@@ -36,11 +36,31 @@ if (!function_exists('imap_open')) {
             'protocol' => 'imap',
         ]);
 
+        $readOnly = (bool) ($flags & OP_READONLY);
+        $attempts = 1 + max(0, $retries);
+
         $numMsg = 0;
+        $connected = false;
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            try {
+                $client->connect();
+                $connected = true;
+                break;
+            } catch (\Throwable $e) {
+                \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
+            }
+        }
+
+        if (!$connected) {
+            trigger_error("imap_open(): Couldn't open stream {$mailbox}", E_USER_WARNING);
+
+            return false;
+        }
+
         try {
-            $client->connect();
             if ($spec->folder !== '') {
-                $status = $client->openFolder($spec->folder);
+                $folder = $client->getFolder($spec->folder);
+                $status = $readOnly ? $folder->examine() : $folder->select();
                 $numMsg = $status['exists'] ?? 0;
             }
         } catch (\Throwable $e) {
@@ -50,7 +70,7 @@ if (!function_exists('imap_open')) {
             return false;
         }
 
-        $connection = new \IMAP\Connection($client, $spec->folder, $mailbox);
+        $connection = new \IMAP\Connection($client, $spec->folder, $mailbox, $readOnly);
         $connection->cachedNumMsg = $numMsg;
 
         return $connection;
@@ -111,7 +131,7 @@ if (!function_exists('imap_num_msg')) {
         $imap->ensureOpen();
 
         try {
-            $status = $imap->client->getFolder($imap->folder)->select();
+            $status = $imap->selectOrExamine();
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
 
@@ -133,7 +153,7 @@ if (!function_exists('imap_check')) {
         $imap->ensureOpen();
 
         try {
-            $status = $imap->client->getFolder($imap->folder)->select();
+            $status = $imap->selectOrExamine();
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
 
@@ -163,7 +183,7 @@ if (!function_exists('imap_search')) {
         $tokens = preg_split('/\s+/', trim($criteria));
 
         try {
-            $imap->client->getFolder($imap->folder)->select();
+            $imap->selectOrExamine();
             $ids = $imap->client->getConnection()->search($tokens, $uidMode)->validatedData();
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
@@ -189,7 +209,7 @@ if (!function_exists('imap_fetchheader')) {
         $imap->ensureOpen();
 
         try {
-            $imap->client->getFolder($imap->folder)->select();
+            $imap->selectOrExamine();
             $headers = $imap->client->getConnection()->headers([$message_num], 'RFC822', $uidMode)->validatedData();
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
@@ -207,7 +227,7 @@ if (!function_exists('imap_headerinfo')) {
         $imap->ensureOpen();
 
         try {
-            $imap->client->getFolder($imap->folder)->select();
+            $imap->selectOrExamine();
             $data = $imap->client->getConnection()
                 ->fetch(['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], [$message_num], null, \Webklex\PHPIMAP\IMAP::ST_MSGN)
                 ->validatedData();
@@ -240,7 +260,7 @@ if (!function_exists('imap_fetch_overview')) {
         $imap->ensureOpen();
 
         try {
-            $status = $imap->client->getFolder($imap->folder)->select();
+            $status = $imap->selectOrExamine();
             $ids = \Fain182\ImapPolyfill\MessageSequence::expand($sequence, $status['exists'] ?? 0);
 
             if ($ids === []) {
@@ -293,7 +313,7 @@ if (!function_exists('imap_fetchstructure')) {
         $imap->ensureOpen();
 
         try {
-            $imap->client->getFolder($imap->folder)->select();
+            $imap->selectOrExamine();
             $parsed = \Fain182\ImapPolyfill\BodyStructureFetch::fetch($imap->client, $message_num, (bool) ($flags & FT_UID));
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
@@ -319,7 +339,7 @@ if (!function_exists('imap_fetchbody')) {
         $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$wireSection}]" : "BODY[{$wireSection}]";
 
         try {
-            $imap->client->getFolder($imap->folder)->select();
+            $imap->selectOrExamine();
             $data = $imap->client->getConnection()->fetch([$item], [$message_num], null, $uidMode)->validatedData();
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
@@ -341,7 +361,7 @@ if (!function_exists('imap_uid')) {
         }
 
         try {
-            $status = $imap->client->getFolder($imap->folder)->select();
+            $status = $imap->selectOrExamine();
 
             if ($message_num > ($status['exists'] ?? 0)) {
                 trigger_error('imap_uid(): Bad message number', E_USER_WARNING);
@@ -370,7 +390,7 @@ if (!function_exists('imap_msgno')) {
         }
 
         try {
-            $imap->client->getFolder($imap->folder)->select();
+            $imap->selectOrExamine();
 
             return (int) $imap->client->getConnection()->getMessageNumber((string) $message_uid)->validatedData();
         } catch (\Webklex\PHPIMAP\Exceptions\MessageNotFoundException) {
@@ -461,7 +481,7 @@ if (!function_exists('imap_setflag_full')) {
         $flagsAtom = '('.trim($flag).')';
 
         try {
-            $imap->client->getFolder($imap->folder)->select();
+            $imap->selectOrExamine();
             $imap->client->getConnection()->requestAndResponse($command, [$sequence, '+FLAGS.SILENT', $flagsAtom]);
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
@@ -484,7 +504,7 @@ if (!function_exists('imap_expunge')) {
         $imap->ensureOpen();
 
         try {
-            $imap->client->getFolder($imap->folder)->select();
+            $imap->selectOrExamine();
             $imap->client->expunge();
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());

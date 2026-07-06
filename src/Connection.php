@@ -21,6 +21,7 @@ final class Connection
         public readonly \Webklex\PHPIMAP\Client $client,
         public string $folder,
         public readonly string $mailbox,
+        public readonly bool $readOnly = false,
     ) {
     }
 
@@ -33,5 +34,22 @@ final class Connection
         if ($this->closed) {
             throw new \ValueError('IMAP\Connection is already closed');
         }
+    }
+
+    /**
+     * Re-selects the current folder before an operation, the way every
+     * wrapper function needs to. Uses EXAMINE instead of SELECT when the
+     * connection was opened with OP_READONLY, so a read-only imap_open()
+     * doesn't get silently escalated back to read-write on the next call —
+     * matching ext-imap, the read-only guarantee itself is enforced by the
+     * IMAP server rejecting writes, not by this client.
+     *
+     * @return array<string, mixed>
+     */
+    public function selectOrExamine(): array
+    {
+        $folder = $this->client->getFolder($this->folder);
+
+        return $this->readOnly ? $folder->examine() : $folder->select();
     }
 }

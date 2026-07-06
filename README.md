@@ -69,7 +69,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_mutf7_to_utf8` | ❌ | |
 | `imap_num_msg` | ✅ | |
 | `imap_num_recent` | ❌ | |
-| `imap_open` | ✅ | `OP_READONLY` unsupported; retries argument ignored |
+| `imap_open` | ✅ | |
 | `imap_ping` | ❌ | |
 | `imap_qprint` | ❌ | |
 | `imap_rename` | ❌ | |
