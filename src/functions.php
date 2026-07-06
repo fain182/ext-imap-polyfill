@@ -191,69 +191,14 @@ if (!function_exists('imap_msgno')) {
 if (!function_exists('imap_list')) {
     function imap_list(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
-        $imap->ensureOpen();
-
-        $ref = \ImapPolyfill\Mailbox\MailboxReference::parse($reference);
-
-        try {
-            $folders = $imap->client->getConnection()->folders($ref->bareReference, $pattern)->validatedData();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        if ($folders === []) {
-            return false;
-        }
-
-        return array_map(static fn (string $name): string => $ref->displayPrefix.$name, array_keys($folders));
+        return (new \ImapPolyfill\Session\Session($imap))->listMailboxes($reference, $pattern);
     }
 }
 
 if (!function_exists('imap_getmailboxes')) {
     function imap_getmailboxes(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
-        $imap->ensureOpen();
-
-        $ref = \ImapPolyfill\Mailbox\MailboxReference::parse($reference);
-
-        $flagBits = [
-            '\noinferiors' => LATT_NOINFERIORS,
-            '\noselect' => LATT_NOSELECT,
-            '\marked' => LATT_MARKED,
-            '\unmarked' => LATT_UNMARKED,
-            '\haschildren' => LATT_HASCHILDREN,
-            '\hasnochildren' => LATT_HASNOCHILDREN,
-        ];
-
-        try {
-            $folders = $imap->client->getConnection()->folders($ref->bareReference, $pattern)->validatedData();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        if ($folders === []) {
-            return false;
-        }
-
-        $result = [];
-        foreach ($folders as $name => $info) {
-            $attributes = 0;
-            foreach ($info['flags'] as $flag) {
-                $attributes |= $flagBits[strtolower($flag)] ?? 0;
-            }
-
-            $mailbox = new \stdClass();
-            $mailbox->name = $ref->displayPrefix.$name;
-            $mailbox->attributes = $attributes;
-            $mailbox->delimiter = $info['delimiter'];
-            $result[] = $mailbox;
-        }
-
-        return $result;
+        return (new \ImapPolyfill\Session\Session($imap))->getMailboxes($reference, $pattern);
     }
 }
 
@@ -396,19 +341,7 @@ if (!function_exists('imap_rfc822_parse_headers')) {
 if (!function_exists('imap_createmailbox')) {
     function imap_createmailbox(\IMAP\Connection $imap, string $mailbox): bool
     {
-        $imap->ensureOpen();
-
-        $folderName = \ImapPolyfill\Mailbox\MailboxReference::parse($mailbox)->bareReference;
-
-        try {
-            $imap->client->createFolder($folderName);
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return (new \ImapPolyfill\Session\Session($imap))->createMailbox($mailbox);
     }
 }
 
@@ -422,39 +355,14 @@ if (!function_exists('imap_create')) {
 if (!function_exists('imap_deletemailbox')) {
     function imap_deletemailbox(\IMAP\Connection $imap, string $mailbox): bool
     {
-        $imap->ensureOpen();
-
-        $folderName = \ImapPolyfill\Mailbox\MailboxReference::parse($mailbox)->bareReference;
-
-        try {
-            $imap->client->deleteFolder($folderName);
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return (new \ImapPolyfill\Session\Session($imap))->deleteMailbox($mailbox);
     }
 }
 
 if (!function_exists('imap_renamemailbox')) {
     function imap_renamemailbox(\IMAP\Connection $imap, string $from, string $to): bool
     {
-        $imap->ensureOpen();
-
-        $fromName = \ImapPolyfill\Mailbox\MailboxReference::parse($from)->bareReference;
-        $toName = \ImapPolyfill\Mailbox\MailboxReference::parse($to)->bareReference;
-
-        try {
-            $imap->client->getFolder($fromName)->rename($toName);
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return (new \ImapPolyfill\Session\Session($imap))->renameMailbox($from, $to);
     }
 }
 
@@ -468,38 +376,14 @@ if (!function_exists('imap_rename')) {
 if (!function_exists('imap_subscribe')) {
     function imap_subscribe(\IMAP\Connection $imap, string $mailbox): bool
     {
-        $imap->ensureOpen();
-
-        $folderName = \ImapPolyfill\Mailbox\MailboxReference::parse($mailbox)->bareReference;
-
-        try {
-            $imap->client->getFolder($folderName)->subscribe();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return (new \ImapPolyfill\Session\Session($imap))->subscribe($mailbox);
     }
 }
 
 if (!function_exists('imap_unsubscribe')) {
     function imap_unsubscribe(\IMAP\Connection $imap, string $mailbox): bool
     {
-        $imap->ensureOpen();
-
-        $folderName = \ImapPolyfill\Mailbox\MailboxReference::parse($mailbox)->bareReference;
-
-        try {
-            $imap->client->getFolder($folderName)->unsubscribe();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return (new \ImapPolyfill\Session\Session($imap))->unsubscribe($mailbox);
     }
 }
 
