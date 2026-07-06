@@ -2,6 +2,12 @@
 
 namespace ImapPolyfill\Mailbox;
 
+/**
+ * Parses ext-imap's mailbox specification syntax, e.g.
+ * "{imap.example.com:993/ssl}INBOX": the server to connect to (host, port,
+ * connection flags like ssl/tls/novalidate-cert) and the folder to select
+ * once connected. Used by imap_open() and imap_reopen().
+ */
 final class MailboxSpec
 {
     /**
