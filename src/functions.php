@@ -53,7 +53,7 @@ if (!function_exists('imap_open')) {
 }
 
 if (!function_exists('imap_close')) {
-    function imap_close(\IMAP\Connection $imap, int $flags = 0): true
+    function imap_close(\IMAP\Connection $imap, int $flags = 0): bool
     {
         $imap->ensureOpen();
 
@@ -440,7 +440,7 @@ if (!function_exists('imap_getmailboxes')) {
 }
 
 if (!function_exists('imap_setflag_full')) {
-    function imap_setflag_full(\IMAP\Connection $imap, string $sequence, string $flag, int $options = 0): true
+    function imap_setflag_full(\IMAP\Connection $imap, string $sequence, string $flag, int $options = 0): bool
     {
         $imap->ensureOpen();
 
@@ -459,14 +459,14 @@ if (!function_exists('imap_setflag_full')) {
 }
 
 if (!function_exists('imap_delete')) {
-    function imap_delete(\IMAP\Connection $imap, string $message_nums, int $flags = 0): true
+    function imap_delete(\IMAP\Connection $imap, string $message_nums, int $flags = 0): bool
     {
         return imap_setflag_full($imap, $message_nums, '\\Deleted', $flags);
     }
 }
 
 if (!function_exists('imap_expunge')) {
-    function imap_expunge(\IMAP\Connection $imap): true
+    function imap_expunge(\IMAP\Connection $imap): bool
     {
         $imap->ensureOpen();
 
