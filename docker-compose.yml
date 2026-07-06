@@ -1,0 +1,26 @@
+services:
+  greenmail:
+    image: docker.io/greenmail/standalone:2.1.0
+    ports:
+      - "13143:3143"
+    environment:
+      GREENMAIL_OPTS: >-
+        -Dgreenmail.setup.test.imap
+        -Dgreenmail.hostname=0.0.0.0
+        -Dgreenmail.users=testuser:testpass@localhost
+
+  # Runs tests/Integration against the real ext-imap extension (PHP 8.3) instead
+  # of this polyfill, to check the test fixtures hold true against the genuine
+  # extension too. `make parity` runs the equivalent without compose tooling.
+  parity:
+    build:
+      context: .
+      dockerfile: Dockerfile.parity
+    depends_on:
+      - greenmail
+    environment:
+      IMAP_POLYFILL_TEST_HOST: greenmail
+      IMAP_POLYFILL_TEST_PORT: 3143
+    volumes:
+      - .:/app
+    command: sh -c "composer install --ignore-platform-reqs --quiet && vendor/bin/phpunit --testsuite integration"

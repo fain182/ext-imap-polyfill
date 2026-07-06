@@ -1,0 +1,72 @@
+<?php
+
+namespace Fain182\ImapPolyfill;
+
+final class HeaderInfo
+{
+    private const ADDRESS_HEADERS = [
+        'to' => 'to',
+        'from' => 'from',
+        'cc' => 'cc',
+        'bcc' => 'bcc',
+        'reply-to' => 'reply_to',
+        'sender' => 'sender',
+        'return-path' => 'return_path',
+    ];
+
+    /**
+     * @param string[] $flags
+     */
+    public static function build(
+        string $rawHeader,
+        array $flags,
+        string $internalDate,
+        string $size,
+        int $msgno,
+        string $defaultHost,
+    ): \stdClass {
+        $fields = RawHeaderFields::parse($rawHeader);
+        $result = new \stdClass();
+
+        foreach (self::ADDRESS_HEADERS as $header => $property) {
+            if (!isset($fields[$header])) {
+                continue;
+            }
+
+            $result->$property = AddressList::parse($fields[$header], $defaultHost);
+            $result->{$property.'address'} = $fields[$header];
+        }
+
+        foreach (['message-id' => 'message_id', 'in-reply-to' => 'in_reply_to', 'references' => 'references'] as $header => $property) {
+            if (isset($fields[$header])) {
+                $result->$property = $fields[$header];
+            }
+        }
+
+        if (isset($fields['date'])) {
+            $result->date = $fields['date'];
+            $result->Date = $fields['date'];
+        }
+
+        if (isset($fields['subject'])) {
+            $result->subject = $fields['subject'];
+            $result->Subject = $fields['subject'];
+        }
+
+        $result->Recent = in_array('\\Recent', $flags, true)
+            ? (in_array('\\Seen', $flags, true) ? 'R' : 'N')
+            : ' ';
+        $result->Unseen = (in_array('\\Recent', $flags, true) || in_array('\\Seen', $flags, true)) ? ' ' : 'U';
+        $result->Flagged = in_array('\\Flagged', $flags, true) ? 'F' : ' ';
+        $result->Answered = in_array('\\Answered', $flags, true) ? 'A' : ' ';
+        $result->Deleted = in_array('\\Deleted', $flags, true) ? 'D' : ' ';
+        $result->Draft = in_array('\\Draft', $flags, true) ? 'X' : ' ';
+
+        $result->Msgno = sprintf('%4d', $msgno);
+        $result->MailDate = $internalDate;
+        $result->Size = $size;
+        $result->udate = strtotime($internalDate);
+
+        return $result;
+    }
+}

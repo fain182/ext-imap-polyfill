@@ -1,0 +1,22 @@
+# Runs the integration test suite against the real ext-imap extension (PHP 8.3,
+# the last version where it shipped in core) to check that the fixtures and
+# assumptions in tests/Integration also hold true against the genuine extension,
+# not just against this polyfill.
+# libc-client (the library ext-imap wraps) was dropped from Debian trixie's
+# repos entirely, so pin to bookworm, the last release that still packages it.
+FROM php:8.3-cli-bookworm
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libc-client2007e-dev \
+        libkrb5-dev \
+        libzip-dev \
+        unzip \
+        git \
+    && rm -rf /var/lib/apt/lists/* \
+    && docker-php-ext-configure imap --with-kerberos --with-imap-ssl \
+    && docker-php-ext-install imap zip
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
