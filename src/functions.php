@@ -82,16 +82,7 @@ if (!function_exists('imap_open')) {
 if (!function_exists('imap_close')) {
     function imap_close(\IMAP\Connection $imap, int $flags = 0): bool
     {
-        $imap->ensureOpen();
-
-        if ($flags & CL_EXPUNGE) {
-            $imap->client->expunge();
-        }
-
-        $imap->client->disconnect();
-        $imap->close();
-
-        return true;
+        return (new \ImapPolyfill\Session\Session($imap))->close($flags);
     }
 }
 
@@ -130,46 +121,14 @@ if (!function_exists('imap_alerts')) {
 if (!function_exists('imap_num_msg')) {
     function imap_num_msg(\IMAP\Connection $imap): int|false
     {
-        $imap->ensureOpen();
-
-        try {
-            $status = $imap->selectOrExamine();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            // ext-imap's imap_num_msg is a cached client-side read (c-client's
-            // stream->nmsgs), not a live query: it keeps returning the last
-            // known count rather than false if the connection later breaks.
-            return $imap->numMessages();
-        }
-
-        $imap->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
-
-        return $imap->numMessages();
+        return (new \ImapPolyfill\Session\Session($imap))->numMessages();
     }
 }
 
 if (!function_exists('imap_check')) {
     function imap_check(\IMAP\Connection $imap): \stdClass|false
     {
-        $imap->ensureOpen();
-
-        try {
-            $status = $imap->selectOrExamine();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        $result = new \stdClass();
-        $result->Date = date('r');
-        $result->Driver = 'imap';
-        $result->Mailbox = $imap->mailbox;
-        $result->Nmsgs = $status['exists'] ?? 0;
-        $result->Recent = $status['recent'] ?? 0;
-
-        return $result;
+        return (new \ImapPolyfill\Session\Session($imap))->check();
     }
 }
 
@@ -769,20 +728,7 @@ if (!function_exists('imap_unsubscribe')) {
 if (!function_exists('imap_num_recent')) {
     function imap_num_recent(\IMAP\Connection $imap): int|false
     {
-        $imap->ensureOpen();
-
-        try {
-            $status = $imap->selectOrExamine();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            // Cached client-side read, like imap_num_msg; see its comment.
-            return $imap->numRecent();
-        }
-
-        $imap->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
-
-        return $imap->numRecent();
+        return (new \ImapPolyfill\Session\Session($imap))->numRecent();
     }
 }
 
@@ -792,33 +738,13 @@ if (!function_exists('imap_is_open')) {
         // Deliberately does not call ensureOpen(): unlike every other
         // wrapper, this function's entire purpose is to check openness
         // without throwing, matching ext-imap's own "doesn't throw" note.
-        return $imap->isOpen();
+        return (new \ImapPolyfill\Session\Session($imap))->isOpen();
     }
 }
 
 if (!function_exists('imap_reopen')) {
     function imap_reopen(\IMAP\Connection $imap, string $mailbox, int $flags = 0, int $retries = 0): bool
     {
-        $imap->ensureOpen();
-
-        // Scoped to switching folders on the same already-connected client:
-        // this polyfill doesn't retain the original credentials needed to
-        // reconnect to a genuinely different host.
-        $spec = \ImapPolyfill\Mailbox\MailboxSpec::parse($mailbox);
-        $readOnly = (bool) ($flags & OP_READONLY);
-
-        try {
-            $folder = $imap->client->getFolder($spec->folder);
-            $status = $readOnly ? $folder->examine() : $folder->select();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        $imap->reselect($spec->folder, $readOnly);
-        $imap->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
-
-        return true;
+        return (new \ImapPolyfill\Session\Session($imap))->reopen($mailbox, $flags);
     }
 }
