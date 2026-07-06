@@ -2,12 +2,16 @@
 
 namespace IMAP;
 
+use ImapPolyfill\Connection\Protocol;
+
 /**
  * Polyfill for the opaque IMAP\Connection class ext-imap registers natively.
  * Holds the webklex client plus the currently selected folder path.
  */
 final class Connection
 {
+    private ?Protocol $protocol = null;
+
     private bool $closed = false;
 
     private string $folder;
@@ -102,5 +106,10 @@ final class Connection
         $folder = $this->client->getFolder($this->folder);
 
         return $this->readOnly ? $folder->examine() : $folder->select();
+    }
+
+    public function protocol(): Protocol
+    {
+        return $this->protocol ??= new Protocol($this->client);
     }
 }

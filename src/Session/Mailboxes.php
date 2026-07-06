@@ -26,7 +26,7 @@ final class Mailboxes
         $ref = MailboxReference::parse($reference);
 
         try {
-            $folders = $this->connection->client->getConnection()->folders($ref->bareReference, $pattern)->validatedData();
+            $folders = $this->connection->protocol()->folders($ref->bareReference, $pattern);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -59,7 +59,7 @@ final class Mailboxes
         ];
 
         try {
-            $folders = $this->connection->client->getConnection()->folders($ref->bareReference, $pattern)->validatedData();
+            $folders = $this->connection->protocol()->folders($ref->bareReference, $pattern);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 

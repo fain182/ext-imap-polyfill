@@ -35,7 +35,7 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $ids = $this->connection->client->getConnection()->search($tokens, $uidMode)->validatedData();
+            $ids = $this->connection->protocol()->search($tokens, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -59,7 +59,7 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $headers = $this->connection->client->getConnection()->headers([$messageNum], 'RFC822', $uidMode)->validatedData();
+            $headers = $this->connection->protocol()->headers([$messageNum], 'RFC822', $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -75,9 +75,12 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $data = $this->connection->client->getConnection()
-                ->fetch(['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], [$messageNum], null, \Webklex\PHPIMAP\IMAP::ST_MSGN)
-                ->validatedData();
+            $data = $this->connection->protocol()->fetch(
+                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
+                [$messageNum],
+                null,
+                \Webklex\PHPIMAP\IMAP::ST_MSGN,
+            );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -115,10 +118,8 @@ final class Mailbox
                 return [];
             }
 
-            $connection = $this->connection->client->getConnection();
-            $data = $connection
-                ->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode)
-                ->validatedData();
+            $protocol = $this->connection->protocol();
+            $data = $protocol->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -137,7 +138,7 @@ final class Mailbox
             $message = $data[$id];
             $uid = $uidMode === \Webklex\PHPIMAP\IMAP::ST_UID ? $id : (int) $message['UID'];
             $msgno = $uidMode === \Webklex\PHPIMAP\IMAP::ST_UID
-                ? $connection->getMessageNumber((string) $id)->validatedData()
+                ? $protocol->getMessageNumber((string) $id)
                 : $id;
 
             $result[] = Overview::build(
@@ -184,7 +185,7 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $data = $this->connection->client->getConnection()->fetch([$item], [$messageNum], null, $uidMode)->validatedData();
+            $data = $this->connection->protocol()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -211,7 +212,7 @@ final class Mailbox
                 return false;
             }
 
-            $uids = $this->connection->client->getConnection()->getUid()->validatedData();
+            $uids = $this->connection->protocol()->getUid();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -232,7 +233,7 @@ final class Mailbox
         try {
             $this->connection->selectOrExamine();
 
-            return (int) $this->connection->client->getConnection()->getMessageNumber((string) $messageUid)->validatedData();
+            return (int) $this->connection->protocol()->getMessageNumber((string) $messageUid);
         } catch (\Webklex\PHPIMAP\Exceptions\MessageNotFoundException) {
             return 0;
         } catch (\Throwable $e) {
@@ -251,7 +252,7 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $this->connection->client->getConnection()->requestAndResponse($command, [$sequence, '+FLAGS.SILENT', $flagsAtom]);
+            $this->connection->protocol()->store($command, [$sequence, '+FLAGS.SILENT', $flagsAtom]);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
         }
@@ -268,7 +269,7 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $this->connection->client->getConnection()->requestAndResponse($command, [$sequence, '-FLAGS.SILENT', $flagsAtom]);
+            $this->connection->protocol()->store($command, [$sequence, '-FLAGS.SILENT', $flagsAtom]);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
         }
