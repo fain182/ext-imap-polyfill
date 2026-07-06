@@ -1,8 +1,8 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests\Integration;
+namespace ImapPolyfill\Tests\Integration;
 
-use Fain182\ImapPolyfill\Tests\ResetsErrorStack;
+use ImapPolyfill\Tests\ResetsErrorStack;
 
 class ImapLastErrorTest extends GreenmailTestCase
 {

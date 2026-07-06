@@ -1,8 +1,8 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests\Unit;
+namespace ImapPolyfill\Tests\Unit;
 
-use Fain182\ImapPolyfill\Overview;
+use ImapPolyfill\Overview;
 use PHPUnit\Framework\TestCase;
 
 class OverviewTest extends TestCase

@@ -1,6 +1,6 @@
 <?php
 
-namespace Fain182\ImapPolyfill;
+namespace ImapPolyfill;
 
 /**
  * ext-imap keeps these as process-global c-client parameters (mail_parameters),

@@ -1,6 +1,6 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests\Integration;
+namespace ImapPolyfill\Tests\Integration;
 
 class ImapFetchheaderTest extends GreenmailTestCase
 {

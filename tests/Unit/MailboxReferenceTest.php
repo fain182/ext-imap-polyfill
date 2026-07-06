@@ -1,8 +1,8 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests\Unit;
+namespace ImapPolyfill\Tests\Unit;
 
-use Fain182\ImapPolyfill\MailboxReference;
+use ImapPolyfill\MailboxReference;
 use PHPUnit\Framework\TestCase;
 
 class MailboxReferenceTest extends TestCase

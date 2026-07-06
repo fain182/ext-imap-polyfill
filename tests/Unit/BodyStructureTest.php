@@ -1,8 +1,8 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests\Unit;
+namespace ImapPolyfill\Tests\Unit;
 
-use Fain182\ImapPolyfill\BodyStructure;
+use ImapPolyfill\BodyStructure;
 use PHPUnit\Framework\TestCase;
 
 class BodyStructureTest extends TestCase

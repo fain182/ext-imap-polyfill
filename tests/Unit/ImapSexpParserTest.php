@@ -1,8 +1,8 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests\Unit;
+namespace ImapPolyfill\Tests\Unit;
 
-use Fain182\ImapPolyfill\ImapSexpParser;
+use ImapPolyfill\ImapSexpParser;
 use PHPUnit\Framework\TestCase;
 
 class ImapSexpParserTest extends TestCase

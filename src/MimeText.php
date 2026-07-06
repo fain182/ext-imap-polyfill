@@ -1,6 +1,6 @@
 <?php
 
-namespace Fain182\ImapPolyfill;
+namespace ImapPolyfill;
 
 final class MimeText
 {

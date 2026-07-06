@@ -1,8 +1,8 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests\Unit;
+namespace ImapPolyfill\Tests\Unit;
 
-use Fain182\ImapPolyfill\HeaderInfo;
+use ImapPolyfill\HeaderInfo;
 use PHPUnit\Framework\TestCase;
 
 class HeaderInfoTest extends TestCase

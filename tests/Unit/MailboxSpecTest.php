@@ -1,8 +1,8 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests\Unit;
+namespace ImapPolyfill\Tests\Unit;
 
-use Fain182\ImapPolyfill\MailboxSpec;
+use ImapPolyfill\MailboxSpec;
 use PHPUnit\Framework\TestCase;
 
 class MailboxSpecTest extends TestCase

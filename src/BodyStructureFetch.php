@@ -1,6 +1,6 @@
 <?php
 
-namespace Fain182\ImapPolyfill;
+namespace ImapPolyfill;
 
 /**
  * Fetches BODYSTRUCTURE directly over the raw socket, bypassing webklex's

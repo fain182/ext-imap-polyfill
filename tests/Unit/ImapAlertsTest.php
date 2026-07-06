@@ -1,9 +1,9 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests\Unit;
+namespace ImapPolyfill\Tests\Unit;
 
-use Fain182\ImapPolyfill\ErrorStack;
-use Fain182\ImapPolyfill\Tests\ResetsErrorStack;
+use ImapPolyfill\ErrorStack;
+use ImapPolyfill\Tests\ResetsErrorStack;
 use PHPUnit\Framework\TestCase;
 
 class ImapAlertsTest extends TestCase

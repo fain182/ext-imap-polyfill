@@ -16,7 +16,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Fain182\\ImapPolyfill\\": "src/"
+            "ImapPolyfill\\": "src/"
         },
         "classmap": [
             "src/Connection.php"
@@ -27,7 +27,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Fain182\\ImapPolyfill\\Tests\\": "tests/"
+            "ImapPolyfill\\Tests\\": "tests/"
         }
     },
     "config": {

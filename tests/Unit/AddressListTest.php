@@ -1,8 +1,8 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests\Unit;
+namespace ImapPolyfill\Tests\Unit;
 
-use Fain182\ImapPolyfill\AddressList;
+use ImapPolyfill\AddressList;
 use PHPUnit\Framework\TestCase;
 
 class AddressListTest extends TestCase

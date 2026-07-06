@@ -1,8 +1,8 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests;
+namespace ImapPolyfill\Tests;
 
-use Fain182\ImapPolyfill\ErrorStack;
+use ImapPolyfill\ErrorStack;
 use ReflectionClass;
 
 /**

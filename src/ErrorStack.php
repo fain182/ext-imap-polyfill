@@ -1,6 +1,6 @@
 <?php
 
-namespace Fain182\ImapPolyfill;
+namespace ImapPolyfill;
 
 /**
  * ext-imap keeps a single global error/alert stack shared by all connections

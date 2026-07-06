@@ -1,6 +1,6 @@
 <?php
 
-namespace Fain182\ImapPolyfill\Tests\Unit;
+namespace ImapPolyfill\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
 
