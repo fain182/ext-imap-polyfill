@@ -45,4 +45,28 @@ abstract class GreenmailTestCase extends TestCase
 
         return $client;
     }
+
+    /**
+     * Seeds a folder where the one remaining message has msgno=1 but uid=2:
+     * append a throwaway message, delete + expunge it, then append the real
+     * one. Needed to prove FT_UID/ST_UID/SE_UID code paths actually key off
+     * the UID rather than silently working by coincidence when uid==msgno.
+     *
+     * @return array{0: string, 1: int} [folder name, uid of the surviving message]
+     */
+    protected function makeMsgnoUidMismatchFixture(string $folderName, string $survivorMessage): array
+    {
+        $seedClient = $this->makeFolder($folderName);
+        $folder = $seedClient->getFolder($folderName);
+        $folder->appendMessage("Subject: Throwaway\r\n\r\nDiscard me");
+        $seedClient->openFolder($folderName);
+        $seedClient->getConnection()->requestAndResponse('STORE', ['1', '+FLAGS.SILENT', '(\\Deleted)']);
+        $seedClient->expunge();
+        $folder->appendMessage($survivorMessage);
+        $seedClient->openFolder($folderName, true);
+
+        $uids = $seedClient->getConnection()->getUid()->validatedData();
+
+        return [$folderName, (int) $uids[1]];
+    }
 }

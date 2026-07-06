@@ -57,4 +57,66 @@ class ImapFetchstructureTest extends GreenmailTestCase
         $this->assertSame('attachment', $result->parts[1]->disposition);
         $this->assertSame('test.bin', $result->parts[1]->dparameters[0]->value);
     }
+
+    public function test_returns_structure_of_a_nested_multipart(): void
+    {
+        $folderName = 'StructBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $message = "Subject: Nested\r\n"
+            ."MIME-Version: 1.0\r\n"
+            ."Content-Type: multipart/mixed; boundary=\"B1\"\r\n"
+            ."\r\n"
+            ."--B1\r\n"
+            ."Content-Type: multipart/alternative; boundary=\"B2\"\r\n"
+            ."\r\n"
+            ."--B2\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."Plain alt\r\n"
+            ."--B2\r\n"
+            ."Content-Type: text/html\r\n"
+            ."\r\n"
+            ."<b>Html alt</b>\r\n"
+            ."--B2--\r\n"
+            ."--B1\r\n"
+            ."Content-Type: application/octet-stream\r\n"
+            ."\r\n"
+            ."AAAA\r\n"
+            ."--B1--\r\n";
+        $seedClient->getFolder($folderName)->appendMessage($message);
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $result = imap_fetchstructure($connection, 1);
+
+        $this->assertSame(1, $result->type); // TYPEMULTIPART
+        $this->assertSame('MIXED', $result->subtype);
+        $this->assertCount(2, $result->parts);
+
+        $nestedAlternative = $result->parts[0];
+        $this->assertSame(1, $nestedAlternative->type); // TYPEMULTIPART
+        $this->assertSame('ALTERNATIVE', $nestedAlternative->subtype);
+        $this->assertCount(2, $nestedAlternative->parts);
+        $this->assertSame(0, $nestedAlternative->parts[0]->type); // TYPETEXT
+        $this->assertSame('PLAIN', $nestedAlternative->parts[0]->subtype);
+        $this->assertSame('HTML', $nestedAlternative->parts[1]->subtype);
+
+        $this->assertSame(3, $result->parts[1]->type); // TYPEAPPLICATION
+    }
+
+    public function test_ft_uid_fetches_by_uid_when_it_diverges_from_msgno(): void
+    {
+        [$folderName, $survivorUid] = $this->makeMsgnoUidMismatchFixture(
+            'StructUidBox' . uniqid(),
+            "Subject: Survivor\r\nContent-Type: text/plain; charset=us-ascii\r\n\r\nBody"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $byMsgno = imap_fetchstructure($connection, 1);
+        $byUid = imap_fetchstructure($connection, $survivorUid, FT_UID);
+
+        $this->assertSame('PLAIN', $byMsgno->subtype);
+        $this->assertEquals($byMsgno, $byUid);
+    }
 }

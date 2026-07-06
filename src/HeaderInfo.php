@@ -37,6 +37,14 @@ final class HeaderInfo
             $result->{$property.'address'} = $fields[$header];
         }
 
+        // RFC 5322: Reply-To and Sender default to From when not explicitly set.
+        foreach (['reply_to', 'sender'] as $property) {
+            if (!isset($result->$property) && isset($result->from)) {
+                $result->$property = $result->from;
+                $result->{$property.'address'} = $result->fromaddress;
+            }
+        }
+
         foreach (['message-id' => 'message_id', 'in-reply-to' => 'in_reply_to', 'references' => 'references'] as $header => $property) {
             if (isset($fields[$header])) {
                 $result->$property = $fields[$header];

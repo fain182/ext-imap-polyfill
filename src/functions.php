@@ -300,7 +300,10 @@ if (!function_exists('imap_fetchbody')) {
         $uidMode = ($flags & FT_UID)
             ? \Webklex\PHPIMAP\IMAP::ST_UID
             : \Webklex\PHPIMAP\IMAP::ST_MSGN;
-        $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$section}]" : "BODY[{$section}]";
+        // ext-imap's section "0" is a legacy alias for the top-level header,
+        // not a literal MIME part index.
+        $wireSection = $section === '0' ? 'HEADER' : $section;
+        $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$wireSection}]" : "BODY[{$wireSection}]";
 
         try {
             $imap->client->getFolder($imap->folder)->select();

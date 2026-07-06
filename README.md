@@ -28,7 +28,7 @@ This is not a reimplementation of all ~80 `imap_*` functions — only the 23 lis
 | `imap_alerts` | never populated — this polyfill doesn't surface server `* OK [ALERT]` responses |
 | `imap_num_msg` | |
 | `imap_check` | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
-| `imap_search` | criteria string is split on whitespace, not parsed like c-client's grammar |
+| `imap_search` | |
 | `imap_fetchheader` | |
 | `imap_headerinfo` | `fetchfrom`/`fetchsubject` (nonzero `$from_length`/`$subject_length`) not implemented |
 | `imap_fetch_overview` | |

@@ -18,4 +18,21 @@ class ImapFetchheaderTest extends GreenmailTestCase
         $this->assertStringContainsString('Subject: Hello World', $header);
         $this->assertStringNotContainsString('Body text', $header);
     }
+
+    public function test_ft_uid_fetches_by_uid_when_it_diverges_from_msgno(): void
+    {
+        [$folderName, $survivorUid] = $this->makeMsgnoUidMismatchFixture(
+            'FetchHeaderUidBox' . uniqid(),
+            "Subject: Survivor\r\n\r\nKeep me"
+        );
+        $this->assertGreaterThan(1, $survivorUid, 'fixture must produce uid != msgno to be a meaningful test');
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $byMsgno = imap_fetchheader($connection, 1);
+        $byUid = imap_fetchheader($connection, $survivorUid, FT_UID);
+
+        $this->assertStringContainsString('Subject: Survivor', $byMsgno);
+        $this->assertSame($byMsgno, $byUid);
+    }
 }
