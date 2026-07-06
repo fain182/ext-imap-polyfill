@@ -2,6 +2,11 @@
 
 namespace ImapPolyfill\Message;
 
+/**
+ * Extracts the individual fields (To, From, Subject...) out of a raw RFC822
+ * header block, the shared first step HeaderInfo and Overview both need
+ * before building their own legacy stdClass shape.
+ */
 final class RawHeaderFields
 {
     /**
