@@ -17,63 +17,11 @@ if (!function_exists('imap_rfc822_parse_adrlist')) {
 if (!function_exists('imap_open')) {
     function imap_open(string $mailbox, string $user, string $password, int $flags = 0, int $retries = 0, array $options = []): \IMAP\Connection|false
     {
-        $spec = \ImapPolyfill\Mailbox\MailboxSpec::parse($mailbox);
+        $connection = \IMAP\Connection::open($mailbox, $user, $password, $flags, $retries);
 
-        $encryption = false;
-        if ($spec->hasFlag('ssl')) {
-            $encryption = 'ssl';
-        } elseif ($spec->hasFlag('tls')) {
-            $encryption = 'tls';
-        }
-
-        $client = (new \Webklex\PHPIMAP\ClientManager())->make([
-            'host' => $spec->host,
-            'port' => $spec->port,
-            'encryption' => $encryption,
-            'validate_cert' => !$spec->hasFlag('novalidate-cert'),
-            'username' => $user,
-            'password' => $password,
-            'protocol' => 'imap',
-        ]);
-
-        $readOnly = (bool) ($flags & OP_READONLY);
-        $attempts = 1 + max(0, $retries);
-
-        $numMsg = 0;
-        $numRecent = 0;
-        $connected = false;
-        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
-            try {
-                $client->connect();
-                $connected = true;
-                break;
-            } catch (\Throwable $e) {
-                \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-            }
-        }
-
-        if (!$connected) {
+        if ($connection === false) {
             trigger_error("imap_open(): Couldn't open stream {$mailbox}", E_USER_WARNING);
-
-            return false;
         }
-
-        try {
-            if ($spec->folder !== '') {
-                $folder = $client->getFolder($spec->folder);
-                $status = $readOnly ? $folder->examine() : $folder->select();
-                $numMsg = $status['exists'] ?? 0;
-                $numRecent = $status['recent'] ?? 0;
-            }
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-            trigger_error("imap_open(): Couldn't open stream {$mailbox}", E_USER_WARNING);
-
-            return false;
-        }
-
-        $connection = new \IMAP\Connection($client, $spec->folder, $mailbox, $readOnly);
-        $connection->rememberCounts($numMsg, $numRecent);
 
         return $connection;
     }

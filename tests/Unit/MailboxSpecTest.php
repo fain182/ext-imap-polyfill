@@ -38,4 +38,39 @@ class MailboxSpecTest extends TestCase
 
         $this->assertSame('INBOX.Sent', $spec->folder);
     }
+
+    public function test_supports_an_empty_folder(): void
+    {
+        $spec = MailboxSpec::parse('{imap.example.com:143/imap}');
+
+        $this->assertSame('', $spec->folder);
+    }
+
+    public function test_rejects_a_spec_without_braces(): void
+    {
+        $this->expectException(\ValueError::class);
+
+        MailboxSpec::parse('INBOX');
+    }
+
+    public function test_rejects_an_empty_string(): void
+    {
+        $this->expectException(\ValueError::class);
+
+        MailboxSpec::parse('');
+    }
+
+    public function test_rejects_empty_braces(): void
+    {
+        $this->expectException(\ValueError::class);
+
+        MailboxSpec::parse('{}INBOX');
+    }
+
+    public function test_rejects_an_unterminated_brace(): void
+    {
+        $this->expectException(\ValueError::class);
+
+        MailboxSpec::parse('{imap.example.com:143INBOX');
+    }
 }

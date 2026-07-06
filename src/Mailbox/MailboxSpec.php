@@ -26,9 +26,16 @@ final class MailboxSpec
         return in_array($flag, $this->flags, true);
     }
 
+    /**
+     * @throws \ValueError when the string is not a "{host...}folder" spec
+     */
     public static function parse(string $mailbox): self
     {
-        preg_match('/^\{([^}]+)\}(.*)$/', $mailbox, $matches);
+        if (!preg_match('/^\{([^}]+)\}(.*)$/', $mailbox, $matches)) {
+            throw new \ValueError(
+                "Malformed mailbox specification \"{$mailbox}\": expected \"{host[:port][/flag...]}folder\""
+            );
+        }
 
         $folder = $matches[2];
         $parts = explode('/', $matches[1]);

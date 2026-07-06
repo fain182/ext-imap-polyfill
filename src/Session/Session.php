@@ -111,7 +111,14 @@ final class Session
     {
         $this->connection->ensureOpen();
 
-        $spec = MailboxSpec::parse($mailbox);
+        try {
+            $spec = MailboxSpec::parse($mailbox);
+        } catch (\ValueError $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
         $readOnly = (bool) ($flags & OP_READONLY);
 
         try {
