@@ -1,3 +1,7 @@
+# The greenmail-up readiness check uses bash's /dev/tcp; on Debian/Ubuntu
+# (incl. GitHub Actions runners) /bin/sh is dash, which lacks it.
+SHELL := /bin/bash
+
 CONTAINER_RUNTIME ?= $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
 GREENMAIL_IMAGE := docker.io/greenmail/standalone:2.1.0
 GREENMAIL_NAME := ext-imap-polyfill-greenmail
