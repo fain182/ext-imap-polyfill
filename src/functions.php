@@ -73,8 +73,7 @@ if (!function_exists('imap_open')) {
         }
 
         $connection = new \IMAP\Connection($client, $spec->folder, $mailbox, $readOnly);
-        $connection->cachedNumMsg = $numMsg;
-        $connection->cachedNumRecent = $numRecent;
+        $connection->rememberCounts($numMsg, $numRecent);
 
         return $connection;
     }
@@ -90,7 +89,7 @@ if (!function_exists('imap_close')) {
         }
 
         $imap->client->disconnect();
-        $imap->closed = true;
+        $imap->close();
 
         return true;
     }
@@ -141,13 +140,12 @@ if (!function_exists('imap_num_msg')) {
             // ext-imap's imap_num_msg is a cached client-side read (c-client's
             // stream->nmsgs), not a live query: it keeps returning the last
             // known count rather than false if the connection later breaks.
-            return $imap->cachedNumMsg;
+            return $imap->numMessages();
         }
 
-        $imap->cachedNumMsg = $status['exists'] ?? 0;
-        $imap->cachedNumRecent = $status['recent'] ?? 0;
+        $imap->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
 
-        return $imap->cachedNumMsg;
+        return $imap->numMessages();
     }
 }
 
@@ -779,13 +777,12 @@ if (!function_exists('imap_num_recent')) {
             \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             // Cached client-side read, like imap_num_msg; see its comment.
-            return $imap->cachedNumRecent;
+            return $imap->numRecent();
         }
 
-        $imap->cachedNumMsg = $status['exists'] ?? 0;
-        $imap->cachedNumRecent = $status['recent'] ?? 0;
+        $imap->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
 
-        return $imap->cachedNumRecent;
+        return $imap->numRecent();
     }
 }
 
@@ -795,7 +792,7 @@ if (!function_exists('imap_is_open')) {
         // Deliberately does not call ensureOpen(): unlike every other
         // wrapper, this function's entire purpose is to check openness
         // without throwing, matching ext-imap's own "doesn't throw" note.
-        return !$imap->closed;
+        return $imap->isOpen();
     }
 }
 
@@ -819,10 +816,8 @@ if (!function_exists('imap_reopen')) {
             return false;
         }
 
-        $imap->folder = $spec->folder;
-        $imap->readOnly = $readOnly;
-        $imap->cachedNumMsg = $status['exists'] ?? 0;
-        $imap->cachedNumRecent = $status['recent'] ?? 0;
+        $imap->reselect($spec->folder, $readOnly);
+        $imap->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
 
         return true;
     }

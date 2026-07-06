@@ -8,24 +8,30 @@ namespace IMAP;
  */
 final class Connection
 {
-    public bool $closed = false;
+    private bool $closed = false;
+
+    private string $folder;
+
+    private bool $readOnly;
 
     /**
      * Mirrors c-client's stream->nmsgs: imap_num_msg() is a cached client-side
      * read, not a live query, so it must keep returning the last known count
      * (not false/0) if the connection later breaks.
      */
-    public int $cachedNumMsg = 0;
+    private int $cachedNumMsg = 0;
 
     /** Mirrors c-client's stream->recent; see $cachedNumMsg. */
-    public int $cachedNumRecent = 0;
+    private int $cachedNumRecent = 0;
 
     public function __construct(
         public readonly \Webklex\PHPIMAP\Client $client,
-        public string $folder,
+        string $folder,
         public readonly string $mailbox,
-        public bool $readOnly = false,
+        bool $readOnly = false,
     ) {
+        $this->folder = $folder;
+        $this->readOnly = $readOnly;
     }
 
     /**
@@ -37,6 +43,48 @@ final class Connection
         if ($this->closed) {
             throw new \ValueError('IMAP\Connection is already closed');
         }
+    }
+
+    public function isOpen(): bool
+    {
+        return !$this->closed;
+    }
+
+    public function isReadOnly(): bool
+    {
+        return $this->readOnly;
+    }
+
+    public function close(): void
+    {
+        $this->closed = true;
+    }
+
+    public function numMessages(): int
+    {
+        return $this->cachedNumMsg;
+    }
+
+    public function numRecent(): int
+    {
+        return $this->cachedNumRecent;
+    }
+
+    public function rememberCounts(int $numMessages, int $numRecent): void
+    {
+        $this->cachedNumMsg = $numMessages;
+        $this->cachedNumRecent = $numRecent;
+    }
+
+    /**
+     * Switches the currently selected folder and read-only mode, e.g. after
+     * imap_reopen(). Does not touch the underlying IMAP session itself —
+     * callers must SELECT/EXAMINE the new folder on the client separately.
+     */
+    public function reselect(string $folder, bool $readOnly): void
+    {
+        $this->folder = $folder;
+        $this->readOnly = $readOnly;
     }
 
     /**

@@ -22,7 +22,7 @@ class ImapOpenReadOnlyTest extends TestCase
         $client = (new \Webklex\PHPIMAP\ClientManager())->make(['host' => 'example.com', 'port' => 143]);
         $connection = new \IMAP\Connection($client, 'INBOX', '{example.com}INBOX', readOnly: true);
 
-        $this->assertTrue($connection->readOnly);
+        $this->assertTrue($connection->isReadOnly());
     }
 
     public function test_defaults_to_not_read_only(): void
@@ -34,6 +34,6 @@ class ImapOpenReadOnlyTest extends TestCase
         $client = (new \Webklex\PHPIMAP\ClientManager())->make(['host' => 'example.com', 'port' => 143]);
         $connection = new \IMAP\Connection($client, 'INBOX', '{example.com}INBOX');
 
-        $this->assertFalse($connection->readOnly);
+        $this->assertFalse($connection->isReadOnly());
     }
 }
