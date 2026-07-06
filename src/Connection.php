@@ -17,11 +17,14 @@ final class Connection
      */
     public int $cachedNumMsg = 0;
 
+    /** Mirrors c-client's stream->recent; see $cachedNumMsg. */
+    public int $cachedNumRecent = 0;
+
     public function __construct(
         public readonly \Webklex\PHPIMAP\Client $client,
         public string $folder,
         public readonly string $mailbox,
-        public readonly bool $readOnly = false,
+        public bool $readOnly = false,
     ) {
     }
 

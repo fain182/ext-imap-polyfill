@@ -37,4 +37,54 @@ final class MimeText
 
         return $decoded ?? $text;
     }
+
+    /**
+     * Structured counterpart to decode(): splits the header value into an
+     * ordered list of {charset, text} segments instead of concatenating
+     * them, matching imap_mime_header_decode(). Unlike decode(), consecutive
+     * encoded-words are NOT joined into one — each stays a separate segment.
+     *
+     * @return \stdClass[]
+     */
+    public static function decodeSegments(string $text): array
+    {
+        $pattern = '/=\?(?P<charset>[^?\s]+)\?(?P<encoding>[BbQq])\?(?P<data>[^?]*)\?=/';
+
+        $segments = [];
+        $cursor = 0;
+
+        if (preg_match_all($pattern, $text, $matches, PREG_OFFSET_CAPTURE)) {
+            foreach ($matches[0] as $index => [$fullMatch, $offset]) {
+                if ($offset > $cursor) {
+                    $segments[] = self::segment('default', substr($text, $cursor, $offset - $cursor));
+                }
+
+                $charset = $matches['charset'][$index][0];
+                $encoding = $matches['encoding'][$index][0];
+                $data = $matches['data'][$index][0];
+
+                $bytes = strcasecmp($encoding, 'B') === 0
+                    ? base64_decode($data)
+                    : quoted_printable_decode(str_replace('_', ' ', $data));
+
+                $segments[] = self::segment($charset, $bytes);
+                $cursor = $offset + strlen($fullMatch);
+            }
+        }
+
+        if ($cursor < strlen($text)) {
+            $segments[] = self::segment('default', substr($text, $cursor));
+        }
+
+        return $segments === [] ? [self::segment('default', $text)] : $segments;
+    }
+
+    private static function segment(string $charset, string $text): \stdClass
+    {
+        $segment = new \stdClass();
+        $segment->charset = $charset;
+        $segment->text = $text;
+
+        return $segment;
+    }
 }

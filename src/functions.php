@@ -40,6 +40,7 @@ if (!function_exists('imap_open')) {
         $attempts = 1 + max(0, $retries);
 
         $numMsg = 0;
+        $numRecent = 0;
         $connected = false;
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
             try {
@@ -62,6 +63,7 @@ if (!function_exists('imap_open')) {
                 $folder = $client->getFolder($spec->folder);
                 $status = $readOnly ? $folder->examine() : $folder->select();
                 $numMsg = $status['exists'] ?? 0;
+                $numRecent = $status['recent'] ?? 0;
             }
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
@@ -72,6 +74,7 @@ if (!function_exists('imap_open')) {
 
         $connection = new \IMAP\Connection($client, $spec->folder, $mailbox, $readOnly);
         $connection->cachedNumMsg = $numMsg;
+        $connection->cachedNumRecent = $numRecent;
 
         return $connection;
     }
@@ -142,6 +145,7 @@ if (!function_exists('imap_num_msg')) {
         }
 
         $imap->cachedNumMsg = $status['exists'] ?? 0;
+        $imap->cachedNumRecent = $status['recent'] ?? 0;
 
         return $imap->cachedNumMsg;
     }
@@ -491,10 +495,36 @@ if (!function_exists('imap_setflag_full')) {
     }
 }
 
+if (!function_exists('imap_clearflag_full')) {
+    function imap_clearflag_full(\IMAP\Connection $imap, string $sequence, string $flag, int $options = 0): bool
+    {
+        $imap->ensureOpen();
+
+        $command = ($options & ST_UID) ? 'UID STORE' : 'STORE';
+        $flagsAtom = '('.trim($flag).')';
+
+        try {
+            $imap->selectOrExamine();
+            $imap->client->getConnection()->requestAndResponse($command, [$sequence, '-FLAGS.SILENT', $flagsAtom]);
+        } catch (\Throwable $e) {
+            \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
+        }
+
+        return true;
+    }
+}
+
 if (!function_exists('imap_delete')) {
     function imap_delete(\IMAP\Connection $imap, string $message_nums, int $flags = 0): bool
     {
         return imap_setflag_full($imap, $message_nums, '\\Deleted', $flags);
+    }
+}
+
+if (!function_exists('imap_undelete')) {
+    function imap_undelete(\IMAP\Connection $imap, string $message_nums, int $flags = 0): bool
+    {
+        return imap_clearflag_full($imap, $message_nums, '\\Deleted', $flags);
     }
 }
 
@@ -529,6 +559,270 @@ if (!function_exists('imap_append')) {
 
             return false;
         }
+
+        return true;
+    }
+}
+
+if (!function_exists('imap_base64')) {
+    function imap_base64(string $text): string|false
+    {
+        return base64_decode($text);
+    }
+}
+
+if (!function_exists('imap_qprint')) {
+    function imap_qprint(string $text): string|false
+    {
+        return quoted_printable_decode($text);
+    }
+}
+
+if (!function_exists('imap_8bit')) {
+    function imap_8bit(string $text): string|false
+    {
+        return quoted_printable_encode($text);
+    }
+}
+
+if (!function_exists('imap_binary')) {
+    function imap_binary(string $text): string|false
+    {
+        // Matches c-client's rfc822_binary: base64 wrapped at 60 chars/line.
+        return chunk_split(base64_encode($text), 60, "\n");
+    }
+}
+
+if (!function_exists('imap_utf8_to_mutf7')) {
+    function imap_utf8_to_mutf7(string $string): string|false
+    {
+        $result = @mb_convert_encoding($string, 'UTF7-IMAP', 'UTF-8');
+
+        return $result !== false ? $result : false;
+    }
+}
+
+if (!function_exists('imap_mutf7_to_utf8')) {
+    function imap_mutf7_to_utf8(string $string): string|false
+    {
+        $result = @mb_convert_encoding($string, 'UTF-8', 'UTF7-IMAP');
+
+        return $result !== false ? $result : false;
+    }
+}
+
+if (!function_exists('imap_utf7_encode')) {
+    function imap_utf7_encode(string $string): string
+    {
+        return mb_convert_encoding($string, 'UTF7-IMAP', 'ISO-8859-1');
+    }
+}
+
+if (!function_exists('imap_utf7_decode')) {
+    function imap_utf7_decode(string $string): string|false
+    {
+        $result = @mb_convert_encoding($string, 'ISO-8859-1', 'UTF7-IMAP');
+
+        return $result !== false ? $result : false;
+    }
+}
+
+if (!function_exists('imap_rfc822_write_address')) {
+    function imap_rfc822_write_address(string $mailbox, string $hostname, string $personal): string|false
+    {
+        $address = "{$mailbox}@{$hostname}";
+
+        if ($personal === '') {
+            return $address;
+        }
+
+        if (str_contains($personal, ',')) {
+            $personal = '"'.$personal.'"';
+        }
+
+        return "{$personal} <{$address}>";
+    }
+}
+
+if (!function_exists('imap_mime_header_decode')) {
+    function imap_mime_header_decode(string $string): array|false
+    {
+        return \Fain182\ImapPolyfill\MimeText::decodeSegments($string);
+    }
+}
+
+if (!function_exists('imap_rfc822_parse_headers')) {
+    function imap_rfc822_parse_headers(string $headers, string $default_hostname = 'UNKNOWN'): \stdClass
+    {
+        return \Fain182\ImapPolyfill\HeaderInfo::buildFromHeaderOnly($headers, $default_hostname);
+    }
+}
+
+if (!function_exists('imap_createmailbox')) {
+    function imap_createmailbox(\IMAP\Connection $imap, string $mailbox): bool
+    {
+        $imap->ensureOpen();
+
+        $folderName = \Fain182\ImapPolyfill\MailboxReference::parse($mailbox)->bareReference;
+
+        try {
+            $imap->client->createFolder($folderName);
+        } catch (\Throwable $e) {
+            \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return true;
+    }
+}
+
+if (!function_exists('imap_create')) {
+    function imap_create(\IMAP\Connection $imap, string $mailbox): bool
+    {
+        return imap_createmailbox($imap, $mailbox);
+    }
+}
+
+if (!function_exists('imap_deletemailbox')) {
+    function imap_deletemailbox(\IMAP\Connection $imap, string $mailbox): bool
+    {
+        $imap->ensureOpen();
+
+        $folderName = \Fain182\ImapPolyfill\MailboxReference::parse($mailbox)->bareReference;
+
+        try {
+            $imap->client->deleteFolder($folderName);
+        } catch (\Throwable $e) {
+            \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return true;
+    }
+}
+
+if (!function_exists('imap_renamemailbox')) {
+    function imap_renamemailbox(\IMAP\Connection $imap, string $from, string $to): bool
+    {
+        $imap->ensureOpen();
+
+        $fromName = \Fain182\ImapPolyfill\MailboxReference::parse($from)->bareReference;
+        $toName = \Fain182\ImapPolyfill\MailboxReference::parse($to)->bareReference;
+
+        try {
+            $imap->client->getFolder($fromName)->rename($toName);
+        } catch (\Throwable $e) {
+            \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return true;
+    }
+}
+
+if (!function_exists('imap_rename')) {
+    function imap_rename(\IMAP\Connection $imap, string $from, string $to): bool
+    {
+        return imap_renamemailbox($imap, $from, $to);
+    }
+}
+
+if (!function_exists('imap_subscribe')) {
+    function imap_subscribe(\IMAP\Connection $imap, string $mailbox): bool
+    {
+        $imap->ensureOpen();
+
+        $folderName = \Fain182\ImapPolyfill\MailboxReference::parse($mailbox)->bareReference;
+
+        try {
+            $imap->client->getFolder($folderName)->subscribe();
+        } catch (\Throwable $e) {
+            \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return true;
+    }
+}
+
+if (!function_exists('imap_unsubscribe')) {
+    function imap_unsubscribe(\IMAP\Connection $imap, string $mailbox): bool
+    {
+        $imap->ensureOpen();
+
+        $folderName = \Fain182\ImapPolyfill\MailboxReference::parse($mailbox)->bareReference;
+
+        try {
+            $imap->client->getFolder($folderName)->unsubscribe();
+        } catch (\Throwable $e) {
+            \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return true;
+    }
+}
+
+if (!function_exists('imap_num_recent')) {
+    function imap_num_recent(\IMAP\Connection $imap): int|false
+    {
+        $imap->ensureOpen();
+
+        try {
+            $status = $imap->selectOrExamine();
+        } catch (\Throwable $e) {
+            \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
+
+            // Cached client-side read, like imap_num_msg; see its comment.
+            return $imap->cachedNumRecent;
+        }
+
+        $imap->cachedNumMsg = $status['exists'] ?? 0;
+        $imap->cachedNumRecent = $status['recent'] ?? 0;
+
+        return $imap->cachedNumRecent;
+    }
+}
+
+if (!function_exists('imap_is_open')) {
+    function imap_is_open(\IMAP\Connection $imap): bool
+    {
+        // Deliberately does not call ensureOpen(): unlike every other
+        // wrapper, this function's entire purpose is to check openness
+        // without throwing, matching ext-imap's own "doesn't throw" note.
+        return !$imap->closed;
+    }
+}
+
+if (!function_exists('imap_reopen')) {
+    function imap_reopen(\IMAP\Connection $imap, string $mailbox, int $flags = 0, int $retries = 0): bool
+    {
+        $imap->ensureOpen();
+
+        // Scoped to switching folders on the same already-connected client:
+        // this polyfill doesn't retain the original credentials needed to
+        // reconnect to a genuinely different host.
+        $spec = \Fain182\ImapPolyfill\MailboxSpec::parse($mailbox);
+        $readOnly = (bool) ($flags & OP_READONLY);
+
+        try {
+            $folder = $imap->client->getFolder($spec->folder);
+            $status = $readOnly ? $folder->examine() : $folder->select();
+        } catch (\Throwable $e) {
+            \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        $imap->folder = $spec->folder;
+        $imap->readOnly = $readOnly;
+        $imap->cachedNumMsg = $status['exists'] ?? 0;
+        $imap->cachedNumRecent = $status['recent'] ?? 0;
 
         return true;
     }

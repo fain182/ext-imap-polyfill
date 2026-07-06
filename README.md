@@ -16,26 +16,26 @@ No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the po
 
 ## Coverage
 
-This is not a reimplementation of all `imap_*` functions — 24 are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — **47 of 75 (63%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
 
 Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the notes column; anything not noted is expected to match exactly.
 
 | Function | Implemented | Notes |
 |---|---|---|
-| `imap_8bit` | ❌ | |
+| `imap_8bit` | ✅ | |
 | `imap_alerts` | ✅ | never populated — this polyfill doesn't surface server `* OK [ALERT]` responses |
 | `imap_append` | ✅ | |
-| `imap_base64` | ❌ | |
-| `imap_binary` | ❌ | |
+| `imap_base64` | ✅ | |
+| `imap_binary` | ✅ | wraps output at 60 chars/line like c-client's `rfc822_binary` |
 | `imap_body` | ❌ | |
 | `imap_bodystruct` | ❌ | |
 | `imap_check` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
-| `imap_clearflag_full` | ❌ | |
+| `imap_clearflag_full` | ✅ | |
 | `imap_close` | ✅ | |
-| `imap_create` | ❌ | |
-| `imap_createmailbox` | ❌ | |
+| `imap_create` | ✅ | |
+| `imap_createmailbox` | ✅ | |
 | `imap_delete` | ✅ | |
-| `imap_deletemailbox` | ❌ | |
+| `imap_deletemailbox` | ✅ | |
 | `imap_errors` | ✅ | |
 | `imap_expunge` | ✅ | |
 | `imap_fetchbody` | ✅ | |
@@ -52,7 +52,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_getsubscribed` | ❌ | |
 | `imap_headerinfo` | ✅ | `fetchfrom`/`fetchsubject` (nonzero `$from_length`/`$subject_length`) not implemented |
 | `imap_headers` | ❌ | |
-| `imap_is_open` | ❌ | |
+| `imap_is_open` | ✅ | |
 | `imap_last_error` | ✅ | |
 | `imap_list` | ✅ | |
 | `imap_listmailbox` | ❌ | |
@@ -64,20 +64,20 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_mail_compose` | ❌ | |
 | `imap_mail_copy` | ❌ | |
 | `imap_mail_move` | ❌ | |
-| `imap_mime_header_decode` | ❌ | |
+| `imap_mime_header_decode` | ✅ | |
 | `imap_msgno` | ✅ | |
-| `imap_mutf7_to_utf8` | ❌ | |
+| `imap_mutf7_to_utf8` | ✅ | |
 | `imap_num_msg` | ✅ | |
-| `imap_num_recent` | ❌ | |
+| `imap_num_recent` | ✅ | cached client-side read, like `imap_num_msg` |
 | `imap_open` | ✅ | |
 | `imap_ping` | ❌ | |
-| `imap_qprint` | ❌ | |
-| `imap_rename` | ❌ | |
-| `imap_renamemailbox` | ❌ | |
-| `imap_reopen` | ❌ | |
+| `imap_qprint` | ✅ | |
+| `imap_rename` | ✅ | |
+| `imap_renamemailbox` | ✅ | |
+| `imap_reopen` | ✅ | only switches folders on the same connection — can't reconnect to a different host, since credentials aren't retained after `imap_open` |
 | `imap_rfc822_parse_adrlist` | ✅ | |
-| `imap_rfc822_parse_headers` | ❌ | |
-| `imap_rfc822_write_address` | ❌ | |
+| `imap_rfc822_parse_headers` | ✅ | |
+| `imap_rfc822_write_address` | ✅ | |
 | `imap_savebody` | ❌ | |
 | `imap_scan` | ❌ | |
 | `imap_scanmailbox` | ❌ | |
@@ -87,16 +87,16 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_set_quota` | ❌ | |
 | `imap_sort` | ❌ | |
 | `imap_status` | ❌ | |
-| `imap_subscribe` | ❌ | |
+| `imap_subscribe` | ✅ | |
 | `imap_thread` | ❌ | |
 | `imap_timeout` | ✅ | |
 | `imap_uid` | ✅ | |
-| `imap_undelete` | ❌ | |
-| `imap_unsubscribe` | ❌ | |
-| `imap_utf7_decode` | ❌ | |
-| `imap_utf7_encode` | ❌ | |
+| `imap_undelete` | ✅ | |
+| `imap_unsubscribe` | ✅ | |
+| `imap_utf7_decode` | ✅ | |
+| `imap_utf7_encode` | ✅ | |
 | `imap_utf8` | ✅ | |
-| `imap_utf8_to_mutf7` | ❌ | |
+| `imap_utf8_to_mutf7` | ✅ | |
 
 ## Development
 
