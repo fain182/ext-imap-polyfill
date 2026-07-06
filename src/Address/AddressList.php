@@ -2,66 +2,45 @@
 
 namespace ImapPolyfill\Address;
 
-class AddressList
+final class AddressList
 {
     /**
-     * @return \stdClass[]
+     * @param Address[] $addresses
      */
-    public static function parse(string $addresses, string $defaultHostname): array
+    private function __construct(private readonly array $addresses)
+    {
+    }
+
+    public static function parse(string $addresses, string $defaultHostname): self
     {
         $parts = preg_split('/,(?=(?:[^"]*"[^"]*")*[^"]*$)/', $addresses);
 
         $result = [];
         foreach ($parts as $part) {
-            $address = self::parseOne(trim($part), $defaultHostname);
+            $address = Address::parse(trim($part), $defaultHostname);
             if ($address !== null) {
                 $result[] = $address;
             }
         }
 
-        return $result;
+        return new self($result);
     }
 
     /**
-     * Formats only the first address of a header value as a single
-     * "Personal <mailbox@host>" string, matching ext-imap's overview shape.
+     * @return \stdClass[]
      */
-    public static function firstAsString(string $addresses, string $defaultHostname): ?string
+    public function toLegacyArray(): array
     {
-        $list = self::parse($addresses, $defaultHostname);
-        if ($list === []) {
-            return null;
-        }
-
-        $address = $list[0];
-        $mailAtHost = "{$address->mailbox}@{$address->host}";
-
-        return isset($address->personal) ? "{$address->personal} <{$mailAtHost}>" : $mailAtHost;
+        return array_map(static fn (Address $address) => $address->toLegacyObject(), $this->addresses);
     }
 
-    private static function parseOne(string $part, string $defaultHostname): ?\stdClass
+    public function first(): ?Address
     {
-        if ($part === '') {
-            return null;
-        }
+        return $this->addresses[0] ?? null;
+    }
 
-        if (!preg_match(
-            '/^(?:"?(?P<name>[^"<]*)"?\s+)?<?(?P<mailbox>[^\s@<>]+)(?:@(?P<host>[^\s@<>]+))?>?$/',
-            $part,
-            $matches
-        )) {
-            return null;
-        }
-
-        $address = new \stdClass();
-        $address->mailbox = $matches['mailbox'];
-        $address->host = ($matches['host'] ?? '') !== '' ? $matches['host'] : $defaultHostname;
-
-        $personal = trim($matches['name'] ?? '');
-        if ($personal !== '') {
-            $address->personal = $personal;
-        }
-
-        return $address;
+    public function firstAsString(): ?string
+    {
+        return $this->first()?->format();
     }
 }

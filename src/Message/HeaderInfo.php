@@ -62,7 +62,7 @@ final class HeaderInfo
                 continue;
             }
 
-            $result->$property = AddressList::parse($fields[$header], $defaultHost);
+            $result->$property = AddressList::parse($fields[$header], $defaultHost)->toLegacyArray();
             $result->{$property.'address'} = $fields[$header];
         }
 

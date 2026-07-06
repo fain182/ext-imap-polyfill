@@ -10,7 +10,7 @@ if (!function_exists('imap_utf8')) {
 if (!function_exists('imap_rfc822_parse_adrlist')) {
     function imap_rfc822_parse_adrlist(string $string, string $default_hostname): array
     {
-        return \ImapPolyfill\Address\AddressList::parse($string, $default_hostname);
+        return \ImapPolyfill\Address\AddressList::parse($string, $default_hostname)->toLegacyArray();
     }
 }
 
@@ -265,7 +265,7 @@ if (!function_exists('imap_fetch_overview')) {
 
         try {
             $status = $imap->selectOrExamine();
-            $ids = \ImapPolyfill\Message\MessageSequence::expand($sequence, $status['exists'] ?? 0);
+            $ids = \ImapPolyfill\Message\MessageSequence::parse($sequence)->expand($status['exists'] ?? 0);
 
             if ($ids === []) {
                 return [];
