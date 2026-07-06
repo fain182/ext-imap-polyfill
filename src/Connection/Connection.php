@@ -8,7 +8,7 @@ use ImapPolyfill\Message\BodyStructureFetch;
 /**
  * Polyfill for the opaque IMAP\Connection class ext-imap registers natively.
  * Owns the webklex client: nothing outside this class touches it directly,
- * so every wire operation Session/Mailbox/Mailboxes need is exposed here as
+ * so every wire operation Session/Mailbox/MailboxHierarchy need is exposed here as
  * a named method instead of reaching through a public "client" field.
  */
 final class Connection

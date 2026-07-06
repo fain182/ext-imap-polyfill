@@ -9,18 +9,18 @@ use ImapPolyfill\Support\ErrorStack;
  * Entry point for a single imap_*() call against an already-open
  * \IMAP\Connection. Owns the connection's own lifecycle (open/closed,
  * cached counts, current folder); mailbox-selection and hierarchy
- * operations are delegated to Mailbox and Mailboxes respectively.
+ * operations are delegated to Mailbox and MailboxHierarchy respectively.
  */
 final class Session
 {
     private readonly Mailbox $mailbox;
 
-    private readonly Mailboxes $mailboxes;
+    private readonly MailboxHierarchy $mailboxHierarchy;
 
     public function __construct(private readonly \IMAP\Connection $connection)
     {
         $this->mailbox = new Mailbox($connection);
-        $this->mailboxes = new Mailboxes($connection);
+        $this->mailboxHierarchy = new MailboxHierarchy($connection);
     }
 
     public function close(int $flags): bool
@@ -199,7 +199,7 @@ final class Session
      */
     public function listMailboxes(string $reference, string $pattern): array|false
     {
-        return $this->mailboxes->listMailboxes($reference, $pattern);
+        return $this->mailboxHierarchy->listMailboxes($reference, $pattern);
     }
 
     /**
@@ -207,31 +207,31 @@ final class Session
      */
     public function getMailboxes(string $reference, string $pattern): array|false
     {
-        return $this->mailboxes->getMailboxes($reference, $pattern);
+        return $this->mailboxHierarchy->getMailboxes($reference, $pattern);
     }
 
     public function createMailbox(string $mailbox): bool
     {
-        return $this->mailboxes->createMailbox($mailbox);
+        return $this->mailboxHierarchy->createMailbox($mailbox);
     }
 
     public function deleteMailbox(string $mailbox): bool
     {
-        return $this->mailboxes->deleteMailbox($mailbox);
+        return $this->mailboxHierarchy->deleteMailbox($mailbox);
     }
 
     public function renameMailbox(string $from, string $to): bool
     {
-        return $this->mailboxes->renameMailbox($from, $to);
+        return $this->mailboxHierarchy->renameMailbox($from, $to);
     }
 
     public function subscribe(string $mailbox): bool
     {
-        return $this->mailboxes->subscribe($mailbox);
+        return $this->mailboxHierarchy->subscribe($mailbox);
     }
 
     public function unsubscribe(string $mailbox): bool
     {
-        return $this->mailboxes->unsubscribe($mailbox);
+        return $this->mailboxHierarchy->unsubscribe($mailbox);
     }
 }

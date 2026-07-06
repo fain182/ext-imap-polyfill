@@ -10,7 +10,7 @@ use ImapPolyfill\Support\ErrorStack;
  * creating, deleting, renaming, and (un)subscribing to folders, without any
  * of them being selected.
  */
-final class Mailboxes
+final class MailboxHierarchy
 {
     public function __construct(private readonly \IMAP\Connection $connection)
     {
