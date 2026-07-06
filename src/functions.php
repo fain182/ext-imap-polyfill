@@ -17,7 +17,7 @@ if (!function_exists('imap_rfc822_parse_adrlist')) {
 if (!function_exists('imap_open')) {
     function imap_open(string $mailbox, string $user, string $password, int $flags = 0, int $retries = 0, array $options = []): \IMAP\Connection|false
     {
-        $connection = \IMAP\Connection::open($mailbox, $user, $password, $flags, $retries);
+        $connection = \ImapPolyfill\Session\Session::open($mailbox, $user, $password, $flags, $retries);
 
         if ($connection === false) {
             trigger_error("imap_open(): Couldn't open stream {$mailbox}", E_USER_WARNING);
@@ -348,7 +348,7 @@ if (!function_exists('imap_is_open')) {
         // Deliberately does not call ensureOpen(): unlike every other
         // wrapper, this function's entire purpose is to check openness
         // without throwing, matching ext-imap's own "doesn't throw" note.
-        return (new \ImapPolyfill\Session\Session($imap))->isOpen();
+        return $imap->isOpen();
     }
 }
 
