@@ -27,16 +27,23 @@ jobs:
 
       - name: Debug environment (temporary)
         run: |
-          php -r 'echo PHP_OS_FAMILY, " ", php_uname(), "\n";'
-          locale
-          php -r 'echo "internal_encoding=", mb_internal_encoding(), "\n"; echo "sub=", mb_substitute_character(), "\n";'
+          php -m | grep -i imap || echo "no ext-imap loaded"
+          php -i | grep -iE "pcre|mbstring.func_overload|zend.multibyte|auto_prepend|auto_append"
           php -r '
-            $b = base64_decode("w6nDqQ==");
-            echo "base64_decode -> ", bin2hex($b), "\n";
-            $m = mb_decode_mimeheader("=?UTF-8?B?w6nDqQ==?=");
-            echo "mb_decode_mimeheader -> ", bin2hex($m), "\n";
+            $text = "=?UTF-8?B?w6nDqQ==?=";
+            $pattern = "/=\?(?P<charset>[^?\s]+)\?(?P<encoding>[BbQq])\?(?P<data>[^?]*)\?=(?:\s+(?==\?[^?\s]+\?[BbQq]\?))?/";
+            preg_match($pattern, $text, $m);
+            echo "regex data capture -> ", bin2hex($m["data"]), " (", $m["data"], ")\n";
+            $direct = base64_decode($m["data"]);
+            echo "direct base64_decode of captured data -> ", bin2hex($direct), "\n";
+            $result = preg_replace_callback($pattern, function ($mm) {
+                $bytes = base64_decode($mm["data"]);
+                echo "  inside callback, base64_decode -> ", bin2hex($bytes), "\n";
+                return $bytes;
+            }, $text);
+            echo "preg_replace_callback final result -> ", bin2hex($result), "\n";
             require "vendor/autoload.php";
-            $u = imap_utf8("=?UTF-8?B?w6nDqQ==?=");
+            $u = imap_utf8($text);
             echo "imap_utf8 -> ", bin2hex($u), "\n";
           '
 
