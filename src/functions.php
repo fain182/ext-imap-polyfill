@@ -260,38 +260,14 @@ if (!function_exists('imap_getmailboxes')) {
 if (!function_exists('imap_setflag_full')) {
     function imap_setflag_full(\IMAP\Connection $imap, string $sequence, string $flag, int $options = 0): bool
     {
-        $imap->ensureOpen();
-
-        $command = ($options & ST_UID) ? 'UID STORE' : 'STORE';
-        $flagsAtom = '('.trim($flag).')';
-
-        try {
-            $imap->selectOrExamine();
-            $imap->client->getConnection()->requestAndResponse($command, [$sequence, '+FLAGS.SILENT', $flagsAtom]);
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-        }
-
-        return true;
+        return (new \ImapPolyfill\Session\Session($imap))->setFlagFull($sequence, $flag, $options);
     }
 }
 
 if (!function_exists('imap_clearflag_full')) {
     function imap_clearflag_full(\IMAP\Connection $imap, string $sequence, string $flag, int $options = 0): bool
     {
-        $imap->ensureOpen();
-
-        $command = ($options & ST_UID) ? 'UID STORE' : 'STORE';
-        $flagsAtom = '('.trim($flag).')';
-
-        try {
-            $imap->selectOrExamine();
-            $imap->client->getConnection()->requestAndResponse($command, [$sequence, '-FLAGS.SILENT', $flagsAtom]);
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-        }
-
-        return true;
+        return (new \ImapPolyfill\Session\Session($imap))->clearFlagFull($sequence, $flag, $options);
     }
 }
 
@@ -312,36 +288,14 @@ if (!function_exists('imap_undelete')) {
 if (!function_exists('imap_expunge')) {
     function imap_expunge(\IMAP\Connection $imap): bool
     {
-        $imap->ensureOpen();
-
-        try {
-            $imap->selectOrExamine();
-            $imap->client->expunge();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-        }
-
-        return true;
+        return (new \ImapPolyfill\Session\Session($imap))->expunge();
     }
 }
 
 if (!function_exists('imap_append')) {
     function imap_append(\IMAP\Connection $imap, string $folder, string $message, ?string $options = null, ?string $internal_date = null): bool
     {
-        $imap->ensureOpen();
-
-        $folderName = \ImapPolyfill\Mailbox\MailboxReference::parse($folder)->bareReference;
-        $flags = $options !== null ? preg_split('/\s+/', trim($options)) : null;
-
-        try {
-            $imap->client->getFolder($folderName)->appendMessage($message, $flags, $internal_date);
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return (new \ImapPolyfill\Session\Session($imap))->append($folder, $message, $options, $internal_date);
     }
 }
 

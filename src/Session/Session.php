@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Session;
 
+use ImapPolyfill\Mailbox\MailboxReference;
 use ImapPolyfill\Mailbox\MailboxSpec;
 use ImapPolyfill\Message\BodyStructure;
 use ImapPolyfill\Message\BodyStructureFetch;
@@ -346,5 +347,71 @@ final class Session
 
             return 0;
         }
+    }
+
+    public function setFlagFull(string $sequence, string $flag, int $options): bool
+    {
+        $this->connection->ensureOpen();
+
+        $command = ($options & ST_UID) ? 'UID STORE' : 'STORE';
+        $flagsAtom = '('.trim($flag).')';
+
+        try {
+            $this->connection->selectOrExamine();
+            $this->connection->client->getConnection()->requestAndResponse($command, [$sequence, '+FLAGS.SILENT', $flagsAtom]);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+        }
+
+        return true;
+    }
+
+    public function clearFlagFull(string $sequence, string $flag, int $options): bool
+    {
+        $this->connection->ensureOpen();
+
+        $command = ($options & ST_UID) ? 'UID STORE' : 'STORE';
+        $flagsAtom = '('.trim($flag).')';
+
+        try {
+            $this->connection->selectOrExamine();
+            $this->connection->client->getConnection()->requestAndResponse($command, [$sequence, '-FLAGS.SILENT', $flagsAtom]);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+        }
+
+        return true;
+    }
+
+    public function expunge(): bool
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            $this->connection->selectOrExamine();
+            $this->connection->client->expunge();
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+        }
+
+        return true;
+    }
+
+    public function append(string $folder, string $message, ?string $options, ?string $internalDate): bool
+    {
+        $this->connection->ensureOpen();
+
+        $folderName = MailboxReference::parse($folder)->bareReference;
+        $flags = $options !== null ? preg_split('/\s+/', trim($options)) : null;
+
+        try {
+            $this->connection->client->getFolder($folderName)->appendMessage($message, $flags, $internalDate);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return true;
     }
 }
