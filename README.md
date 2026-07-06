@@ -16,36 +16,87 @@ No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the po
 
 ## Coverage
 
-This is not a reimplementation of all ~80 `imap_*` functions — only the 23 listed below are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any other `imap_*` function will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — 24 are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
 
-| Function | Notes |
-|---|---|
-| `imap_open` | `OP_READONLY` unsupported; retries argument ignored |
-| `imap_close` | supports `CL_EXPUNGE` |
-| `imap_timeout` | process-global, like the original |
-| `imap_last_error` | |
-| `imap_errors` | |
-| `imap_alerts` | never populated — this polyfill doesn't surface server `* OK [ALERT]` responses |
-| `imap_num_msg` | |
-| `imap_check` | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
-| `imap_search` | |
-| `imap_fetchheader` | |
-| `imap_headerinfo` | `fetchfrom`/`fetchsubject` (nonzero `$from_length`/`$subject_length`) not implemented |
-| `imap_fetch_overview` | |
-| `imap_fetchstructure` | |
-| `imap_fetchbody` | |
-| `imap_msgno` | |
-| `imap_uid` | |
-| `imap_list` | |
-| `imap_getmailboxes` | |
-| `imap_setflag_full` | |
-| `imap_delete` | |
-| `imap_expunge` | |
-| `imap_append` | |
-| `imap_utf8` | |
-| `imap_rfc822_parse_adrlist` | |
+Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the notes column; anything not noted is expected to match exactly.
 
-Every function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the notes above; anything not listed there is expected to match exactly.
+| Function | Implemented | Notes |
+|---|---|---|
+| `imap_8bit` | ❌ | |
+| `imap_alerts` | ✅ | never populated — this polyfill doesn't surface server `* OK [ALERT]` responses |
+| `imap_append` | ✅ | |
+| `imap_base64` | ❌ | |
+| `imap_binary` | ❌ | |
+| `imap_body` | ❌ | |
+| `imap_bodystruct` | ❌ | |
+| `imap_check` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
+| `imap_clearflag_full` | ❌ | |
+| `imap_close` | ✅ | supports `CL_EXPUNGE` |
+| `imap_create` | ❌ | |
+| `imap_createmailbox` | ❌ | |
+| `imap_delete` | ✅ | |
+| `imap_deletemailbox` | ❌ | |
+| `imap_errors` | ✅ | |
+| `imap_expunge` | ✅ | |
+| `imap_fetchbody` | ✅ | |
+| `imap_fetchheader` | ✅ | |
+| `imap_fetchmime` | ❌ | |
+| `imap_fetch_overview` | ✅ | |
+| `imap_fetchstructure` | ✅ | |
+| `imap_fetchtext` | ❌ | |
+| `imap_gc` | ❌ | |
+| `imap_getacl` | ❌ | |
+| `imap_getmailboxes` | ✅ | |
+| `imap_get_quota` | ❌ | |
+| `imap_get_quotaroot` | ❌ | |
+| `imap_getsubscribed` | ❌ | |
+| `imap_headerinfo` | ✅ | `fetchfrom`/`fetchsubject` (nonzero `$from_length`/`$subject_length`) not implemented |
+| `imap_headers` | ❌ | |
+| `imap_is_open` | ❌ | |
+| `imap_last_error` | ✅ | |
+| `imap_list` | ✅ | |
+| `imap_listmailbox` | ❌ | |
+| `imap_listscan` | ❌ | |
+| `imap_listsubscribed` | ❌ | |
+| `imap_lsub` | ❌ | |
+| `imap_mail` | ❌ | |
+| `imap_mailboxmsginfo` | ❌ | |
+| `imap_mail_compose` | ❌ | |
+| `imap_mail_copy` | ❌ | |
+| `imap_mail_move` | ❌ | |
+| `imap_mime_header_decode` | ❌ | |
+| `imap_msgno` | ✅ | |
+| `imap_mutf7_to_utf8` | ❌ | |
+| `imap_num_msg` | ✅ | cached client-side read, like the original — does not re-query the server |
+| `imap_num_recent` | ❌ | |
+| `imap_open` | ✅ | `OP_READONLY` unsupported; retries argument ignored |
+| `imap_ping` | ❌ | |
+| `imap_qprint` | ❌ | |
+| `imap_rename` | ❌ | |
+| `imap_renamemailbox` | ❌ | |
+| `imap_reopen` | ❌ | |
+| `imap_rfc822_parse_adrlist` | ✅ | |
+| `imap_rfc822_parse_headers` | ❌ | |
+| `imap_rfc822_write_address` | ❌ | |
+| `imap_savebody` | ❌ | |
+| `imap_scan` | ❌ | |
+| `imap_scanmailbox` | ❌ | |
+| `imap_search` | ✅ | |
+| `imap_setacl` | ❌ | |
+| `imap_setflag_full` | ✅ | |
+| `imap_set_quota` | ❌ | |
+| `imap_sort` | ❌ | |
+| `imap_status` | ❌ | |
+| `imap_subscribe` | ❌ | |
+| `imap_thread` | ❌ | |
+| `imap_timeout` | ✅ | process-global, like the original |
+| `imap_uid` | ✅ | |
+| `imap_undelete` | ❌ | |
+| `imap_unsubscribe` | ❌ | |
+| `imap_utf7_decode` | ❌ | |
+| `imap_utf7_encode` | ❌ | |
+| `imap_utf8` | ✅ | |
+| `imap_utf8_to_mutf7` | ❌ | |
 
 ## Development
 
