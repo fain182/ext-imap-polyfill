@@ -25,6 +25,21 @@ jobs:
       - name: Composer install
         run: make install
 
+      - name: Debug environment (temporary)
+        run: |
+          php -r 'echo PHP_OS_FAMILY, " ", php_uname(), "\n";'
+          locale
+          php -r 'echo "internal_encoding=", mb_internal_encoding(), "\n"; echo "sub=", mb_substitute_character(), "\n";'
+          php -r '
+            $b = base64_decode("w6nDqQ==");
+            echo "base64_decode -> ", bin2hex($b), "\n";
+            $m = mb_decode_mimeheader("=?UTF-8?B?w6nDqQ==?=");
+            echo "mb_decode_mimeheader -> ", bin2hex($m), "\n";
+            require "vendor/autoload.php";
+            $u = imap_utf8("=?UTF-8?B?w6nDqQ==?=");
+            echo "imap_utf8 -> ", bin2hex($u), "\n";
+          '
+
       - name: Unit tests
         run: make test-unit
 
