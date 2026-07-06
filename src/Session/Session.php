@@ -3,6 +3,11 @@
 namespace ImapPolyfill\Session;
 
 use ImapPolyfill\Mailbox\MailboxSpec;
+use ImapPolyfill\Message\BodyStructure;
+use ImapPolyfill\Message\BodyStructureFetch;
+use ImapPolyfill\Message\HeaderInfo;
+use ImapPolyfill\Message\MessageSequence;
+use ImapPolyfill\Message\Overview;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -119,5 +124,227 @@ final class Session
         $this->connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
 
         return true;
+    }
+
+    /**
+     * @return int[]|false
+     */
+    public function search(string $criteria, int $flags, string $charset): array|false
+    {
+        $uidMode = ($flags & SE_UID)
+            ? \Webklex\PHPIMAP\IMAP::ST_UID
+            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+
+        $this->connection->ensureOpen();
+
+        $tokens = preg_split('/\s+/', trim($criteria));
+
+        try {
+            $this->connection->selectOrExamine();
+            $ids = $this->connection->client->getConnection()->search($tokens, $uidMode)->validatedData();
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        if ($ids === []) {
+            return false;
+        }
+
+        return array_map('intval', $ids);
+    }
+
+    public function fetchHeader(int $messageNum, int $flags): string|false
+    {
+        $uidMode = ($flags & FT_UID)
+            ? \Webklex\PHPIMAP\IMAP::ST_UID
+            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+
+        $this->connection->ensureOpen();
+
+        try {
+            $this->connection->selectOrExamine();
+            $headers = $this->connection->client->getConnection()->headers([$messageNum], 'RFC822', $uidMode)->validatedData();
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return $headers[$messageNum] ?? reset($headers);
+    }
+
+    public function headerInfo(int $messageNum): \stdClass|false
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            $this->connection->selectOrExamine();
+            $data = $this->connection->client->getConnection()
+                ->fetch(['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], [$messageNum], null, \Webklex\PHPIMAP\IMAP::ST_MSGN)
+                ->validatedData();
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        $message = $data[$messageNum] ?? reset($data);
+
+        return HeaderInfo::build(
+            $message['RFC822.HEADER'],
+            $message['FLAGS'],
+            $message['INTERNALDATE'],
+            $message['RFC822.SIZE'],
+            $messageNum,
+            $this->connection->client->host,
+        );
+    }
+
+    /**
+     * @return \stdClass[]|false
+     */
+    public function fetchOverview(string $sequence, int $flags): array|false
+    {
+        $uidMode = ($flags & FT_UID)
+            ? \Webklex\PHPIMAP\IMAP::ST_UID
+            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+
+        $this->connection->ensureOpen();
+
+        try {
+            $status = $this->connection->selectOrExamine();
+            $ids = MessageSequence::parse($sequence)->expand($status['exists'] ?? 0);
+
+            if ($ids === []) {
+                return [];
+            }
+
+            $connection = $this->connection->client->getConnection();
+            $data = $connection
+                ->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode)
+                ->validatedData();
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            // Observed real ext-imap behavior: a broken connection yields an
+            // empty result set here, not false (unlike most other fetch
+            // functions in this file).
+            return [];
+        }
+
+        $result = [];
+        foreach ($ids as $id) {
+            if (!isset($data[$id])) {
+                continue;
+            }
+
+            $message = $data[$id];
+            $uid = $uidMode === \Webklex\PHPIMAP\IMAP::ST_UID ? $id : (int) $message['UID'];
+            $msgno = $uidMode === \Webklex\PHPIMAP\IMAP::ST_UID
+                ? $connection->getMessageNumber((string) $id)->validatedData()
+                : $id;
+
+            $result[] = Overview::build(
+                $message['RFC822.HEADER'],
+                $message['FLAGS'],
+                $message['INTERNALDATE'],
+                (int) $message['RFC822.SIZE'],
+                $uid,
+                $msgno,
+                $this->connection->client->host,
+            );
+        }
+
+        return $result;
+    }
+
+    public function fetchStructure(int $messageNum, int $flags): \stdClass|false
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            $this->connection->selectOrExamine();
+            $parsed = BodyStructureFetch::fetch($this->connection->client, $messageNum, (bool) ($flags & FT_UID));
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return BodyStructure::build($parsed);
+    }
+
+    public function fetchBody(int $messageNum, string $section, int $flags): string|false
+    {
+        $this->connection->ensureOpen();
+
+        $uidMode = ($flags & FT_UID)
+            ? \Webklex\PHPIMAP\IMAP::ST_UID
+            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+        // ext-imap's section "0" is a legacy alias for the top-level header,
+        // not a literal MIME part index.
+        $wireSection = $section === '0' ? 'HEADER' : $section;
+        $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$wireSection}]" : "BODY[{$wireSection}]";
+
+        try {
+            $this->connection->selectOrExamine();
+            $data = $this->connection->client->getConnection()->fetch([$item], [$messageNum], null, $uidMode)->validatedData();
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return $data[$messageNum] ?? reset($data);
+    }
+
+    public function uid(int $messageNum): int|false
+    {
+        $this->connection->ensureOpen();
+
+        if ($messageNum < 1) {
+            throw new \ValueError('imap_uid(): Argument #2 ($message_num) must be greater than 0');
+        }
+
+        try {
+            $status = $this->connection->selectOrExamine();
+
+            if ($messageNum > ($status['exists'] ?? 0)) {
+                trigger_error('imap_uid(): Bad message number', E_USER_WARNING);
+
+                return false;
+            }
+
+            $uids = $this->connection->client->getConnection()->getUid()->validatedData();
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return (int) $uids[$messageNum];
+    }
+
+    public function msgno(int $messageUid): int
+    {
+        $this->connection->ensureOpen();
+
+        if ($messageUid < 1) {
+            throw new \ValueError('imap_msgno(): Argument #2 ($message_uid) must be greater than 0');
+        }
+
+        try {
+            $this->connection->selectOrExamine();
+
+            return (int) $this->connection->client->getConnection()->getMessageNumber((string) $messageUid)->validatedData();
+        } catch (\Webklex\PHPIMAP\Exceptions\MessageNotFoundException) {
+            return 0;
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return 0;
+        }
     }
 }

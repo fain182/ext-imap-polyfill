@@ -135,232 +135,56 @@ if (!function_exists('imap_check')) {
 if (!function_exists('imap_search')) {
     function imap_search(\IMAP\Connection $imap, string $criteria, int $flags = SE_FREE, string $charset = ''): array|false
     {
-        $uidMode = ($flags & SE_UID)
-            ? \Webklex\PHPIMAP\IMAP::ST_UID
-            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
-
-        $imap->ensureOpen();
-
-        $tokens = preg_split('/\s+/', trim($criteria));
-
-        try {
-            $imap->selectOrExamine();
-            $ids = $imap->client->getConnection()->search($tokens, $uidMode)->validatedData();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        if ($ids === []) {
-            return false;
-        }
-
-        return array_map('intval', $ids);
+        return (new \ImapPolyfill\Session\Session($imap))->search($criteria, $flags, $charset);
     }
 }
 
 if (!function_exists('imap_fetchheader')) {
     function imap_fetchheader(\IMAP\Connection $imap, int $message_num, int $flags = 0): string|false
     {
-        $uidMode = ($flags & FT_UID)
-            ? \Webklex\PHPIMAP\IMAP::ST_UID
-            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
-
-        $imap->ensureOpen();
-
-        try {
-            $imap->selectOrExamine();
-            $headers = $imap->client->getConnection()->headers([$message_num], 'RFC822', $uidMode)->validatedData();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return $headers[$message_num] ?? reset($headers);
+        return (new \ImapPolyfill\Session\Session($imap))->fetchHeader($message_num, $flags);
     }
 }
 
 if (!function_exists('imap_headerinfo')) {
     function imap_headerinfo(\IMAP\Connection $imap, int $message_num, int $from_length = 0, int $subject_length = 0): \stdClass|false
     {
-        $imap->ensureOpen();
-
-        try {
-            $imap->selectOrExamine();
-            $data = $imap->client->getConnection()
-                ->fetch(['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], [$message_num], null, \Webklex\PHPIMAP\IMAP::ST_MSGN)
-                ->validatedData();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        $message = $data[$message_num] ?? reset($data);
-
-        return \ImapPolyfill\Message\HeaderInfo::build(
-            $message['RFC822.HEADER'],
-            $message['FLAGS'],
-            $message['INTERNALDATE'],
-            $message['RFC822.SIZE'],
-            $message_num,
-            $imap->client->host,
-        );
+        return (new \ImapPolyfill\Session\Session($imap))->headerInfo($message_num);
     }
 }
 
 if (!function_exists('imap_fetch_overview')) {
     function imap_fetch_overview(\IMAP\Connection $imap, string $sequence, int $flags = 0): array|false
     {
-        $uidMode = ($flags & FT_UID)
-            ? \Webklex\PHPIMAP\IMAP::ST_UID
-            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
-
-        $imap->ensureOpen();
-
-        try {
-            $status = $imap->selectOrExamine();
-            $ids = \ImapPolyfill\Message\MessageSequence::parse($sequence)->expand($status['exists'] ?? 0);
-
-            if ($ids === []) {
-                return [];
-            }
-
-            $connection = $imap->client->getConnection();
-            $data = $connection
-                ->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode)
-                ->validatedData();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            // Observed real ext-imap behavior: a broken connection yields an
-            // empty result set here, not false (unlike most other fetch
-            // functions in this file).
-            return [];
-        }
-
-        $result = [];
-        foreach ($ids as $id) {
-            if (!isset($data[$id])) {
-                continue;
-            }
-
-            $message = $data[$id];
-            $uid = $uidMode === \Webklex\PHPIMAP\IMAP::ST_UID ? $id : (int) $message['UID'];
-            $msgno = $uidMode === \Webklex\PHPIMAP\IMAP::ST_UID
-                ? $connection->getMessageNumber((string) $id)->validatedData()
-                : $id;
-
-            $result[] = \ImapPolyfill\Message\Overview::build(
-                $message['RFC822.HEADER'],
-                $message['FLAGS'],
-                $message['INTERNALDATE'],
-                (int) $message['RFC822.SIZE'],
-                $uid,
-                $msgno,
-                $imap->client->host,
-            );
-        }
-
-        return $result;
+        return (new \ImapPolyfill\Session\Session($imap))->fetchOverview($sequence, $flags);
     }
 }
 
 if (!function_exists('imap_fetchstructure')) {
     function imap_fetchstructure(\IMAP\Connection $imap, int $message_num, int $flags = 0): \stdClass|false
     {
-        $imap->ensureOpen();
-
-        try {
-            $imap->selectOrExamine();
-            $parsed = \ImapPolyfill\Message\BodyStructureFetch::fetch($imap->client, $message_num, (bool) ($flags & FT_UID));
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return \ImapPolyfill\Message\BodyStructure::build($parsed);
+        return (new \ImapPolyfill\Session\Session($imap))->fetchStructure($message_num, $flags);
     }
 }
 
 if (!function_exists('imap_fetchbody')) {
     function imap_fetchbody(\IMAP\Connection $imap, int $message_num, string $section, int $flags = 0): string|false
     {
-        $imap->ensureOpen();
-
-        $uidMode = ($flags & FT_UID)
-            ? \Webklex\PHPIMAP\IMAP::ST_UID
-            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
-        // ext-imap's section "0" is a legacy alias for the top-level header,
-        // not a literal MIME part index.
-        $wireSection = $section === '0' ? 'HEADER' : $section;
-        $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$wireSection}]" : "BODY[{$wireSection}]";
-
-        try {
-            $imap->selectOrExamine();
-            $data = $imap->client->getConnection()->fetch([$item], [$message_num], null, $uidMode)->validatedData();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return $data[$message_num] ?? reset($data);
+        return (new \ImapPolyfill\Session\Session($imap))->fetchBody($message_num, $section, $flags);
     }
 }
 
 if (!function_exists('imap_uid')) {
     function imap_uid(\IMAP\Connection $imap, int $message_num): int|false
     {
-        $imap->ensureOpen();
-
-        if ($message_num < 1) {
-            throw new \ValueError('imap_uid(): Argument #2 ($message_num) must be greater than 0');
-        }
-
-        try {
-            $status = $imap->selectOrExamine();
-
-            if ($message_num > ($status['exists'] ?? 0)) {
-                trigger_error('imap_uid(): Bad message number', E_USER_WARNING);
-
-                return false;
-            }
-
-            $uids = $imap->client->getConnection()->getUid()->validatedData();
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return (int) $uids[$message_num];
+        return (new \ImapPolyfill\Session\Session($imap))->uid($message_num);
     }
 }
 
 if (!function_exists('imap_msgno')) {
     function imap_msgno(\IMAP\Connection $imap, int $message_uid): int
     {
-        $imap->ensureOpen();
-
-        if ($message_uid < 1) {
-            throw new \ValueError('imap_msgno(): Argument #2 ($message_uid) must be greater than 0');
-        }
-
-        try {
-            $imap->selectOrExamine();
-
-            return (int) $imap->client->getConnection()->getMessageNumber((string) $message_uid)->validatedData();
-        } catch (\Webklex\PHPIMAP\Exceptions\MessageNotFoundException) {
-            return 0;
-        } catch (\Throwable $e) {
-            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
-
-            return 0;
-        }
+        return (new \ImapPolyfill\Session\Session($imap))->msgno($message_uid);
     }
 }
 
