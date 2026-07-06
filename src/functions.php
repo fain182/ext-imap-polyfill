@@ -83,84 +83,84 @@ if (!function_exists('imap_check')) {
 if (!function_exists('imap_search')) {
     function imap_search(\IMAP\Connection $imap, string $criteria, int $flags = SE_FREE, string $charset = ''): array|false
     {
-        return (new \ImapPolyfill\Session\Session($imap))->search($criteria, $flags, $charset);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->search($criteria, $flags, $charset);
     }
 }
 
 if (!function_exists('imap_fetchheader')) {
     function imap_fetchheader(\IMAP\Connection $imap, int $message_num, int $flags = 0): string|false
     {
-        return (new \ImapPolyfill\Session\Session($imap))->fetchHeader($message_num, $flags);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->fetchHeader($message_num, $flags);
     }
 }
 
 if (!function_exists('imap_headerinfo')) {
     function imap_headerinfo(\IMAP\Connection $imap, int $message_num, int $from_length = 0, int $subject_length = 0): \stdClass|false
     {
-        return (new \ImapPolyfill\Session\Session($imap))->headerInfo($message_num);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->headerInfo($message_num);
     }
 }
 
 if (!function_exists('imap_fetch_overview')) {
     function imap_fetch_overview(\IMAP\Connection $imap, string $sequence, int $flags = 0): array|false
     {
-        return (new \ImapPolyfill\Session\Session($imap))->fetchOverview($sequence, $flags);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->fetchOverview($sequence, $flags);
     }
 }
 
 if (!function_exists('imap_fetchstructure')) {
     function imap_fetchstructure(\IMAP\Connection $imap, int $message_num, int $flags = 0): \stdClass|false
     {
-        return (new \ImapPolyfill\Session\Session($imap))->fetchStructure($message_num, $flags);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->fetchStructure($message_num, $flags);
     }
 }
 
 if (!function_exists('imap_fetchbody')) {
     function imap_fetchbody(\IMAP\Connection $imap, int $message_num, string $section, int $flags = 0): string|false
     {
-        return (new \ImapPolyfill\Session\Session($imap))->fetchBody($message_num, $section, $flags);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->fetchBody($message_num, $section, $flags);
     }
 }
 
 if (!function_exists('imap_uid')) {
     function imap_uid(\IMAP\Connection $imap, int $message_num): int|false
     {
-        return (new \ImapPolyfill\Session\Session($imap))->uid($message_num);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->uid($message_num);
     }
 }
 
 if (!function_exists('imap_msgno')) {
     function imap_msgno(\IMAP\Connection $imap, int $message_uid): int
     {
-        return (new \ImapPolyfill\Session\Session($imap))->msgno($message_uid);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->msgno($message_uid);
     }
 }
 
 if (!function_exists('imap_list')) {
     function imap_list(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
-        return (new \ImapPolyfill\Session\Session($imap))->listMailboxes($reference, $pattern);
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->listMailboxes($reference, $pattern);
     }
 }
 
 if (!function_exists('imap_getmailboxes')) {
     function imap_getmailboxes(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
-        return (new \ImapPolyfill\Session\Session($imap))->getMailboxes($reference, $pattern);
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->getMailboxes($reference, $pattern);
     }
 }
 
 if (!function_exists('imap_setflag_full')) {
     function imap_setflag_full(\IMAP\Connection $imap, string $sequence, string $flag, int $options = 0): bool
     {
-        return (new \ImapPolyfill\Session\Session($imap))->setFlagFull($sequence, $flag, $options);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->setFlagFull($sequence, $flag, $options);
     }
 }
 
 if (!function_exists('imap_clearflag_full')) {
     function imap_clearflag_full(\IMAP\Connection $imap, string $sequence, string $flag, int $options = 0): bool
     {
-        return (new \ImapPolyfill\Session\Session($imap))->clearFlagFull($sequence, $flag, $options);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->clearFlagFull($sequence, $flag, $options);
     }
 }
 
@@ -181,14 +181,14 @@ if (!function_exists('imap_undelete')) {
 if (!function_exists('imap_expunge')) {
     function imap_expunge(\IMAP\Connection $imap): bool
     {
-        return (new \ImapPolyfill\Session\Session($imap))->expunge();
+        return (new \ImapPolyfill\Session\Mailbox($imap))->expunge();
     }
 }
 
 if (!function_exists('imap_append')) {
     function imap_append(\IMAP\Connection $imap, string $folder, string $message, ?string $options = null, ?string $internal_date = null): bool
     {
-        return (new \ImapPolyfill\Session\Session($imap))->append($folder, $message, $options, $internal_date);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->append($folder, $message, $options, $internal_date);
     }
 }
 
@@ -289,7 +289,7 @@ if (!function_exists('imap_rfc822_parse_headers')) {
 if (!function_exists('imap_createmailbox')) {
     function imap_createmailbox(\IMAP\Connection $imap, string $mailbox): bool
     {
-        return (new \ImapPolyfill\Session\Session($imap))->createMailbox($mailbox);
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->createMailbox($mailbox);
     }
 }
 
@@ -303,14 +303,14 @@ if (!function_exists('imap_create')) {
 if (!function_exists('imap_deletemailbox')) {
     function imap_deletemailbox(\IMAP\Connection $imap, string $mailbox): bool
     {
-        return (new \ImapPolyfill\Session\Session($imap))->deleteMailbox($mailbox);
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->deleteMailbox($mailbox);
     }
 }
 
 if (!function_exists('imap_renamemailbox')) {
     function imap_renamemailbox(\IMAP\Connection $imap, string $from, string $to): bool
     {
-        return (new \ImapPolyfill\Session\Session($imap))->renameMailbox($from, $to);
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->renameMailbox($from, $to);
     }
 }
 
@@ -324,14 +324,14 @@ if (!function_exists('imap_rename')) {
 if (!function_exists('imap_subscribe')) {
     function imap_subscribe(\IMAP\Connection $imap, string $mailbox): bool
     {
-        return (new \ImapPolyfill\Session\Session($imap))->subscribe($mailbox);
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->subscribe($mailbox);
     }
 }
 
 if (!function_exists('imap_unsubscribe')) {
     function imap_unsubscribe(\IMAP\Connection $imap, string $mailbox): bool
     {
-        return (new \ImapPolyfill\Session\Session($imap))->unsubscribe($mailbox);
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->unsubscribe($mailbox);
     }
 }
 
