@@ -67,4 +67,53 @@ class BodyStructureTest extends TestCase
         $this->assertSame('filename', $attachmentPart->dparameters[0]->attribute);
         $this->assertSame('test.bin', $attachmentPart->dparameters[0]->value);
     }
+
+    public function test_builds_an_embedded_message_rfc822_with_its_own_nested_parts(): void
+    {
+        $nestedTextPart = ['text', 'plain', null, null, null, '7BIT', 20, 5, null, null, null];
+        $parsed = ['message', 'rfc822', null, null, null, '7BIT', 100, ['fake', 'envelope'], $nestedTextPart, 15, null, null, null];
+
+        $result = BodyStructure::build($parsed);
+
+        $this->assertSame(2, $result->type); // TYPEMESSAGE
+        $this->assertSame('RFC822', $result->subtype);
+        $this->assertSame(15, $result->lines);
+        $this->assertCount(1, $result->parts);
+        $this->assertSame(0, $result->parts[0]->type); // TYPETEXT
+        $this->assertSame(20, $result->parts[0]->bytes);
+    }
+
+    public function test_id_and_description_are_set_when_present(): void
+    {
+        $parsed = ['text', 'plain', null, 'part-id-1', 'a description', '7BIT', 10, 1, null, null, null];
+
+        $result = BodyStructure::build($parsed);
+
+        $this->assertSame(1, $result->ifid);
+        $this->assertSame('part-id-1', $result->id);
+        $this->assertSame(1, $result->ifdescription);
+        $this->assertSame('a description', $result->description);
+    }
+
+    public function test_disposition_without_parameters(): void
+    {
+        $parsed = ['text', 'plain', null, null, null, '7BIT', 10, 1, null, ['inline', null], null];
+
+        $result = BodyStructure::build($parsed);
+
+        $this->assertSame(1, $result->ifdisposition);
+        $this->assertSame('inline', $result->disposition);
+        $this->assertSame(0, $result->ifdparameters);
+        $this->assertEquals(new \stdClass(), $result->dparameters);
+    }
+
+    public function test_ifsubtype_is_zero_when_subtype_is_absent(): void
+    {
+        $parsed = ['text', null, null, null, null, '7BIT', 10, 1, null, null, null];
+
+        $result = BodyStructure::build($parsed);
+
+        $this->assertSame(0, $result->ifsubtype);
+        $this->assertObjectNotHasProperty('subtype', $result);
+    }
 }

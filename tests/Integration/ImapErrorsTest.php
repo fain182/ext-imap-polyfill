@@ -10,6 +10,16 @@ class ImapErrorsTest extends GreenmailTestCase
 
     public function test_returns_false_when_no_errors_occurred(): void
     {
+        if (extension_loaded('imap')) {
+            // Real ext-imap keeps a single global error stack for the whole
+            // PHP process with no userland reset hook; once any other test
+            // in this run has triggered a real IMAP error, this can no
+            // longer observe a pristine state. Our own ErrorStack is reset
+            // per-test via ResetsErrorStack, so this only applies when
+            // running against the genuine extension (the "parity" job).
+            $this->markTestSkipped('ext-imap has no way to reset its global error stack between tests.');
+        }
+
         $this->assertFalse(imap_errors());
     }
 

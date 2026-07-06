@@ -36,10 +36,12 @@ if (!function_exists('imap_open')) {
             'protocol' => 'imap',
         ]);
 
+        $numMsg = 0;
         try {
             $client->connect();
             if ($spec->folder !== '') {
-                $client->openFolder($spec->folder);
+                $status = $client->openFolder($spec->folder);
+                $numMsg = $status['exists'] ?? 0;
             }
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
@@ -48,7 +50,10 @@ if (!function_exists('imap_open')) {
             return false;
         }
 
-        return new \IMAP\Connection($client, $spec->folder, $mailbox);
+        $connection = new \IMAP\Connection($client, $spec->folder, $mailbox);
+        $connection->cachedNumMsg = $numMsg;
+
+        return $connection;
     }
 }
 
@@ -110,10 +115,15 @@ if (!function_exists('imap_num_msg')) {
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
 
-            return false;
+            // ext-imap's imap_num_msg is a cached client-side read (c-client's
+            // stream->nmsgs), not a live query: it keeps returning the last
+            // known count rather than false if the connection later breaks.
+            return $imap->cachedNumMsg;
         }
 
-        return $status['exists'] ?? 0;
+        $imap->cachedNumMsg = $status['exists'] ?? 0;
+
+        return $imap->cachedNumMsg;
     }
 }
 
@@ -244,7 +254,10 @@ if (!function_exists('imap_fetch_overview')) {
         } catch (\Throwable $e) {
             \Fain182\ImapPolyfill\ErrorStack::push($e->getMessage());
 
-            return false;
+            // Observed real ext-imap behavior: a broken connection yields an
+            // empty result set here, not false (unlike most other fetch
+            // functions in this file).
+            return [];
         }
 
         $result = [];

@@ -10,6 +10,13 @@ final class Connection
 {
     public bool $closed = false;
 
+    /**
+     * Mirrors c-client's stream->nmsgs: imap_num_msg() is a cached client-side
+     * read, not a live query, so it must keep returning the last known count
+     * (not false/0) if the connection later breaks.
+     */
+    public int $cachedNumMsg = 0;
+
     public function __construct(
         public readonly \Webklex\PHPIMAP\Client $client,
         public string $folder,

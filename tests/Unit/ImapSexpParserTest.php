@@ -52,4 +52,26 @@ class ImapSexpParserTest extends TestCase
 
         $this->assertSame(['text', 'plain', null, null, null, '7BIT', 5], ImapSexpParser::parseAt($buffer, $pos));
     }
+
+    public function test_parses_literal_syntax(): void
+    {
+        $buffer = "({5}\r\nhello 1)";
+
+        $this->assertSame(['hello', 1], ImapSexpParser::parseAt($buffer, 0));
+    }
+
+    public function test_parses_literal_syntax_with_bare_lf(): void
+    {
+        $buffer = "({5}\nhello 1)";
+
+        $this->assertSame(['hello', 1], ImapSexpParser::parseAt($buffer, 0));
+    }
+
+    public function test_throws_on_unterminated_quoted_string(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Unterminated quoted string in IMAP response');
+
+        ImapSexpParser::parseAt('("unterminated', 0);
+    }
 }

@@ -69,4 +69,19 @@ abstract class GreenmailTestCase extends TestCase
 
         return [$folderName, (int) $uids[1]];
     }
+
+    /**
+     * Opens a connection to a fresh folder, then deletes that folder out from
+     * under it via a second client — a realistic way to make a *subsequent*
+     * operation on an otherwise still-open connection genuinely fail server
+     * side, for exercising the catch/ErrorStack path of the imap_* wrappers.
+     */
+    protected function openConnectionToFolderThatThenDisappears(string $folderName): \IMAP\Connection
+    {
+        $seedClient = $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $seedClient->deleteFolder($folderName, expunge: false);
+
+        return $connection;
+    }
 }

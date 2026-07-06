@@ -21,4 +21,9 @@ class ImapTimeoutTest extends TestCase
     {
         $this->assertFalse(imap_timeout(99));
     }
+
+    public function test_returns_false_when_setting_an_unknown_timeout_type(): void
+    {
+        $this->assertFalse(imap_timeout(99, 5));
+    }
 }

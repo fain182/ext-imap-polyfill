@@ -89,7 +89,9 @@ final class BodyStructure
             }
             $next++;
         } elseif ($result->type === self::TYPES['message'] && strtolower($result->subtype ?? '') === 'rfc822') {
-            $next += 2; // skip envelope and nested body-structure
+            $next++; // skip envelope
+            $result->parts = [self::build($parsed[$next])];
+            $next++;
             if (!empty($parsed[$next])) {
                 $result->lines = $parsed[$next];
             }

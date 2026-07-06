@@ -10,6 +10,11 @@ class ImapLastErrorTest extends GreenmailTestCase
 
     public function test_returns_false_when_no_error_has_occurred(): void
     {
+        if (extension_loaded('imap')) {
+            // See ImapErrorsTest::test_returns_false_when_no_errors_occurred.
+            $this->markTestSkipped('ext-imap has no way to reset its global error stack between tests.');
+        }
+
         $this->assertFalse(imap_last_error());
     }
 
