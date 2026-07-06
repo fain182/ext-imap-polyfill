@@ -3,7 +3,7 @@
 if (!function_exists('imap_utf8')) {
     function imap_utf8(string $mime_encoded_text): string
     {
-        return mb_decode_mimeheader($mime_encoded_text);
+        return \Fain182\ImapPolyfill\MimeText::decode($mime_encoded_text);
     }
 }
 

@@ -2,11 +2,12 @@
 
 namespace Fain182\ImapPolyfill\Tests\Integration;
 
-use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+use Fain182\ImapPolyfill\Tests\ResetsErrorStack;
 
 class ImapLastErrorTest extends GreenmailTestCase
 {
-    #[RunInSeparateProcess]
+    use ResetsErrorStack;
+
     public function test_returns_false_when_no_error_has_occurred(): void
     {
         $this->assertFalse(imap_last_error());

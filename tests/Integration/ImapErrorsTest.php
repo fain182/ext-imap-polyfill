@@ -2,17 +2,17 @@
 
 namespace Fain182\ImapPolyfill\Tests\Integration;
 
-use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+use Fain182\ImapPolyfill\Tests\ResetsErrorStack;
 
 class ImapErrorsTest extends GreenmailTestCase
 {
-    #[RunInSeparateProcess]
+    use ResetsErrorStack;
+
     public function test_returns_false_when_no_errors_occurred(): void
     {
         $this->assertFalse(imap_errors());
     }
 
-    #[RunInSeparateProcess]
     public function test_returns_and_drains_accumulated_errors(): void
     {
         imap_open(self::mailboxSpec(), self::USER, 'wrong-password');
