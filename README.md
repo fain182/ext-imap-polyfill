@@ -31,7 +31,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_bodystruct` | ❌ | |
 | `imap_check` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
 | `imap_clearflag_full` | ❌ | |
-| `imap_close` | ✅ | supports `CL_EXPUNGE` |
+| `imap_close` | ✅ | |
 | `imap_create` | ❌ | |
 | `imap_createmailbox` | ❌ | |
 | `imap_delete` | ✅ | |
@@ -67,7 +67,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_mime_header_decode` | ❌ | |
 | `imap_msgno` | ✅ | |
 | `imap_mutf7_to_utf8` | ❌ | |
-| `imap_num_msg` | ✅ | cached client-side read, like the original — does not re-query the server |
+| `imap_num_msg` | ✅ | |
 | `imap_num_recent` | ❌ | |
 | `imap_open` | ✅ | `OP_READONLY` unsupported; retries argument ignored |
 | `imap_ping` | ❌ | |
@@ -89,7 +89,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_status` | ❌ | |
 | `imap_subscribe` | ❌ | |
 | `imap_thread` | ❌ | |
-| `imap_timeout` | ✅ | process-global, like the original |
+| `imap_timeout` | ✅ | |
 | `imap_uid` | ✅ | |
 | `imap_undelete` | ❌ | |
 | `imap_unsubscribe` | ❌ | |
