@@ -3,13 +3,18 @@
 namespace IMAP;
 
 use ImapPolyfill\Connection\Protocol;
+use ImapPolyfill\Message\BodyStructureFetch;
 
 /**
  * Polyfill for the opaque IMAP\Connection class ext-imap registers natively.
- * Holds the webklex client plus the currently selected folder path.
+ * Owns the webklex client: nothing outside this class touches it directly,
+ * so every wire operation Session/Mailbox/Mailboxes need is exposed here as
+ * a named method instead of reaching through a public "client" field.
  */
 final class Connection
 {
+    private readonly \Webklex\PHPIMAP\Client $client;
+
     private ?Protocol $protocol = null;
 
     private bool $closed = false;
@@ -29,11 +34,12 @@ final class Connection
     private int $cachedNumRecent = 0;
 
     public function __construct(
-        public readonly \Webklex\PHPIMAP\Client $client,
+        \Webklex\PHPIMAP\Client $client,
         string $folder,
         public readonly string $mailbox,
         bool $readOnly = false,
     ) {
+        $this->client = $client;
         $this->folder = $folder;
         $this->readOnly = $readOnly;
     }
@@ -103,13 +109,81 @@ final class Connection
      */
     public function selectOrExamine(): array
     {
-        $folder = $this->client->getFolder($this->folder);
+        return $this->selectOrExamineFolder($this->folder, $this->readOnly);
+    }
 
-        return $this->readOnly ? $folder->examine() : $folder->select();
+    /**
+     * Selects/examines a folder other than the currently-remembered one,
+     * e.g. to probe a target folder before imap_reopen() commits to it via
+     * reselect(). Does not touch $this->folder/$this->readOnly itself.
+     *
+     * @return array<string, mixed>
+     */
+    public function selectOrExamineFolder(string $folder, bool $readOnly): array
+    {
+        $folderObj = $this->client->getFolder($folder);
+
+        return $readOnly ? $folderObj->examine() : $folderObj->select();
     }
 
     public function protocol(): Protocol
     {
         return $this->protocol ??= new Protocol($this->client);
+    }
+
+    public function host(): string
+    {
+        return $this->client->host;
+    }
+
+    public function expunge(): void
+    {
+        $this->client->expunge();
+    }
+
+    public function disconnect(): void
+    {
+        $this->client->disconnect();
+    }
+
+    public function createFolder(string $name): void
+    {
+        $this->client->createFolder($name);
+    }
+
+    public function deleteFolder(string $name): void
+    {
+        $this->client->deleteFolder($name);
+    }
+
+    public function renameFolder(string $from, string $to): void
+    {
+        $this->client->getFolder($from)->rename($to);
+    }
+
+    public function subscribeFolder(string $name): void
+    {
+        $this->client->getFolder($name)->subscribe();
+    }
+
+    public function unsubscribeFolder(string $name): void
+    {
+        $this->client->getFolder($name)->unsubscribe();
+    }
+
+    /**
+     * @param string[]|null $flags
+     */
+    public function appendMessage(string $folder, string $message, ?array $flags, ?string $internalDate): void
+    {
+        $this->client->getFolder($folder)->appendMessage($message, $flags, $internalDate);
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    public function fetchBodyStructure(int $messageNum, bool $byUid): array
+    {
+        return BodyStructureFetch::fetch($this->client, $messageNum, $byUid);
     }
 }

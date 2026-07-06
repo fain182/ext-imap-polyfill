@@ -4,7 +4,6 @@ namespace ImapPolyfill\Session;
 
 use ImapPolyfill\Mailbox\MailboxReference;
 use ImapPolyfill\Message\BodyStructure;
-use ImapPolyfill\Message\BodyStructureFetch;
 use ImapPolyfill\Message\HeaderInfo;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\Overview;
@@ -95,7 +94,7 @@ final class Mailbox
             $message['INTERNALDATE'],
             $message['RFC822.SIZE'],
             $messageNum,
-            $this->connection->client->host,
+            $this->connection->host(),
         );
     }
 
@@ -148,7 +147,7 @@ final class Mailbox
                 (int) $message['RFC822.SIZE'],
                 $uid,
                 $msgno,
-                $this->connection->client->host,
+                $this->connection->host(),
             );
         }
 
@@ -161,7 +160,7 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $parsed = BodyStructureFetch::fetch($this->connection->client, $messageNum, (bool) ($flags & FT_UID));
+            $parsed = $this->connection->fetchBodyStructure($messageNum, (bool) ($flags & FT_UID));
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -283,7 +282,7 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $this->connection->client->expunge();
+            $this->connection->expunge();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
         }
@@ -299,7 +298,7 @@ final class Mailbox
         $flags = $options !== null ? preg_split('/\s+/', trim($options)) : null;
 
         try {
-            $this->connection->client->getFolder($folderName)->appendMessage($message, $flags, $internalDate);
+            $this->connection->appendMessage($folderName, $message, $flags, $internalDate);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 

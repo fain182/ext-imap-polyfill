@@ -28,10 +28,10 @@ final class Session
         $this->connection->ensureOpen();
 
         if ($flags & CL_EXPUNGE) {
-            $this->connection->client->expunge();
+            $this->connection->expunge();
         }
 
-        $this->connection->client->disconnect();
+        $this->connection->disconnect();
         $this->connection->close();
 
         return true;
@@ -115,8 +115,7 @@ final class Session
         $readOnly = (bool) ($flags & OP_READONLY);
 
         try {
-            $folder = $this->connection->client->getFolder($spec->folder);
-            $status = $readOnly ? $folder->examine() : $folder->select();
+            $status = $this->connection->selectOrExamineFolder($spec->folder, $readOnly);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
