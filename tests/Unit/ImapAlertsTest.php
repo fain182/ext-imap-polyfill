@@ -2,7 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
-use ImapPolyfill\ErrorStack;
+use ImapPolyfill\Support\ErrorStack;
 use ImapPolyfill\Tests\ResetsErrorStack;
 use PHPUnit\Framework\TestCase;
 

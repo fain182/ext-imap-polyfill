@@ -1,6 +1,8 @@
 <?php
 
-namespace ImapPolyfill;
+namespace ImapPolyfill\Message;
+
+use ImapPolyfill\Search\ImapSexpParser;
 
 /**
  * Fetches BODYSTRUCTURE directly over the raw socket, bypassing webklex's

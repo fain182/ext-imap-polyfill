@@ -2,7 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
-use ImapPolyfill\MailboxSpec;
+use ImapPolyfill\Mailbox\MailboxSpec;
 use PHPUnit\Framework\TestCase;
 
 class MailboxSpecTest extends TestCase

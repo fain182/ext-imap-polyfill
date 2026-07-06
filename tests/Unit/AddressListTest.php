@@ -2,7 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
-use ImapPolyfill\AddressList;
+use ImapPolyfill\Address\AddressList;
 use PHPUnit\Framework\TestCase;
 
 class AddressListTest extends TestCase

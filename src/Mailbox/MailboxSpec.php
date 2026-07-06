@@ -1,6 +1,6 @@
 <?php
 
-namespace ImapPolyfill;
+namespace ImapPolyfill\Mailbox;
 
 final class MailboxSpec
 {

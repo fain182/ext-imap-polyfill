@@ -3,21 +3,21 @@
 if (!function_exists('imap_utf8')) {
     function imap_utf8(string $mime_encoded_text): string
     {
-        return \ImapPolyfill\MimeText::decode($mime_encoded_text);
+        return \ImapPolyfill\Mime\MimeText::decode($mime_encoded_text);
     }
 }
 
 if (!function_exists('imap_rfc822_parse_adrlist')) {
     function imap_rfc822_parse_adrlist(string $string, string $default_hostname): array
     {
-        return \ImapPolyfill\AddressList::parse($string, $default_hostname);
+        return \ImapPolyfill\Address\AddressList::parse($string, $default_hostname);
     }
 }
 
 if (!function_exists('imap_open')) {
     function imap_open(string $mailbox, string $user, string $password, int $flags = 0, int $retries = 0, array $options = []): \IMAP\Connection|false
     {
-        $spec = \ImapPolyfill\MailboxSpec::parse($mailbox);
+        $spec = \ImapPolyfill\Mailbox\MailboxSpec::parse($mailbox);
 
         $encryption = false;
         if ($spec->hasFlag('ssl')) {
@@ -48,7 +48,7 @@ if (!function_exists('imap_open')) {
                 $connected = true;
                 break;
             } catch (\Throwable $e) {
-                \ImapPolyfill\ErrorStack::push($e->getMessage());
+                \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
             }
         }
 
@@ -66,7 +66,7 @@ if (!function_exists('imap_open')) {
                 $numRecent = $status['recent'] ?? 0;
             }
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
             trigger_error("imap_open(): Couldn't open stream {$mailbox}", E_USER_WARNING);
 
             return false;
@@ -100,31 +100,31 @@ if (!function_exists('imap_timeout')) {
     function imap_timeout(int $timeout_type, int $timeout = -1): int|bool
     {
         if ($timeout === -1) {
-            return \ImapPolyfill\Timeouts::get($timeout_type);
+            return \ImapPolyfill\Support\Timeouts::get($timeout_type);
         }
 
-        return \ImapPolyfill\Timeouts::set($timeout_type, $timeout);
+        return \ImapPolyfill\Support\Timeouts::set($timeout_type, $timeout);
     }
 }
 
 if (!function_exists('imap_last_error')) {
     function imap_last_error(): string|false
     {
-        return \ImapPolyfill\ErrorStack::last();
+        return \ImapPolyfill\Support\ErrorStack::last();
     }
 }
 
 if (!function_exists('imap_errors')) {
     function imap_errors(): array|false
     {
-        return \ImapPolyfill\ErrorStack::drainErrors();
+        return \ImapPolyfill\Support\ErrorStack::drainErrors();
     }
 }
 
 if (!function_exists('imap_alerts')) {
     function imap_alerts(): array|false
     {
-        return \ImapPolyfill\ErrorStack::drainAlerts();
+        return \ImapPolyfill\Support\ErrorStack::drainAlerts();
     }
 }
 
@@ -136,7 +136,7 @@ if (!function_exists('imap_num_msg')) {
         try {
             $status = $imap->selectOrExamine();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             // ext-imap's imap_num_msg is a cached client-side read (c-client's
             // stream->nmsgs), not a live query: it keeps returning the last
@@ -159,7 +159,7 @@ if (!function_exists('imap_check')) {
         try {
             $status = $imap->selectOrExamine();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -190,7 +190,7 @@ if (!function_exists('imap_search')) {
             $imap->selectOrExamine();
             $ids = $imap->client->getConnection()->search($tokens, $uidMode)->validatedData();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -216,7 +216,7 @@ if (!function_exists('imap_fetchheader')) {
             $imap->selectOrExamine();
             $headers = $imap->client->getConnection()->headers([$message_num], 'RFC822', $uidMode)->validatedData();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -236,14 +236,14 @@ if (!function_exists('imap_headerinfo')) {
                 ->fetch(['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], [$message_num], null, \Webklex\PHPIMAP\IMAP::ST_MSGN)
                 ->validatedData();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
 
         $message = $data[$message_num] ?? reset($data);
 
-        return \ImapPolyfill\HeaderInfo::build(
+        return \ImapPolyfill\Message\HeaderInfo::build(
             $message['RFC822.HEADER'],
             $message['FLAGS'],
             $message['INTERNALDATE'],
@@ -265,7 +265,7 @@ if (!function_exists('imap_fetch_overview')) {
 
         try {
             $status = $imap->selectOrExamine();
-            $ids = \ImapPolyfill\MessageSequence::expand($sequence, $status['exists'] ?? 0);
+            $ids = \ImapPolyfill\Message\MessageSequence::expand($sequence, $status['exists'] ?? 0);
 
             if ($ids === []) {
                 return [];
@@ -276,7 +276,7 @@ if (!function_exists('imap_fetch_overview')) {
                 ->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode)
                 ->validatedData();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             // Observed real ext-imap behavior: a broken connection yields an
             // empty result set here, not false (unlike most other fetch
@@ -296,7 +296,7 @@ if (!function_exists('imap_fetch_overview')) {
                 ? $connection->getMessageNumber((string) $id)->validatedData()
                 : $id;
 
-            $result[] = \ImapPolyfill\Overview::build(
+            $result[] = \ImapPolyfill\Message\Overview::build(
                 $message['RFC822.HEADER'],
                 $message['FLAGS'],
                 $message['INTERNALDATE'],
@@ -318,14 +318,14 @@ if (!function_exists('imap_fetchstructure')) {
 
         try {
             $imap->selectOrExamine();
-            $parsed = \ImapPolyfill\BodyStructureFetch::fetch($imap->client, $message_num, (bool) ($flags & FT_UID));
+            $parsed = \ImapPolyfill\Message\BodyStructureFetch::fetch($imap->client, $message_num, (bool) ($flags & FT_UID));
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
 
-        return \ImapPolyfill\BodyStructure::build($parsed);
+        return \ImapPolyfill\Message\BodyStructure::build($parsed);
     }
 }
 
@@ -346,7 +346,7 @@ if (!function_exists('imap_fetchbody')) {
             $imap->selectOrExamine();
             $data = $imap->client->getConnection()->fetch([$item], [$message_num], null, $uidMode)->validatedData();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -375,7 +375,7 @@ if (!function_exists('imap_uid')) {
 
             $uids = $imap->client->getConnection()->getUid()->validatedData();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -400,7 +400,7 @@ if (!function_exists('imap_msgno')) {
         } catch (\Webklex\PHPIMAP\Exceptions\MessageNotFoundException) {
             return 0;
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return 0;
         }
@@ -412,12 +412,12 @@ if (!function_exists('imap_list')) {
     {
         $imap->ensureOpen();
 
-        $ref = \ImapPolyfill\MailboxReference::parse($reference);
+        $ref = \ImapPolyfill\Mailbox\MailboxReference::parse($reference);
 
         try {
             $folders = $imap->client->getConnection()->folders($ref->bareReference, $pattern)->validatedData();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -435,7 +435,7 @@ if (!function_exists('imap_getmailboxes')) {
     {
         $imap->ensureOpen();
 
-        $ref = \ImapPolyfill\MailboxReference::parse($reference);
+        $ref = \ImapPolyfill\Mailbox\MailboxReference::parse($reference);
 
         $flagBits = [
             '\noinferiors' => LATT_NOINFERIORS,
@@ -449,7 +449,7 @@ if (!function_exists('imap_getmailboxes')) {
         try {
             $folders = $imap->client->getConnection()->folders($ref->bareReference, $pattern)->validatedData();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -488,7 +488,7 @@ if (!function_exists('imap_setflag_full')) {
             $imap->selectOrExamine();
             $imap->client->getConnection()->requestAndResponse($command, [$sequence, '+FLAGS.SILENT', $flagsAtom]);
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
         }
 
         return true;
@@ -507,7 +507,7 @@ if (!function_exists('imap_clearflag_full')) {
             $imap->selectOrExamine();
             $imap->client->getConnection()->requestAndResponse($command, [$sequence, '-FLAGS.SILENT', $flagsAtom]);
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
         }
 
         return true;
@@ -537,7 +537,7 @@ if (!function_exists('imap_expunge')) {
             $imap->selectOrExamine();
             $imap->client->expunge();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
         }
 
         return true;
@@ -549,13 +549,13 @@ if (!function_exists('imap_append')) {
     {
         $imap->ensureOpen();
 
-        $folderName = \ImapPolyfill\MailboxReference::parse($folder)->bareReference;
+        $folderName = \ImapPolyfill\Mailbox\MailboxReference::parse($folder)->bareReference;
         $flags = $options !== null ? preg_split('/\s+/', trim($options)) : null;
 
         try {
             $imap->client->getFolder($folderName)->appendMessage($message, $flags, $internal_date);
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -647,14 +647,14 @@ if (!function_exists('imap_rfc822_write_address')) {
 if (!function_exists('imap_mime_header_decode')) {
     function imap_mime_header_decode(string $string): array|false
     {
-        return \ImapPolyfill\MimeText::decodeSegments($string);
+        return \ImapPolyfill\Mime\MimeText::decodeSegments($string);
     }
 }
 
 if (!function_exists('imap_rfc822_parse_headers')) {
     function imap_rfc822_parse_headers(string $headers, string $default_hostname = 'UNKNOWN'): \stdClass
     {
-        return \ImapPolyfill\HeaderInfo::buildFromHeaderOnly($headers, $default_hostname);
+        return \ImapPolyfill\Message\HeaderInfo::buildFromHeaderOnly($headers, $default_hostname);
     }
 }
 
@@ -663,12 +663,12 @@ if (!function_exists('imap_createmailbox')) {
     {
         $imap->ensureOpen();
 
-        $folderName = \ImapPolyfill\MailboxReference::parse($mailbox)->bareReference;
+        $folderName = \ImapPolyfill\Mailbox\MailboxReference::parse($mailbox)->bareReference;
 
         try {
             $imap->client->createFolder($folderName);
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -689,12 +689,12 @@ if (!function_exists('imap_deletemailbox')) {
     {
         $imap->ensureOpen();
 
-        $folderName = \ImapPolyfill\MailboxReference::parse($mailbox)->bareReference;
+        $folderName = \ImapPolyfill\Mailbox\MailboxReference::parse($mailbox)->bareReference;
 
         try {
             $imap->client->deleteFolder($folderName);
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -708,13 +708,13 @@ if (!function_exists('imap_renamemailbox')) {
     {
         $imap->ensureOpen();
 
-        $fromName = \ImapPolyfill\MailboxReference::parse($from)->bareReference;
-        $toName = \ImapPolyfill\MailboxReference::parse($to)->bareReference;
+        $fromName = \ImapPolyfill\Mailbox\MailboxReference::parse($from)->bareReference;
+        $toName = \ImapPolyfill\Mailbox\MailboxReference::parse($to)->bareReference;
 
         try {
             $imap->client->getFolder($fromName)->rename($toName);
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -735,12 +735,12 @@ if (!function_exists('imap_subscribe')) {
     {
         $imap->ensureOpen();
 
-        $folderName = \ImapPolyfill\MailboxReference::parse($mailbox)->bareReference;
+        $folderName = \ImapPolyfill\Mailbox\MailboxReference::parse($mailbox)->bareReference;
 
         try {
             $imap->client->getFolder($folderName)->subscribe();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -754,12 +754,12 @@ if (!function_exists('imap_unsubscribe')) {
     {
         $imap->ensureOpen();
 
-        $folderName = \ImapPolyfill\MailboxReference::parse($mailbox)->bareReference;
+        $folderName = \ImapPolyfill\Mailbox\MailboxReference::parse($mailbox)->bareReference;
 
         try {
             $imap->client->getFolder($folderName)->unsubscribe();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }
@@ -776,7 +776,7 @@ if (!function_exists('imap_num_recent')) {
         try {
             $status = $imap->selectOrExamine();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             // Cached client-side read, like imap_num_msg; see its comment.
             return $imap->cachedNumRecent;
@@ -807,14 +807,14 @@ if (!function_exists('imap_reopen')) {
         // Scoped to switching folders on the same already-connected client:
         // this polyfill doesn't retain the original credentials needed to
         // reconnect to a genuinely different host.
-        $spec = \ImapPolyfill\MailboxSpec::parse($mailbox);
+        $spec = \ImapPolyfill\Mailbox\MailboxSpec::parse($mailbox);
         $readOnly = (bool) ($flags & OP_READONLY);
 
         try {
             $folder = $imap->client->getFolder($spec->folder);
             $status = $readOnly ? $folder->examine() : $folder->select();
         } catch (\Throwable $e) {
-            \ImapPolyfill\ErrorStack::push($e->getMessage());
+            \ImapPolyfill\Support\ErrorStack::push($e->getMessage());
 
             return false;
         }

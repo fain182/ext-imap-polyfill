@@ -2,7 +2,7 @@
 
 namespace ImapPolyfill\Tests;
 
-use ImapPolyfill\ErrorStack;
+use ImapPolyfill\Support\ErrorStack;
 use ReflectionClass;
 
 /**

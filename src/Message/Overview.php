@@ -1,6 +1,8 @@
 <?php
 
-namespace ImapPolyfill;
+namespace ImapPolyfill\Message;
+
+use ImapPolyfill\Address\AddressList;
 
 final class Overview
 {

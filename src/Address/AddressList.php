@@ -1,6 +1,6 @@
 <?php
 
-namespace ImapPolyfill;
+namespace ImapPolyfill\Address;
 
 class AddressList
 {

@@ -2,7 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
-use ImapPolyfill\Overview;
+use ImapPolyfill\Message\Overview;
 use PHPUnit\Framework\TestCase;
 
 class OverviewTest extends TestCase

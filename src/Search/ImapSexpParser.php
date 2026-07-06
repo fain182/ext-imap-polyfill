@@ -1,6 +1,6 @@
 <?php
 
-namespace ImapPolyfill;
+namespace ImapPolyfill\Search;
 
 /**
  * Parses the parenthesized-list syntax IMAP servers use for structured FETCH

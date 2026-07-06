@@ -2,7 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
-use ImapPolyfill\HeaderInfo;
+use ImapPolyfill\Message\HeaderInfo;
 use PHPUnit\Framework\TestCase;
 
 class HeaderInfoTest extends TestCase

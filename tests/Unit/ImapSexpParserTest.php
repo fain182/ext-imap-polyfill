@@ -2,7 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
-use ImapPolyfill\ImapSexpParser;
+use ImapPolyfill\Search\ImapSexpParser;
 use PHPUnit\Framework\TestCase;
 
 class ImapSexpParserTest extends TestCase

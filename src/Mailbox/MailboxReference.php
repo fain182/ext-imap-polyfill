@@ -1,6 +1,6 @@
 <?php
 
-namespace ImapPolyfill;
+namespace ImapPolyfill\Mailbox;
 
 /**
  * Splits a LIST/LSUB reference argument into the "{host...}" display prefix

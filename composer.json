@@ -19,7 +19,7 @@
             "ImapPolyfill\\": "src/"
         },
         "classmap": [
-            "src/Connection.php"
+            "src/Connection/Connection.php"
         ],
         "files": [
             "bootstrap.php"

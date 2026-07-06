@@ -2,7 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
-use ImapPolyfill\BodyStructure;
+use ImapPolyfill\Message\BodyStructure;
 use PHPUnit\Framework\TestCase;
 
 class BodyStructureTest extends TestCase
