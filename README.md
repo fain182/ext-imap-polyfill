@@ -98,6 +98,17 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_utf8` | ✅ | |
 | `imap_utf8_to_mutf7` | ✅ | |
 
+## Limitations
+
+A few deviations from the real extension that a package evaluator should know about before relying on it:
+
+- Warnings are raised as `E_USER_WARNING`, not `E_WARNING` — userland code can't raise the exact error level the C extension uses.
+- `OP_HALFOPEN` and most other `OP_*` open flags are accepted (to avoid spurious `ValueError`s) but have no effect; only `OP_READONLY` and `CL_EXPUNGE` actually change behavior.
+- `imap_reopen()` only switches folders on the already-open connection — it can't reconnect to a different host, since `imap_open()`'s credentials aren't retained.
+- `imap_alerts()` is never populated; this polyfill doesn't surface server `* OK [ALERT]` responses.
+- Only the `imap` service is supported in mailbox specs — a `{host/pop3}` or `{host/nntp}` prefix is parsed but ignored, and the connection always speaks IMAP.
+- `imap_open()`'s `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored.
+
 ## Development
 
 ```bash
