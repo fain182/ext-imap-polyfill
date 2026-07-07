@@ -2,11 +2,14 @@
 
 namespace ImapPolyfill\Session;
 
+use ImapPolyfill\Address\AddressList;
 use ImapPolyfill\Mailbox\MailboxReference;
 use ImapPolyfill\Message\BodyStructure;
 use ImapPolyfill\Message\HeaderInfo;
+use ImapPolyfill\Message\HeadersLine;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\Overview;
+use ImapPolyfill\Message\RawHeaderFields;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -508,5 +511,157 @@ final class Mailbox
         }
 
         return true;
+    }
+
+    /**
+     * @return string[]
+     */
+    public function headers(): array
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            $status = $this->connection->selectOrExamine();
+            $exists = $status['exists'] ?? 0;
+
+            if ($exists === 0) {
+                return [];
+            }
+
+            $data = $this->connection->protocol()->fetch(
+                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
+                range(1, $exists),
+                null,
+                \Webklex\PHPIMAP\IMAP::ST_MSGN,
+            );
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return [];
+        }
+
+        $result = [];
+        foreach (range(1, $exists) as $msgno) {
+            if (!isset($data[$msgno])) {
+                continue;
+            }
+
+            $message = $data[$msgno];
+            $result[] = HeadersLine::build(
+                $message['RFC822.HEADER'],
+                $message['FLAGS'],
+                $message['INTERNALDATE'],
+                (int) $message['RFC822.SIZE'],
+                $msgno,
+                $this->connection->host(),
+            );
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return int[]|false
+     */
+    public function sort(int $criteria, bool $reverse, int $flags, ?string $searchCriteria, ?string $charset): array|false
+    {
+        $this->connection->ensureOpen();
+
+        if (!in_array($criteria, [SORTDATE, SORTARRIVAL, SORTFROM, SORTSUBJECT, SORTTO, SORTCC, SORTSIZE], true)) {
+            throw new \ValueError('imap_sort(): Argument #2 ($criteria) must be one of the SORT* constants');
+        }
+
+        if ($flags && ($flags & ~(SE_UID | SE_NOPREFETCH)) !== 0) {
+            throw new \ValueError('imap_sort(): Argument #4 ($flags) must be a bitmask of SE_UID, and SE_NOPREFETCH');
+        }
+
+        try {
+            $status = $this->connection->selectOrExamine();
+            $exists = $status['exists'] ?? 0;
+
+            if ($exists === 0) {
+                return [];
+            }
+
+            if ($searchCriteria !== null) {
+                $tokens = preg_split('/\s+/', trim($searchCriteria)) ?: [];
+                $ids = $this->connection->protocol()->search($tokens, \Webklex\PHPIMAP\IMAP::ST_MSGN);
+
+                if ($ids === []) {
+                    return [];
+                }
+            } else {
+                $ids = range(1, $exists);
+            }
+
+            $data = $this->connection->protocol()->fetch(
+                ['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
+                $ids,
+                null,
+                \Webklex\PHPIMAP\IMAP::ST_MSGN,
+            );
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        $host = $this->connection->host();
+        $entries = [];
+        foreach ($ids as $msgno) {
+            if (!isset($data[$msgno])) {
+                continue;
+            }
+
+            $message = $data[$msgno];
+            $entries[] = [
+                'msgno' => $msgno,
+                'uid' => (int) $message['UID'],
+                'key' => $this->sortKey($criteria, $message, $host),
+            ];
+        }
+
+        usort($entries, static function (array $a, array $b) use ($reverse): int {
+            $cmp = $a['key'] <=> $b['key'];
+            if ($cmp === 0) {
+                $cmp = $a['msgno'] <=> $b['msgno'];
+            }
+
+            return $reverse ? -$cmp : $cmp;
+        });
+
+        $byUid = (bool) ($flags & SE_UID);
+
+        return array_map(static fn (array $e): int => $byUid ? $e['uid'] : $e['msgno'], $entries);
+    }
+
+    /**
+     * @param array<string, mixed> $message
+     */
+    private function sortKey(int $criteria, array $message, string $defaultHost): int|string
+    {
+        $fields = RawHeaderFields::parse($message['RFC822.HEADER']);
+
+        return match ($criteria) {
+            SORTDATE => strtotime($fields['date'] ?? '') ?: 0,
+            SORTARRIVAL => strtotime($message['INTERNALDATE']) ?: 0,
+            SORTSIZE => (int) $message['RFC822.SIZE'],
+            SORTFROM => self::mailboxKey($fields['from'] ?? null, $defaultHost),
+            SORTTO => self::mailboxKey($fields['to'] ?? null, $defaultHost),
+            SORTCC => self::mailboxKey($fields['cc'] ?? null, $defaultHost),
+            SORTSUBJECT => strtolower(preg_replace('/^\s*(re|fwd?)\s*:\s*/i', '', $fields['subject'] ?? '') ?? ''),
+            default => 0,
+        };
+    }
+
+    private static function mailboxKey(?string $addressHeader, string $defaultHost): string
+    {
+        if ($addressHeader === null) {
+            return '';
+        }
+
+        $address = AddressList::parse($addressHeader, $defaultHost)->first();
+
+        return $address === null ? '' : strtolower($address->mailbox);
     }
 }

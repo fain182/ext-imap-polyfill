@@ -109,6 +109,26 @@ if (!function_exists('imap_search')) {
     }
 }
 
+if (!function_exists('imap_headers')) {
+    /**
+     * @return string[]
+     */
+    function imap_headers(\IMAP\Connection $imap): array
+    {
+        return (new \ImapPolyfill\Session\Mailbox($imap))->headers();
+    }
+}
+
+if (!function_exists('imap_sort')) {
+    /**
+     * @return int[]|false
+     */
+    function imap_sort(\IMAP\Connection $imap, int $criteria, bool $reverse, int $flags = 0, ?string $search_criteria = null, ?string $charset = null): array|false
+    {
+        return (new \ImapPolyfill\Session\Mailbox($imap))->sort($criteria, $reverse, $flags, $search_criteria, $charset);
+    }
+}
+
 if (!function_exists('imap_fetchheader')) {
     function imap_fetchheader(\IMAP\Connection $imap, int $message_num, int $flags = 0): string|false
     {

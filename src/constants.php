@@ -72,6 +72,38 @@ if (!defined('SE_FREE')) {
     define('SE_FREE', 0x2);
 }
 
+if (!defined('SE_NOPREFETCH')) {
+    define('SE_NOPREFETCH', 0x4);
+}
+
+if (!defined('SORTDATE')) {
+    define('SORTDATE', 0);
+}
+
+if (!defined('SORTARRIVAL')) {
+    define('SORTARRIVAL', 1);
+}
+
+if (!defined('SORTFROM')) {
+    define('SORTFROM', 2);
+}
+
+if (!defined('SORTSUBJECT')) {
+    define('SORTSUBJECT', 3);
+}
+
+if (!defined('SORTTO')) {
+    define('SORTTO', 4);
+}
+
+if (!defined('SORTCC')) {
+    define('SORTCC', 5);
+}
+
+if (!defined('SORTSIZE')) {
+    define('SORTSIZE', 6);
+}
+
 if (!defined('FT_UID')) {
     define('FT_UID', 0x1);
 }

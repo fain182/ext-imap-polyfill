@@ -16,7 +16,7 @@ No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the po
 
 ## Coverage
 
-This is not a reimplementation of all `imap_*` functions — **62 of 75 (83%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — **64 of 75 (85%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
 
 Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the notes column; anything not noted is expected to match exactly.
 
@@ -51,7 +51,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_get_quotaroot` | ❌ | |
 | `imap_getsubscribed` | ✅ |  |
 | `imap_headerinfo` | ✅ | `fetchfrom`/`fetchsubject` (nonzero `$from_length`/`$subject_length`) not implemented |
-| `imap_headers` | ❌ | |
+| `imap_headers` | ✅ | fixed-column summary line matching c-client's own `mail_date()`/`mail_fetchfrom()`/`mail_fetchsubject()` formatting exactly; custom user-defined flags (the `{flag}` segment) are never populated, since this polyfill doesn't track them |
 | `imap_is_open` | ✅ | |
 | `imap_last_error` | ✅ | |
 | `imap_list` | ✅ | |
@@ -85,7 +85,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_setacl` | ❌ | |
 | `imap_setflag_full` | ✅ | |
 | `imap_set_quota` | ❌ | |
-| `imap_sort` | ❌ | |
+| `imap_sort` | ✅ | client-side sort (matches real ext-imap's own fallback against a server without the SORT extension, e.g. Greenmail); `SORTSUBJECT` strips a leading `Re:`/`Fwd:` for comparison, not the full RFC5256 base-subject algorithm |
 | `imap_status` | ✅ |  |
 | `imap_subscribe` | ✅ | |
 | `imap_thread` | ❌ | |
