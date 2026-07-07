@@ -4,12 +4,48 @@ if (!defined('NIL')) {
     define('NIL', 0);
 }
 
+if (!defined('OP_DEBUG')) {
+    define('OP_DEBUG', 0x1);
+}
+
 if (!defined('OP_READONLY')) {
     define('OP_READONLY', 0x2);
 }
 
+if (!defined('OP_ANONYMOUS')) {
+    define('OP_ANONYMOUS', 0x4);
+}
+
+if (!defined('OP_SHORTCACHE')) {
+    define('OP_SHORTCACHE', 0x8);
+}
+
+if (!defined('OP_SILENT')) {
+    define('OP_SILENT', 0x10);
+}
+
+if (!defined('OP_PROTOTYPE')) {
+    define('OP_PROTOTYPE', 0x20);
+}
+
+if (!defined('OP_HALFOPEN')) {
+    define('OP_HALFOPEN', 0x40);
+}
+
+if (!defined('OP_EXPUNGE')) {
+    define('OP_EXPUNGE', 0x80);
+}
+
+if (!defined('OP_SECURE')) {
+    define('OP_SECURE', 0x100);
+}
+
 if (!defined('CL_EXPUNGE')) {
-    define('CL_EXPUNGE', 1);
+    // This is PHP's own PHP_EXPUNGE define (php_imap.c), not c-client's
+    // CL_EXPUNGE (0x1) — ext-imap deliberately exposes a different userland
+    // value so it can't collide with the OP_* bitmask passed to imap_open(),
+    // then translates it to c-client's real CL_EXPUNGE internally.
+    define('CL_EXPUNGE', 32768);
 }
 
 if (!defined('IMAP_OPENTIMEOUT')) {
