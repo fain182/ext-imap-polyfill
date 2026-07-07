@@ -6,6 +6,7 @@ CONTAINER_RUNTIME ?= $(shell command -v podman 2>/dev/null || command -v docker 
 GREENMAIL_IMAGE := docker.io/greenmail/standalone:2.1.0
 GREENMAIL_NAME := ext-imap-polyfill-greenmail
 GREENMAIL_PORT := 13143
+GREENMAIL_POP3_PORT := 13110
 NETWORK_NAME := ext-imap-polyfill-net
 PARITY_IMAGE := ext-imap-polyfill-parity
 
@@ -32,11 +33,16 @@ greenmail-up:
 	$(CONTAINER_RUNTIME) run -d --name $(GREENMAIL_NAME) \
 		--network $(NETWORK_NAME) --network-alias greenmail \
 		-p $(GREENMAIL_PORT):3143 \
-		-e GREENMAIL_OPTS='-Dgreenmail.setup.test.imap -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=testuser:testpass@localhost' \
+		-p $(GREENMAIL_POP3_PORT):3110 \
+		-e GREENMAIL_OPTS='-Dgreenmail.setup.test.imap -Dgreenmail.setup.test.pop3 -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=testuser:testpass@localhost' \
 		$(GREENMAIL_IMAGE)
 	@echo "Waiting for Greenmail to greet IMAP clients on port $(GREENMAIL_PORT)..."
 	@until exec 3<>/dev/tcp/127.0.0.1/$(GREENMAIL_PORT) && read -r -t 2 greeting <&3 && [[ "$$greeting" == '* OK'* ]]; do \
 		exec 3<&- 2>/dev/null; sleep 1; \
+	done
+	@echo "Waiting for Greenmail to greet POP3 clients on port $(GREENMAIL_POP3_PORT)..."
+	@until exec 4<>/dev/tcp/127.0.0.1/$(GREENMAIL_POP3_PORT) && read -r -t 2 greeting <&4 && [[ "$$greeting" == '+OK'* ]]; do \
+		exec 4<&- 2>/dev/null; sleep 1; \
 	done
 
 greenmail-down:
@@ -63,6 +69,7 @@ parity: parity-build greenmail-up
 		--network $(NETWORK_NAME) \
 		-e IMAP_POLYFILL_TEST_HOST=greenmail \
 		-e IMAP_POLYFILL_TEST_PORT=3143 \
+		-e IMAP_POLYFILL_TEST_POP3_PORT=3110 \
 		-v $(CURDIR):/app:Z \
 		$(PARITY_IMAGE) \
 		sh -c 'composer install --ignore-platform-reqs --quiet && php -m | grep -q imap && vendor/bin/phpunit --testsuite integration'; \

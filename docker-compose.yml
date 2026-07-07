@@ -3,9 +3,11 @@ services:
     image: docker.io/greenmail/standalone:2.1.0
     ports:
       - "13143:3143"
+      - "13110:3110"
     environment:
       GREENMAIL_OPTS: >-
         -Dgreenmail.setup.test.imap
+        -Dgreenmail.setup.test.pop3
         -Dgreenmail.hostname=0.0.0.0
         -Dgreenmail.users=testuser:testpass@localhost
 
@@ -21,6 +23,7 @@ services:
     environment:
       IMAP_POLYFILL_TEST_HOST: greenmail
       IMAP_POLYFILL_TEST_PORT: 3143
+      IMAP_POLYFILL_TEST_POP3_PORT: 3110
     volumes:
       - .:/app
     command: sh -c "composer install --ignore-platform-reqs --quiet && vendor/bin/phpunit --testsuite integration"

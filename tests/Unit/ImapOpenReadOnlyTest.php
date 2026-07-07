@@ -20,7 +20,8 @@ class ImapOpenReadOnlyTest extends TestCase
         }
 
         $client = (new \Webklex\PHPIMAP\ClientManager())->make(['host' => 'example.com', 'port' => 143]);
-        $connection = new \IMAP\Connection($client, 'INBOX', '{example.com}INBOX', readOnly: true);
+        $backend = new \ImapPolyfill\Connection\Imap\ImapBackend($client);
+        $connection = new \IMAP\Connection($backend, 'INBOX', '{example.com}INBOX', readOnly: true);
 
         $this->assertTrue($connection->isReadOnly());
     }
@@ -32,7 +33,8 @@ class ImapOpenReadOnlyTest extends TestCase
         }
 
         $client = (new \Webklex\PHPIMAP\ClientManager())->make(['host' => 'example.com', 'port' => 143]);
-        $connection = new \IMAP\Connection($client, 'INBOX', '{example.com}INBOX');
+        $backend = new \ImapPolyfill\Connection\Imap\ImapBackend($client);
+        $connection = new \IMAP\Connection($backend, 'INBOX', '{example.com}INBOX');
 
         $this->assertFalse($connection->isReadOnly());
     }

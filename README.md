@@ -4,7 +4,7 @@ A drop-in polyfill for the `imap_*` functions removed from PHP core in 8.4.
 
 PHP 8.4 moved `ext-imap` out of core and onto PECL ([RFC](https://wiki.php.net/rfc/unbundle_imap_pspell_oci8)). The C library it wraps (c-client) has been unmaintained since 2007 and is disappearing from Linux distributions, so installing the PECL package is getting harder every release. Codebases built on the `imap_*` functions are usually rewritten against an OOP library like [webklex/php-imap](https://github.com/Webklex/php-imap) instead — a real migration effort, not a version bump.
 
-This package lets you skip that rewrite for the common cases: it defines the same global `imap_*` functions, backed by webklex/php-imap, and only activates if `ext-imap` isn't already loaded.
+This package lets you skip that rewrite for the common cases: it defines the same global `imap_*` functions, backed by webklex/php-imap for IMAP and a small raw client for POP3, and only activates if `ext-imap` isn't already loaded. **IMAP and POP3** — unlike the real extension, it doesn't speak NNTP.
 
 ## Install
 
@@ -102,11 +102,12 @@ Every implemented function's object/array shape (property names, casing, flag se
 
 A few deviations from the real extension that a package evaluator should know about before relying on it:
 
+- `{host/nntp}` is parsed but ignored (falls back to IMAP); `{host/pop3}` genuinely connects over POP3 — see the POP3 notes below.
+- **POP3** (`{host/pop3}`): matches real ext-imap's own treatment of POP3 — a single mailbox always named `INBOX` (any other folder in the spec fails to open, and `OP_READONLY` fails to open at all, both like the real extension); `SEARCH`, `STATUS`, and `BODYSTRUCTURE` are all synthesized client-side, since POP3 has none of them on the wire; flags (`imap_setflag_full`/`imap_clearflag_full`/`\Seen` etc.) exist only for the lifetime of the connection, since POP3 has no persistent flag storage; `imap_mail_copy`/`imap_mail_move`/`imap_append`/mailbox-creation-or-rename all fail outright, same as real ext-imap. `imap_search()`'s criteria grammar over POP3 is a practical subset (`ALL`, `SEEN`/`UNSEEN`, `ANSWERED`/`UNANSWERED`, `DELETED`/`UNDELETED`, `FLAGGED`/`UNFLAGGED`, `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT` substring match, `SINCE`/`BEFORE`/`ON`), not the full RFC3501 grammar.
 - Warnings are raised as `E_USER_WARNING`, not `E_WARNING` — userland code can't raise the exact error level the C extension uses.
 - `OP_HALFOPEN` and most other `OP_*` open flags are accepted (to avoid spurious `ValueError`s) but have no effect; only `OP_READONLY` and `CL_EXPUNGE` actually change behavior.
 - `imap_reopen()` only switches folders on the already-open connection — it can't reconnect to a different host, since `imap_open()`'s credentials aren't retained.
 - `imap_alerts()` is never populated; this polyfill doesn't surface server `* OK [ALERT]` responses.
-- Only the `imap` service is supported in mailbox specs — a `{host/pop3}` or `{host/nntp}` prefix is parsed but ignored, and the connection always speaks IMAP.
 - `imap_open()`'s `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored.
 
 ## Development
@@ -114,7 +115,7 @@ A few deviations from the real extension that a package evaluator should know ab
 ```bash
 make install          # composer install
 make test-unit        # pure-PHP tests, no server needed
-make test-integration  # spins up a disposable Greenmail IMAP server, runs the full suite against it
+make test-integration  # spins up a disposable Greenmail IMAP+POP3 server, runs the full suite against it
 make test              # both of the above
 ```
 

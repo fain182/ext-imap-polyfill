@@ -43,6 +43,31 @@ final class Session
             return false;
         }
 
+        $backend = $spec->hasFlag('pop3')
+            ? self::connectPop3($spec, $mailbox, $user, $password, $retries)
+            : self::connectImap($spec, $user, $password, $retries);
+
+        if ($backend === false) {
+            return false;
+        }
+
+        $connection = new \IMAP\Connection($backend, $spec->folder, $mailbox, (bool) ($flags & OP_READONLY));
+        $connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
+
+        try {
+            $status = $connection->selectOrExamine();
+            $connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return $connection;
+    }
+
+    private static function connectImap(MailboxSpec $spec, string $user, string $password, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
+    {
         $encryption = false;
         if ($spec->hasFlag('ssl')) {
             $encryption = 'ssl';
@@ -61,34 +86,43 @@ final class Session
         ]);
 
         $attempts = 1 + max(0, $retries);
-        $connected = false;
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
             try {
                 $client->connect();
-                $connected = true;
-                break;
+
+                return new \ImapPolyfill\Connection\Imap\ImapBackend($client);
             } catch (\Throwable $e) {
                 ErrorStack::push($e->getMessage());
             }
         }
 
-        if (!$connected) {
-            return false;
+        return false;
+    }
+
+    private static function connectPop3(MailboxSpec $spec, string $mailbox, string $user, string $password, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
+    {
+        $encryption = false;
+        if ($spec->hasFlag('ssl')) {
+            $encryption = 'ssl';
+        } elseif ($spec->hasFlag('tls')) {
+            $encryption = 'tls';
         }
 
-        $connection = new \IMAP\Connection($client, $spec->folder, $mailbox, (bool) ($flags & OP_READONLY));
-        $connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
+        $attempts = 1 + max(0, $retries);
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            $protocol = new \ImapPolyfill\Connection\Pop3\Pop3Protocol();
 
-        try {
-            $status = $connection->selectOrExamine();
-            $connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
+            try {
+                $protocol->connect($spec->host, $spec->port, $encryption, !$spec->hasFlag('novalidate-cert'));
+                $protocol->login($user, $password);
 
-            return false;
+                return new \ImapPolyfill\Connection\Pop3\Pop3Backend($protocol, $spec->host, $mailbox);
+            } catch (\Throwable $e) {
+                ErrorStack::push($e->getMessage());
+            }
         }
 
-        return $connection;
+        return false;
     }
 
     public function close(int $flags): bool
@@ -169,7 +203,7 @@ final class Session
 
         $result = new \stdClass();
         $result->Date = date('r');
-        $result->Driver = 'imap';
+        $result->Driver = $this->connection->driverName();
         $result->Mailbox = $this->connection->mailbox;
         $result->Nmsgs = $status['exists'] ?? 0;
         $result->Recent = $status['recent'] ?? 0;
@@ -223,7 +257,7 @@ final class Session
         $result->Deleted = $deleted;
         $result->Size = $size;
         $result->Date = date('r');
-        $result->Driver = 'imap';
+        $result->Driver = $this->connection->driverName();
         $result->Mailbox = $this->connection->mailbox;
         $result->Nmsgs = $exists;
         $result->Recent = $status['recent'] ?? 0;

@@ -2,20 +2,19 @@
 
 namespace IMAP;
 
-use ImapPolyfill\Connection\Protocol;
-use ImapPolyfill\Message\BodyStructureFetch;
+use ImapPolyfill\Connection\ConnectionBackend;
 
 /**
  * Polyfill for the opaque IMAP\Connection class ext-imap registers natively.
- * Owns the webklex client: nothing outside this class touches it directly,
- * so every wire operation Session/Mailbox/MailboxHierarchy need is exposed here as
- * a named method instead of reaching through a public "client" field.
+ * Holds connection-level state (selected folder, read-only flag, cached
+ * counters) and delegates every wire operation to a ConnectionBackend —
+ * either Connection\Imap\ImapBackend (webklex/IMAP) or Connection\Pop3\Pop3Backend
+ * (POP3), chosen by Session::open() from the mailbox spec. Knows nothing
+ * about imap_* contracts, ErrorStack, or return-value conventions.
  */
 final class Connection
 {
-    private readonly \Webklex\PHPIMAP\Client $client;
-
-    private ?Protocol $protocol = null;
+    private readonly ConnectionBackend $backend;
 
     private bool $closed = false;
 
@@ -41,12 +40,12 @@ final class Connection
     private int $cachedNumRecent = 0;
 
     public function __construct(
-        \Webklex\PHPIMAP\Client $client,
+        ConnectionBackend $backend,
         string $folder,
         public readonly string $mailbox,
         bool $readOnly = false,
     ) {
-        $this->client = $client;
+        $this->backend = $backend;
         $this->folder = $folder;
         $this->readOnly = $readOnly;
     }
@@ -105,8 +104,8 @@ final class Connection
 
     /**
      * Switches the currently selected folder and read-only mode, e.g. after
-     * imap_reopen(). Does not touch the underlying IMAP session itself —
-     * callers must SELECT/EXAMINE the new folder on the client separately.
+     * imap_reopen(). Does not touch the underlying session itself — callers
+     * must select/examine the new folder on the backend separately.
      */
     public function reselect(string $folder, bool $readOnly): void
     {
@@ -138,54 +137,63 @@ final class Connection
      */
     public function selectOrExamineFolder(string $folder, bool $readOnly): array
     {
-        $folderObj = $this->client->getFolder($folder);
-
-        return $readOnly ? $folderObj->examine() : $folderObj->select();
+        return $this->backend->selectOrExamineFolder($folder, $readOnly);
     }
 
-    public function protocol(): Protocol
+    /**
+     * Exposes the message/folder wire operations (search, fetch, store,
+     * folders, ...) of the current backend; named protocol() for historical
+     * reasons — it returns the whole ConnectionBackend, not just the subset
+     * that used to live on the (now-removed) Protocol-only accessor.
+     */
+    public function protocol(): ConnectionBackend
     {
-        return $this->protocol ??= new Protocol($this->client);
+        return $this->backend;
     }
 
     public function host(): string
     {
-        return $this->client->host;
+        return $this->backend->host();
+    }
+
+    public function driverName(): string
+    {
+        return $this->backend->driverName();
     }
 
     public function expunge(): void
     {
-        $this->client->expunge();
+        $this->backend->expunge();
     }
 
     public function disconnect(): void
     {
-        $this->client->disconnect();
+        $this->backend->disconnect();
     }
 
     public function createFolder(string $name): void
     {
-        $this->client->createFolder($name);
+        $this->backend->createFolder($name);
     }
 
     public function deleteFolder(string $name): void
     {
-        $this->client->deleteFolder($name);
+        $this->backend->deleteFolder($name);
     }
 
     public function renameFolder(string $from, string $to): void
     {
-        $this->client->getFolder($from)->rename($to);
+        $this->backend->renameFolder($from, $to);
     }
 
     public function subscribeFolder(string $name): void
     {
-        $this->client->getFolder($name)->subscribe();
+        $this->backend->subscribeFolder($name);
     }
 
     public function unsubscribeFolder(string $name): void
     {
-        $this->client->getFolder($name)->unsubscribe();
+        $this->backend->unsubscribeFolder($name);
     }
 
     /**
@@ -193,7 +201,7 @@ final class Connection
      */
     public function appendMessage(string $folder, string $message, ?array $flags, ?string $internalDate): void
     {
-        $this->client->getFolder($folder)->appendMessage($message, $flags, $internalDate);
+        $this->backend->appendMessage($folder, $message, $flags, $internalDate);
     }
 
     /**
@@ -201,6 +209,6 @@ final class Connection
      */
     public function fetchBodyStructure(int $messageNum, bool $byUid): array
     {
-        return BodyStructureFetch::fetch($this->client, $messageNum, $byUid);
+        return $this->backend->fetchBodyStructure($messageNum, $byUid);
     }
 }
