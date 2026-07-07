@@ -231,6 +231,23 @@ final class Session
         return $result;
     }
 
+    /**
+     * This polyfill keeps no client-side cache of message elements/envelopes/
+     * texts to purge, so once the flags bitmask is validated there is
+     * nothing left to do — matching ext-imap's own "always returns true"
+     * contract (mail_gc()'s result isn't even checked in php_imap.c).
+     */
+    public function gc(int $flags): bool
+    {
+        $this->connection->ensureOpen();
+
+        if ($flags && ($flags & ~(IMAP_GC_TEXTS | IMAP_GC_ELT | IMAP_GC_ENV)) !== 0) {
+            throw new \ValueError('imap_gc(): Argument #2 ($flags) must be a bitmask of IMAP_GC_TEXTS, IMAP_GC_ELT, and IMAP_GC_ENV');
+        }
+
+        return true;
+    }
+
     public function ping(): bool
     {
         $this->connection->ensureOpen();

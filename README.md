@@ -16,7 +16,7 @@ No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the po
 
 ## Coverage
 
-This is not a reimplementation of all `imap_*` functions — **58 of 75 (77%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — **62 of 75 (83%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
 
 Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the notes column; anything not noted is expected to match exactly.
 
@@ -28,7 +28,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_base64` | ✅ | |
 | `imap_binary` | ✅ | wraps output at 60 chars/line like c-client's `rfc822_binary` |
 | `imap_body` | ✅ |  |
-| `imap_bodystruct` | ❌ | |
+| `imap_bodystruct` | ✅ | msgno-only, never uid — c-client's `mail_body()` has no UID equivalent, unlike `imap_fetchbody()` |
 | `imap_check` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
 | `imap_clearflag_full` | ✅ | |
 | `imap_close` | ✅ | |
@@ -40,11 +40,11 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_expunge` | ✅ | |
 | `imap_fetchbody` | ✅ | |
 | `imap_fetchheader` | ✅ | |
-| `imap_fetchmime` | ❌ | |
+| `imap_fetchmime` | ✅ | |
 | `imap_fetch_overview` | ✅ | |
 | `imap_fetchstructure` | ✅ | |
 | `imap_fetchtext` | ✅ | alias of `imap_body` |
-| `imap_gc` | ❌ | |
+| `imap_gc` | ✅ | this polyfill keeps no cache, so once the flags bitmask is validated it's a no-op that always returns `true`, like the real extension |
 | `imap_getacl` | ❌ | |
 | `imap_getmailboxes` | ✅ | |
 | `imap_get_quota` | ❌ | |
@@ -78,7 +78,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_rfc822_parse_adrlist` | ✅ | |
 | `imap_rfc822_parse_headers` | ✅ | |
 | `imap_rfc822_write_address` | ✅ | |
-| `imap_savebody` | ❌ | |
+| `imap_savebody` | ✅ | accepts a file path or an open stream resource; like the real extension, returns `true` regardless of whether the section fetch itself found anything, as long as the destination could be opened |
 | `imap_scan` | ❌ | |
 | `imap_scanmailbox` | ❌ | |
 | `imap_search` | ✅ | |

@@ -147,3 +147,16 @@ if (!defined('SA_UIDVALIDITY')) {
 if (!defined('SA_ALL')) {
     define('SA_ALL', SA_MESSAGES | SA_RECENT | SA_UNSEEN | SA_UIDNEXT | SA_UIDVALIDITY);
 }
+
+// Values from c-client's mail.h GC_* defines.
+if (!defined('IMAP_GC_ELT')) {
+    define('IMAP_GC_ELT', 0x1);
+}
+
+if (!defined('IMAP_GC_ENV')) {
+    define('IMAP_GC_ENV', 0x2);
+}
+
+if (!defined('IMAP_GC_TEXTS')) {
+    define('IMAP_GC_TEXTS', 0x4);
+}

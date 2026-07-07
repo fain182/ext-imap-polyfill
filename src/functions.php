@@ -136,6 +136,34 @@ if (!function_exists('imap_body')) {
     }
 }
 
+if (!function_exists('imap_fetchmime')) {
+    function imap_fetchmime(\IMAP\Connection $imap, int $message_num, string $section, int $flags = 0): string|false
+    {
+        return (new \ImapPolyfill\Session\Mailbox($imap))->fetchMime($message_num, $section, $flags);
+    }
+}
+
+if (!function_exists('imap_bodystruct')) {
+    function imap_bodystruct(\IMAP\Connection $imap, int $message_num, string $section): \stdClass|false
+    {
+        return (new \ImapPolyfill\Session\Mailbox($imap))->bodyStruct($message_num, $section);
+    }
+}
+
+if (!function_exists('imap_savebody')) {
+    function imap_savebody(\IMAP\Connection $imap, mixed $file, int $message_num, string $section = '', int $flags = 0): bool
+    {
+        return (new \ImapPolyfill\Session\Mailbox($imap))->saveBody($file, $message_num, $section, $flags);
+    }
+}
+
+if (!function_exists('imap_gc')) {
+    function imap_gc(\IMAP\Connection $imap, int $flags): bool
+    {
+        return (new \ImapPolyfill\Session\Session($imap))->gc($flags);
+    }
+}
+
 if (!function_exists('imap_fetchtext')) {
     function imap_fetchtext(\IMAP\Connection $imap, int $message_num, int $flags = 0): string|false
     {

@@ -32,6 +32,75 @@ final class BodyStructure
         return is_array($parsed[0]) ? self::buildMultipart($parsed) : self::buildSinglePart($parsed);
     }
 
+    /**
+     * Walks a dotted section path ("1", "2.1", ...) down the full parsed
+     * BODYSTRUCTURE tree to find the sub-tree for imap_bodystruct(), the same
+     * way c-client's mail_body() indexes into BODY.nested.part for multipart
+     * envelopes and steps into the embedded message for message/rfc822 parts.
+     *
+     * @param array<int, mixed> $parsed
+     */
+    public static function resolveSection(array $parsed, string $section): ?array
+    {
+        if ($section === '' || !preg_match('/^\d+(\.\d+)*$/', $section)) {
+            return null;
+        }
+
+        return self::descend($parsed, array_map('intval', explode('.', $section)));
+    }
+
+    /**
+     * @param array<int, mixed> $node
+     * @param int[] $segments
+     * @return array<int, mixed>|null
+     */
+    private static function descend(array $node, array $segments): ?array
+    {
+        if ($segments === []) {
+            return $node;
+        }
+
+        $index = array_shift($segments);
+        if ($index < 1) {
+            return null;
+        }
+
+        if (is_array($node[0])) {
+            $children = [];
+            $i = 0;
+            while (isset($node[$i]) && is_array($node[$i])) {
+                $children[] = $node[$i];
+                $i++;
+            }
+
+            if ($index > count($children)) {
+                return null;
+            }
+
+            return self::descend($children[$index - 1], $segments);
+        }
+
+        // Singlepart: index 1 names the part itself; anything else is invalid.
+        if ($index !== 1) {
+            return null;
+        }
+
+        if ($segments === []) {
+            return $node;
+        }
+
+        // Only a message/rfc822 part carries a further nested body to
+        // navigate into; layout is [type, subtype, params, id, description,
+        // encoding, size, envelope, body, ...].
+        $type = strtolower((string) $node[0]);
+        $subtype = strtolower((string) ($node[1] ?? ''));
+        if ($type !== 'message' || $subtype !== 'rfc822' || !is_array($node[8] ?? null)) {
+            return null;
+        }
+
+        return self::descend($node[8], $segments);
+    }
+
     private static function buildMultipart(array $parsed): \stdClass
     {
         $result = new \stdClass();

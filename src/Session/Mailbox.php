@@ -210,6 +210,104 @@ final class Mailbox
         return $data[$messageNum] ?? reset($data);
     }
 
+    public function fetchMime(int $messageNum, string $section, int $flags): string|false
+    {
+        $this->connection->ensureOpen();
+
+        if ($messageNum < 1) {
+            throw new \ValueError('imap_fetchmime(): Argument #2 ($message_num) must be greater than 0');
+        }
+
+        if ($flags !== 0 && ($flags & ~(FT_UID | FT_PEEK | FT_INTERNAL)) !== 0) {
+            throw new \ValueError('imap_fetchmime(): Argument #4 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');
+        }
+
+        $uidMode = ($flags & FT_UID)
+            ? \Webklex\PHPIMAP\IMAP::ST_UID
+            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+        $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$section}.MIME]" : "BODY[{$section}.MIME]";
+
+        try {
+            $this->connection->selectOrExamine();
+            $data = $this->connection->protocol()->fetch([$item], [$messageNum], null, $uidMode);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return $data[$messageNum] ?? reset($data);
+    }
+
+    public function bodyStruct(int $messageNum, string $section): \stdClass|false
+    {
+        $this->connection->ensureOpen();
+
+        if ($messageNum < 1) {
+            throw new \ValueError('imap_bodystruct(): Argument #2 ($message_num) must be greater than 0');
+        }
+
+        try {
+            $this->connection->selectOrExamine();
+            // c-client's mail_body() indexes a single BODYSTRUCTURE fetch by
+            // section, unlike imap_fetchbody(): there is no msgno/uid
+            // equivalent of BODYSTRUCTURE for one section, so this is always
+            // a msgno, never a uid (no FT_UID here, unlike imap_fetchbody()).
+            $parsed = $this->connection->fetchBodyStructure($messageNum, false);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        $node = BodyStructure::resolveSection($parsed, $section);
+
+        if ($node === null) {
+            return false;
+        }
+
+        return BodyStructure::build($node);
+    }
+
+    /**
+     * @param resource|string $file
+     */
+    public function saveBody(mixed $file, int $messageNum, string $section, int $flags): bool
+    {
+        $this->connection->ensureOpen();
+
+        if ($messageNum < 1) {
+            throw new \ValueError('imap_savebody(): Argument #3 ($message_num) must be greater than 0');
+        }
+
+        if ($flags !== 0 && ($flags & ~(FT_UID | FT_PEEK | FT_INTERNAL)) !== 0) {
+            throw new \ValueError('imap_savebody(): Argument #5 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');
+        }
+
+        $isResource = is_resource($file);
+        if ($isResource) {
+            $handle = $file;
+        } else {
+            $handle = @fopen((string) $file, 'wb');
+            if ($handle === false) {
+                return false;
+            }
+        }
+
+        // ext-imap's C implementation never checks whether the underlying
+        // mail_fetchbody_full() call actually produced anything — it just
+        // writes whatever it got (nothing, for an invalid section) and
+        // returns true as long as the destination could be opened.
+        $body = $this->fetchBody($messageNum, $section, $flags);
+        fwrite($handle, $body === false ? '' : $body);
+
+        if (!$isResource) {
+            fclose($handle);
+        }
+
+        return true;
+    }
+
     public function body(int $messageNum, int $flags): string|false
     {
         $this->connection->ensureOpen();
