@@ -87,6 +87,46 @@ final class MailboxHierarchy
         return $result;
     }
 
+    public function status(string $mailbox, int $flags): \stdClass|false
+    {
+        $this->connection->ensureOpen();
+
+        if (($flags & ~SA_ALL) !== 0) {
+            throw new \ValueError('imap_status(): Argument #3 ($flags) must be a bitmask of SA_* constants');
+        }
+
+        $itemBits = [
+            'MESSAGES' => SA_MESSAGES,
+            'RECENT' => SA_RECENT,
+            'UNSEEN' => SA_UNSEEN,
+            'UIDNEXT' => SA_UIDNEXT,
+            'UIDVALIDITY' => SA_UIDVALIDITY,
+        ];
+
+        $items = array_keys(array_filter($itemBits, static fn (int $bit): bool => (bool) ($flags & $bit)));
+        $folderName = MailboxReference::parse($mailbox)->bareReference;
+
+        try {
+            $status = $this->connection->protocol()->folderStatus($folderName, $items);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        $result = new \stdClass();
+        $result->flags = 0;
+        foreach ($itemBits as $item => $bit) {
+            $key = strtolower($item);
+            if (isset($status[$key])) {
+                $result->flags |= $bit;
+                $result->{$key} = $status[$key];
+            }
+        }
+
+        return $result;
+    }
+
     public function createMailbox(string $mailbox): bool
     {
         $this->connection->ensureOpen();

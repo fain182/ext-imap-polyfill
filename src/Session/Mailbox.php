@@ -194,6 +194,86 @@ final class Mailbox
         return $data[$messageNum] ?? reset($data);
     }
 
+    public function body(int $messageNum, int $flags): string|false
+    {
+        $this->connection->ensureOpen();
+
+        if ($messageNum < 1) {
+            throw new \ValueError('imap_body(): Argument #2 ($message_num) must be greater than 0');
+        }
+
+        if (($flags & ~(FT_UID | FT_PEEK | FT_INTERNAL)) !== 0) {
+            throw new \ValueError('imap_body(): Argument #3 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');
+        }
+
+        $uidMode = ($flags & FT_UID)
+            ? \Webklex\PHPIMAP\IMAP::ST_UID
+            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+        $item = ($flags & FT_PEEK) ? 'BODY.PEEK[TEXT]' : 'BODY[TEXT]';
+
+        try {
+            $this->connection->selectOrExamine();
+            $data = $this->connection->protocol()->fetch([$item], [$messageNum], null, $uidMode);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return $data[$messageNum] ?? reset($data);
+    }
+
+    public function copy(string $sequence, string $folder, int $options): bool
+    {
+        $this->connection->ensureOpen();
+
+        if (($options & ~(CP_UID | CP_MOVE)) !== 0) {
+            throw new \ValueError('imap_mail_copy(): Argument #4 ($options) must be a bitmask of CP_UID, and CP_MOVE');
+        }
+
+        return $this->copyTo($sequence, $folder, $options);
+    }
+
+    public function move(string $sequence, string $folder, int $options): bool
+    {
+        $this->connection->ensureOpen();
+
+        if (($options & ~CP_UID) !== 0) {
+            throw new \ValueError('imap_mail_move(): Argument #4 ($options) must be CP_UID or 0');
+        }
+
+        return $this->copyTo($sequence, $folder, $options | CP_MOVE);
+    }
+
+    private function copyTo(string $sequence, string $folder, int $options): bool
+    {
+        $uidMode = ($options & CP_UID)
+            ? \Webklex\PHPIMAP\IMAP::ST_UID
+            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+
+        try {
+            $this->connection->selectOrExamine();
+            // Unlike APPEND and STATUS, c-client's COPY sends the mailbox
+            // argument verbatim on the wire — a "{host}folder" spec is not
+            // unwrapped and simply names a nonexistent folder server-side.
+            $this->connection->protocol()->copy($sequence, $folder, $uidMode);
+
+            // c-client's CP_MOVE predates the IMAP MOVE extension: it marks
+            // the source messages \Deleted after copying and leaves the
+            // expunge to the caller.
+            if ($options & CP_MOVE) {
+                $command = ($options & CP_UID) ? 'UID STORE' : 'STORE';
+                $this->connection->protocol()->store($command, [$sequence, '+FLAGS.SILENT', '(\\Deleted)']);
+            }
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return true;
+    }
+
     public function uid(int $messageNum): int|false
     {
         $this->connection->ensureOpen();

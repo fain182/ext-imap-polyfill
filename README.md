@@ -16,7 +16,7 @@ No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the po
 
 ## Coverage
 
-This is not a reimplementation of all `imap_*` functions — **47 of 75 (63%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — **54 of 75 (72%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
 
 Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the notes column; anything not noted is expected to match exactly.
 
@@ -27,7 +27,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_append` | ✅ | |
 | `imap_base64` | ✅ | |
 | `imap_binary` | ✅ | wraps output at 60 chars/line like c-client's `rfc822_binary` |
-| `imap_body` | ❌ | |
+| `imap_body` | ✅ |  |
 | `imap_bodystruct` | ❌ | |
 | `imap_check` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
 | `imap_clearflag_full` | ✅ | |
@@ -43,7 +43,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_fetchmime` | ❌ | |
 | `imap_fetch_overview` | ✅ | |
 | `imap_fetchstructure` | ✅ | |
-| `imap_fetchtext` | ❌ | |
+| `imap_fetchtext` | ✅ | alias of `imap_body` |
 | `imap_gc` | ❌ | |
 | `imap_getacl` | ❌ | |
 | `imap_getmailboxes` | ✅ | |
@@ -55,22 +55,22 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_is_open` | ✅ | |
 | `imap_last_error` | ✅ | |
 | `imap_list` | ✅ | |
-| `imap_listmailbox` | ❌ | |
+| `imap_listmailbox` | ✅ | alias of `imap_list` |
 | `imap_listscan` | ❌ | |
 | `imap_listsubscribed` | ❌ | |
 | `imap_lsub` | ❌ | |
 | `imap_mail` | ❌ | |
 | `imap_mailboxmsginfo` | ❌ | |
 | `imap_mail_compose` | ❌ | |
-| `imap_mail_copy` | ❌ | |
-| `imap_mail_move` | ❌ | |
+| `imap_mail_copy` | ✅ |  |
+| `imap_mail_move` | ✅ | copies and marks the source `\Deleted` without expunging, like c-client; target is a bare folder name |
 | `imap_mime_header_decode` | ✅ | |
 | `imap_msgno` | ✅ | |
 | `imap_mutf7_to_utf8` | ✅ | |
 | `imap_num_msg` | ✅ | |
 | `imap_num_recent` | ✅ | cached client-side read, like `imap_num_msg` |
 | `imap_open` | ✅ | |
-| `imap_ping` | ❌ | |
+| `imap_ping` | ✅ |  |
 | `imap_qprint` | ✅ | |
 | `imap_rename` | ✅ | |
 | `imap_renamemailbox` | ✅ | |
@@ -86,7 +86,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_setflag_full` | ✅ | |
 | `imap_set_quota` | ❌ | |
 | `imap_sort` | ❌ | |
-| `imap_status` | ❌ | |
+| `imap_status` | ✅ |  |
 | `imap_subscribe` | ✅ | |
 | `imap_thread` | ❌ | |
 | `imap_timeout` | ✅ | |

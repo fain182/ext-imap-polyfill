@@ -122,6 +122,48 @@ if (!function_exists('imap_fetchbody')) {
     }
 }
 
+if (!function_exists('imap_body')) {
+    function imap_body(\IMAP\Connection $imap, int $message_num, int $flags = 0): string|false
+    {
+        return (new \ImapPolyfill\Session\Mailbox($imap))->body($message_num, $flags);
+    }
+}
+
+if (!function_exists('imap_fetchtext')) {
+    function imap_fetchtext(\IMAP\Connection $imap, int $message_num, int $flags = 0): string|false
+    {
+        return imap_body($imap, $message_num, $flags);
+    }
+}
+
+if (!function_exists('imap_mail_copy')) {
+    function imap_mail_copy(\IMAP\Connection $imap, string $message_nums, string $folder, int $flags = 0): bool
+    {
+        return (new \ImapPolyfill\Session\Mailbox($imap))->copy($message_nums, $folder, $flags);
+    }
+}
+
+if (!function_exists('imap_mail_move')) {
+    function imap_mail_move(\IMAP\Connection $imap, string $message_nums, string $folder, int $flags = 0): bool
+    {
+        return (new \ImapPolyfill\Session\Mailbox($imap))->move($message_nums, $folder, $flags);
+    }
+}
+
+if (!function_exists('imap_ping')) {
+    function imap_ping(\IMAP\Connection $imap): bool
+    {
+        return (new \ImapPolyfill\Session\Session($imap))->ping();
+    }
+}
+
+if (!function_exists('imap_status')) {
+    function imap_status(\IMAP\Connection $imap, string $mailbox, int $flags): \stdClass|false
+    {
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->status($mailbox, $flags);
+    }
+}
+
 if (!function_exists('imap_uid')) {
     function imap_uid(\IMAP\Connection $imap, int $message_num): int|false
     {
@@ -140,6 +182,13 @@ if (!function_exists('imap_list')) {
     function imap_list(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
         return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->listMailboxes($reference, $pattern);
+    }
+}
+
+if (!function_exists('imap_listmailbox')) {
+    function imap_listmailbox(\IMAP\Connection $imap, string $reference, string $pattern): array|false
+    {
+        return imap_list($imap, $reference, $pattern);
     }
 }
 

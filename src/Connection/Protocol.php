@@ -78,4 +78,24 @@ final class Protocol
     {
         return $this->client->getConnection()->folders($reference, $pattern)->validatedData();
     }
+
+    public function copy(string $sequence, string $folder, int $uidMode): void
+    {
+        $this->client->getConnection()->copyMessage($folder, $sequence, null, $uidMode)->validatedData();
+    }
+
+    public function noop(): void
+    {
+        $this->client->getConnection()->noop()->validatedData();
+    }
+
+    /**
+     * @param string[] $items
+     *
+     * @return array<string, int>
+     */
+    public function folderStatus(string $folder, array $items): array
+    {
+        return $this->client->getConnection()->folderStatus($folder, $items)->validatedData();
+    }
 }

@@ -159,6 +159,21 @@ final class Session
         return $result;
     }
 
+    public function ping(): bool
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            $this->connection->protocol()->noop();
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return true;
+    }
+
     /**
      * Scoped to switching folders on the same already-connected client: this
      * polyfill doesn't retain the original credentials needed to reconnect
