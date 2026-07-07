@@ -144,16 +144,16 @@ if (!function_exists('imap_fetchtext')) {
 }
 
 if (!function_exists('imap_mail_copy')) {
-    function imap_mail_copy(\IMAP\Connection $imap, string $message_nums, string $folder, int $flags = 0): bool
+    function imap_mail_copy(\IMAP\Connection $imap, string $message_nums, string $mailbox, int $flags = 0): bool
     {
-        return (new \ImapPolyfill\Session\Mailbox($imap))->copy($message_nums, $folder, $flags);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->copy($message_nums, $mailbox, $flags);
     }
 }
 
 if (!function_exists('imap_mail_move')) {
-    function imap_mail_move(\IMAP\Connection $imap, string $message_nums, string $folder, int $flags = 0): bool
+    function imap_mail_move(\IMAP\Connection $imap, string $message_nums, string $mailbox, int $flags = 0): bool
     {
-        return (new \ImapPolyfill\Session\Mailbox($imap))->move($message_nums, $folder, $flags);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->move($message_nums, $mailbox, $flags);
     }
 }
 
@@ -270,31 +270,31 @@ if (!function_exists('imap_append')) {
 }
 
 if (!function_exists('imap_base64')) {
-    function imap_base64(string $text): string|false
+    function imap_base64(string $string): string|false
     {
-        return base64_decode($text);
+        return base64_decode($string);
     }
 }
 
 if (!function_exists('imap_qprint')) {
-    function imap_qprint(string $text): string|false
+    function imap_qprint(string $string): string|false
     {
-        return quoted_printable_decode($text);
+        return quoted_printable_decode($string);
     }
 }
 
 if (!function_exists('imap_8bit')) {
-    function imap_8bit(string $text): string|false
+    function imap_8bit(string $string): string|false
     {
-        return quoted_printable_encode($text);
+        return quoted_printable_encode($string);
     }
 }
 
 if (!function_exists('imap_binary')) {
-    function imap_binary(string $text): string|false
+    function imap_binary(string $string): string|false
     {
         // Matches c-client's rfc822_binary: base64 wrapped at 60 chars/line.
-        return chunk_split(base64_encode($text), 60, "\n");
+        return chunk_split(base64_encode($string), 60, "\n");
     }
 }
 
