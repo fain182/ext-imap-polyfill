@@ -39,11 +39,11 @@ class MailboxSpecTest extends TestCase
         $this->assertSame('INBOX.Sent', $spec->folder);
     }
 
-    public function test_supports_an_empty_folder(): void
+    public function test_defaults_an_omitted_folder_to_inbox(): void
     {
         $spec = MailboxSpec::parse('{imap.example.com:143/imap}');
 
-        $this->assertSame('', $spec->folder);
+        $this->assertSame('INBOX', $spec->folder);
     }
 
     public function test_rejects_a_spec_without_braces(): void

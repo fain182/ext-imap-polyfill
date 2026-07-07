@@ -70,10 +70,8 @@ final class Session
         $connection = new \IMAP\Connection($client, $spec->folder, $mailbox, (bool) ($flags & OP_READONLY));
 
         try {
-            if ($spec->folder !== '') {
-                $status = $connection->selectOrExamine();
-                $connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
-            }
+            $status = $connection->selectOrExamine();
+            $connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -86,6 +84,10 @@ final class Session
     public function close(int $flags): bool
     {
         $this->connection->ensureOpen();
+
+        if (($flags & ~CL_EXPUNGE) !== 0) {
+            throw new \ValueError('imap_close(): Argument #2 ($flags) must be CL_EXPUNGE or 0');
+        }
 
         if ($flags & CL_EXPUNGE) {
             $this->connection->expunge();

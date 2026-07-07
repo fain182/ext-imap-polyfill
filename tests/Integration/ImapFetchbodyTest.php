@@ -87,6 +87,51 @@ class ImapFetchbodyTest extends GreenmailTestCase
         $this->assertSame('AAAA', imap_fetchbody($connection, 1, '2'));
     }
 
+    public function test_an_empty_section_returns_the_entire_message(): void
+    {
+        $folderName = 'FetchBodyBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage(
+            "Subject: Whole\r\nContent-Type: text/plain\r\n\r\nEntire body\r\n"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $whole = imap_fetchbody($connection, 1, '');
+
+        $this->assertIsString($whole);
+        $this->assertStringContainsString('Subject: Whole', $whole);
+        $this->assertStringContainsString('Entire body', $whole);
+    }
+
+    public function test_ft_peek_leaves_the_message_unseen(): void
+    {
+        $folderName = 'FetchBodyBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Peek\r\n\r\nBody");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        imap_fetchbody($connection, 1, '1', FT_PEEK);
+
+        $overview = imap_fetch_overview($connection, '1:1');
+        $this->assertSame(0, $overview[0]->seen);
+    }
+
+    public function test_fetching_without_ft_peek_marks_the_message_seen(): void
+    {
+        $folderName = 'FetchBodyBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: NoPeek\r\n\r\nBody");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        imap_fetchbody($connection, 1, '1');
+
+        $overview = imap_fetch_overview($connection, '1:1');
+        $this->assertSame(1, $overview[0]->seen);
+    }
+
     public function test_ft_uid_fetches_by_uid_when_it_diverges_from_msgno(): void
     {
         [$folderName, $survivorUid] = $this->makeMsgnoUidMismatchFixture(

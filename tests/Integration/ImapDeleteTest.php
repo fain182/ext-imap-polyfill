@@ -36,6 +36,19 @@ class ImapDeleteTest extends GreenmailTestCase
         $this->assertSame(1, $overview[0]->deleted);
     }
 
+    public function test_returns_true_even_for_an_out_of_range_message_number(): void
+    {
+        $folderName = 'DeleteBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Hello\r\n\r\nBody");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        // imap_delete has no failure mode: it returns true no matter what the
+        // sequence matches; a failed STORE is only visible via imap_last_error().
+        $this->assertTrue(imap_delete($connection, '42'));
+    }
+
     public function test_deletes_a_range_of_messages(): void
     {
         $folderName = 'DeleteBox' . uniqid();

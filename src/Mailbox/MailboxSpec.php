@@ -37,7 +37,9 @@ final class MailboxSpec
             );
         }
 
-        $folder = $matches[2];
+        // c-client treats an omitted folder part as INBOX: imap_open("{host}")
+        // selects INBOX rather than leaving no mailbox selected.
+        $folder = $matches[2] !== '' ? $matches[2] : 'INBOX';
         $parts = explode('/', $matches[1]);
         $hostPort = array_shift($parts);
         $flags = $parts;

@@ -43,6 +43,9 @@ final class ErrorStack
 
         $errors = self::$errors;
         self::$errors = [];
+        // ext-imap's imap_last_error() reads the same stack imap_errors()
+        // frees, so draining the stack clears the last error too.
+        self::$lastError = false;
 
         return $errors;
     }

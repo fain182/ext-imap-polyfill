@@ -246,6 +246,10 @@ final class Mailbox
     {
         $this->connection->ensureOpen();
 
+        if (($options & ~ST_UID) !== 0) {
+            throw new \ValueError('imap_setflag_full(): Argument #4 ($options) must be ST_UID or 0');
+        }
+
         $command = ($options & ST_UID) ? 'UID STORE' : 'STORE';
         $flagsAtom = '('.trim($flag).')';
 
@@ -262,6 +266,10 @@ final class Mailbox
     public function clearFlagFull(string $sequence, string $flag, int $options): bool
     {
         $this->connection->ensureOpen();
+
+        if (($options & ~ST_UID) !== 0) {
+            throw new \ValueError('imap_clearflag_full(): Argument #4 ($options) must be ST_UID or 0');
+        }
 
         $command = ($options & ST_UID) ? 'UID STORE' : 'STORE';
         $flagsAtom = '('.trim($flag).')';

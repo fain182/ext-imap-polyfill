@@ -27,4 +27,23 @@ class ImapAppendTest extends GreenmailTestCase
         $overview = imap_fetch_overview($connection, '1:1');
         $this->assertSame(1, $overview[0]->seen);
     }
+
+    public function test_preserves_a_supplied_internal_date(): void
+    {
+        $folderName = 'AppendBox' . uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $timestamp = 1700000000;
+        imap_append(
+            $connection,
+            self::mailboxSpec($folderName),
+            "Subject: Dated\r\n\r\nBody text\r\n",
+            null,
+            date('d-M-Y H:i:s O', $timestamp)
+        );
+
+        $overview = imap_fetch_overview($connection, '1:1');
+        $this->assertSame($timestamp, $overview[0]->udate);
+    }
 }

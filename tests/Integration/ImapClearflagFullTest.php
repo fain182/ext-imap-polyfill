@@ -21,6 +21,18 @@ class ImapClearflagFullTest extends GreenmailTestCase
         $this->assertSame(1, $overview[0]->seen);
     }
 
+    public function test_rejects_options_other_than_st_uid(): void
+    {
+        $folderName = 'ClearFlagBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Hello\r\n\r\nBody");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $this->expectException(\ValueError::class);
+        imap_clearflag_full($connection, '1', '\\Seen', 9999);
+    }
+
     public function test_imap_undelete_clears_the_deleted_flag(): void
     {
         $folderName = 'UndeleteBox'.uniqid();

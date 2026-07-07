@@ -24,4 +24,16 @@ class ImapLastErrorTest extends GreenmailTestCase
 
         $this->assertIsString(imap_last_error());
     }
+
+    public function test_is_cleared_when_imap_errors_drains_the_stack(): void
+    {
+        imap_open(self::mailboxSpec(), self::USER, 'wrong-password');
+        $this->assertIsString(imap_last_error());
+
+        imap_errors();
+
+        // imap_last_error() reads the same stack imap_errors() frees, so
+        // after a drain it reports false, not the stale last message.
+        $this->assertFalse(imap_last_error());
+    }
 }

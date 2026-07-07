@@ -23,4 +23,12 @@ class ImapCloseTest extends GreenmailTestCase
 
         $this->assertTrue($result);
     }
+
+    public function test_rejects_flags_other_than_cl_expunge(): void
+    {
+        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+
+        $this->expectException(\ValueError::class);
+        imap_close($connection, 42);
+    }
 }
