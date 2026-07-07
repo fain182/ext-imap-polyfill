@@ -50,11 +50,15 @@ final class Mailbox
 
     public function fetchHeader(int $messageNum, int $flags): string|false
     {
+        $this->connection->ensureOpen();
+
+        if ($messageNum < 1) {
+            throw new \ValueError('imap_fetchheader(): Argument #2 ($message_num) must be greater than 0');
+        }
+
         $uidMode = ($flags & FT_UID)
             ? \Webklex\PHPIMAP\IMAP::ST_UID
             : \Webklex\PHPIMAP\IMAP::ST_MSGN;
-
-        $this->connection->ensureOpen();
 
         try {
             $this->connection->selectOrExamine();
@@ -71,6 +75,10 @@ final class Mailbox
     public function headerInfo(int $messageNum): \stdClass|false
     {
         $this->connection->ensureOpen();
+
+        if ($messageNum < 1) {
+            throw new \ValueError('imap_headerinfo(): Argument #2 ($message_num) must be greater than 0');
+        }
 
         try {
             $this->connection->selectOrExamine();
@@ -158,6 +166,10 @@ final class Mailbox
     {
         $this->connection->ensureOpen();
 
+        if ($messageNum < 1) {
+            throw new \ValueError('imap_fetchstructure(): Argument #2 ($message_num) must be greater than 0');
+        }
+
         try {
             $this->connection->selectOrExamine();
             $parsed = $this->connection->fetchBodyStructure($messageNum, (bool) ($flags & FT_UID));
@@ -173,6 +185,10 @@ final class Mailbox
     public function fetchBody(int $messageNum, string $section, int $flags): string|false
     {
         $this->connection->ensureOpen();
+
+        if ($messageNum < 1) {
+            throw new \ValueError('imap_fetchbody(): Argument #2 ($message_num) must be greater than 0');
+        }
 
         $uidMode = ($flags & FT_UID)
             ? \Webklex\PHPIMAP\IMAP::ST_UID

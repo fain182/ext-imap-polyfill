@@ -35,4 +35,15 @@ class ImapFetchheaderTest extends GreenmailTestCase
         $this->assertStringContainsString('Subject: Survivor', $byMsgno);
         $this->assertSame($byMsgno, $byUid);
     }
+
+    public function test_throws_value_error_for_a_non_positive_message_number(): void
+    {
+        $folderName = 'FetchHeaderValBox'.uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_fetchheader(): Argument #2 ($message_num) must be greater than 0');
+        imap_fetchheader($connection, 0);
+    }
 }

@@ -96,4 +96,15 @@ class ImapHeaderinfoTest extends GreenmailTestCase
         $this->assertSame('joe', $result->sender[0]->mailbox);
         $this->assertSame('joe@example.com', $result->senderaddress);
     }
+
+    public function test_throws_value_error_for_a_non_positive_message_number(): void
+    {
+        $folderName = 'HeaderinfoValBox'.uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_headerinfo(): Argument #2 ($message_num) must be greater than 0');
+        imap_headerinfo($connection, 0);
+    }
 }

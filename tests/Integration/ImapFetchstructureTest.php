@@ -119,4 +119,15 @@ class ImapFetchstructureTest extends GreenmailTestCase
         $this->assertSame('PLAIN', $byMsgno->subtype);
         $this->assertEquals($byMsgno, $byUid);
     }
+
+    public function test_throws_value_error_for_a_non_positive_message_number(): void
+    {
+        $folderName = 'StructValBox'.uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_fetchstructure(): Argument #2 ($message_num) must be greater than 0');
+        imap_fetchstructure($connection, 0);
+    }
 }

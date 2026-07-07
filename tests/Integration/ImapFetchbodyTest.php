@@ -147,4 +147,15 @@ class ImapFetchbodyTest extends GreenmailTestCase
         $this->assertSame('Survivor body', $byMsgno);
         $this->assertSame($byMsgno, $byUid);
     }
+
+    public function test_throws_value_error_for_a_non_positive_message_number(): void
+    {
+        $folderName = 'FetchBodyValBox'.uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_fetchbody(): Argument #2 ($message_num) must be greater than 0');
+        imap_fetchbody($connection, 0, '1');
+    }
 }
