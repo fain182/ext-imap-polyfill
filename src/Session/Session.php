@@ -159,6 +159,60 @@ final class Session
         return $result;
     }
 
+    public function mailboxMsgInfo(): \stdClass|false
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            $status = $this->connection->selectOrExamine();
+            $exists = $status['exists'] ?? 0;
+
+            $unread = 0;
+            $deleted = 0;
+            $size = 0;
+            if ($exists > 0) {
+                $data = $this->connection->protocol()->fetch(
+                    ['FLAGS', 'RFC822.SIZE'],
+                    range(1, $exists),
+                    null,
+                    \Webklex\PHPIMAP\IMAP::ST_MSGN,
+                );
+
+                foreach ($data as $message) {
+                    $flags = $message['FLAGS'];
+                    // c-client counts a message as unread when it is unseen
+                    // *or* recent (MESSAGECACHE's `!seen || recent`), not
+                    // just unseen.
+                    if (!in_array('\\Seen', $flags, true) || in_array('\\Recent', $flags, true)) {
+                        $unread++;
+                    }
+
+                    if (in_array('\\Deleted', $flags, true)) {
+                        $deleted++;
+                    }
+
+                    $size += (int) $message['RFC822.SIZE'];
+                }
+            }
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        $result = new \stdClass();
+        $result->Unread = $unread;
+        $result->Deleted = $deleted;
+        $result->Size = $size;
+        $result->Date = date('r');
+        $result->Driver = 'imap';
+        $result->Mailbox = $this->connection->mailbox;
+        $result->Nmsgs = $exists;
+        $result->Recent = $status['recent'] ?? 0;
+
+        return $result;
+    }
+
     public function ping(): bool
     {
         $this->connection->ensureOpen();

@@ -79,6 +79,32 @@ final class Protocol
         return $this->client->getConnection()->folders($reference, $pattern)->validatedData();
     }
 
+    /**
+     * webklex's folders() only speaks LIST; this is the same wire exchange
+     * and response shape for LSUB.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function subscribedFolders(string $reference, string $pattern): array
+    {
+        $connection = $this->client->getConnection();
+        $response = $connection
+            ->requestAndResponse('LSUB', $connection->escapeString($reference, $pattern))
+            ->setCanBeEmpty(true);
+
+        $result = [];
+        foreach ($response->validatedData() as $item) {
+            if (!is_array($item) || count($item) !== 4 || $item[0] !== 'LSUB') {
+                continue;
+            }
+
+            $name = str_replace('\\\\', '\\', str_replace('\\"', '"', $item[3]));
+            $result[$name] = ['delimiter' => $item[2], 'flags' => $item[1]];
+        }
+
+        return $result;
+    }
+
     public function copy(string $sequence, string $folder, int $uidMode): void
     {
         $this->client->getConnection()->copyMessage($folder, $sequence, null, $uidMode)->validatedData();

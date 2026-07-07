@@ -80,6 +80,13 @@ if (!function_exists('imap_check')) {
     }
 }
 
+if (!function_exists('imap_mailboxmsginfo')) {
+    function imap_mailboxmsginfo(\IMAP\Connection $imap): \stdClass|false
+    {
+        return (new \ImapPolyfill\Session\Session($imap))->mailboxMsgInfo();
+    }
+}
+
 if (!function_exists('imap_search')) {
     function imap_search(\IMAP\Connection $imap, string $criteria, int $flags = SE_FREE, string $charset = ''): array|false
     {
@@ -182,6 +189,27 @@ if (!function_exists('imap_list')) {
     function imap_list(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
         return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->listMailboxes($reference, $pattern);
+    }
+}
+
+if (!function_exists('imap_lsub')) {
+    function imap_lsub(\IMAP\Connection $imap, string $reference, string $pattern): array|false
+    {
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->listSubscribed($reference, $pattern);
+    }
+}
+
+if (!function_exists('imap_listsubscribed')) {
+    function imap_listsubscribed(\IMAP\Connection $imap, string $reference, string $pattern): array|false
+    {
+        return imap_lsub($imap, $reference, $pattern);
+    }
+}
+
+if (!function_exists('imap_getsubscribed')) {
+    function imap_getsubscribed(\IMAP\Connection $imap, string $reference, string $pattern): array|false
+    {
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->getSubscribed($reference, $pattern);
     }
 }
 

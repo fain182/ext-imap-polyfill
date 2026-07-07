@@ -21,19 +21,44 @@ final class MailboxHierarchy
      */
     public function listMailboxes(string $reference, string $pattern): array|false
     {
+        return $this->names($reference, $pattern, subscribedOnly: false);
+    }
+
+    /**
+     * @return string[]|false
+     */
+    public function listSubscribed(string $reference, string $pattern): array|false
+    {
+        return $this->names($reference, $pattern, subscribedOnly: true);
+    }
+
+    /**
+     * @return \stdClass[]|false
+     */
+    public function getMailboxes(string $reference, string $pattern): array|false
+    {
+        return $this->objects($reference, $pattern, subscribedOnly: false);
+    }
+
+    /**
+     * @return \stdClass[]|false
+     */
+    public function getSubscribed(string $reference, string $pattern): array|false
+    {
+        return $this->objects($reference, $pattern, subscribedOnly: true);
+    }
+
+    /**
+     * @return string[]|false
+     */
+    private function names(string $reference, string $pattern, bool $subscribedOnly): array|false
+    {
         $this->connection->ensureOpen();
 
         $ref = MailboxReference::parse($reference);
+        $folders = $this->foldersMatching($ref, $pattern, $subscribedOnly);
 
-        try {
-            $folders = $this->connection->protocol()->folders($ref->bareReference, $pattern);
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        if ($folders === []) {
+        if ($folders === false || $folders === []) {
             return false;
         }
 
@@ -43,11 +68,9 @@ final class MailboxHierarchy
     /**
      * @return \stdClass[]|false
      */
-    public function getMailboxes(string $reference, string $pattern): array|false
+    private function objects(string $reference, string $pattern, bool $subscribedOnly): array|false
     {
         $this->connection->ensureOpen();
-
-        $ref = MailboxReference::parse($reference);
 
         $flagBits = [
             '\noinferiors' => LATT_NOINFERIORS,
@@ -58,15 +81,10 @@ final class MailboxHierarchy
             '\hasnochildren' => LATT_HASNOCHILDREN,
         ];
 
-        try {
-            $folders = $this->connection->protocol()->folders($ref->bareReference, $pattern);
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
+        $ref = MailboxReference::parse($reference);
+        $folders = $this->foldersMatching($ref, $pattern, $subscribedOnly);
 
-            return false;
-        }
-
-        if ($folders === []) {
+        if ($folders === false || $folders === []) {
             return false;
         }
 
@@ -85,6 +103,22 @@ final class MailboxHierarchy
         }
 
         return $result;
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>|false
+     */
+    private function foldersMatching(MailboxReference $ref, string $pattern, bool $subscribedOnly): array|false
+    {
+        try {
+            return $subscribedOnly
+                ? $this->connection->protocol()->subscribedFolders($ref->bareReference, $pattern)
+                : $this->connection->protocol()->folders($ref->bareReference, $pattern);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
     }
 
     public function status(string $mailbox, int $flags): \stdClass|false

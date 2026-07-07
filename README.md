@@ -16,7 +16,7 @@ No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the po
 
 ## Coverage
 
-This is not a reimplementation of all `imap_*` functions — **54 of 75 (72%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — **58 of 75 (77%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
 
 Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the notes column; anything not noted is expected to match exactly.
 
@@ -49,7 +49,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_getmailboxes` | ✅ | |
 | `imap_get_quota` | ❌ | |
 | `imap_get_quotaroot` | ❌ | |
-| `imap_getsubscribed` | ❌ | |
+| `imap_getsubscribed` | ✅ |  |
 | `imap_headerinfo` | ✅ | `fetchfrom`/`fetchsubject` (nonzero `$from_length`/`$subject_length`) not implemented |
 | `imap_headers` | ❌ | |
 | `imap_is_open` | ✅ | |
@@ -57,10 +57,10 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_list` | ✅ | |
 | `imap_listmailbox` | ✅ | alias of `imap_list` |
 | `imap_listscan` | ❌ | |
-| `imap_listsubscribed` | ❌ | |
-| `imap_lsub` | ❌ | |
+| `imap_listsubscribed` | ✅ | alias of `imap_lsub` |
+| `imap_lsub` | ✅ |  |
 | `imap_mail` | ❌ | |
-| `imap_mailboxmsginfo` | ❌ | |
+| `imap_mailboxmsginfo` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
 | `imap_mail_compose` | ❌ | |
 | `imap_mail_copy` | ✅ |  |
 | `imap_mail_move` | ✅ | copies and marks the source `\Deleted` without expunging, like c-client; target is a bare folder name |
