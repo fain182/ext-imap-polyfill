@@ -51,7 +51,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_get_quotaroot` | ❌ | |
 | `imap_getsubscribed` | ✅ |  |
 | `imap_headerinfo` | ✅ | `fetchfrom`/`fetchsubject` (nonzero `$from_length`/`$subject_length`) not implemented |
-| `imap_headers` | ✅ | fixed-column summary line matching c-client's own `mail_date()`/`mail_fetchfrom()`/`mail_fetchsubject()` formatting exactly; custom user-defined flags (the `{flag}` segment) are never populated, since this polyfill doesn't track them |
+| `imap_headers` | ✅ | custom user-defined flags (the `{flag}` segment) are never populated, since this polyfill doesn't track them |
 | `imap_is_open` | ✅ | |
 | `imap_last_error` | ✅ | |
 | `imap_list` | ✅ | |
@@ -85,10 +85,10 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_setacl` | ❌ | |
 | `imap_setflag_full` | ✅ | |
 | `imap_set_quota` | ❌ | |
-| `imap_sort` | ✅ | client-side sort (matches real ext-imap's own fallback against a server without the SORT extension, e.g. Greenmail); `SORTSUBJECT` strips a leading `Re:`/`Fwd:` for comparison, not the full RFC5256 base-subject algorithm |
+| `imap_sort` | ✅ | `SORTSUBJECT` strips a leading `Re:`/`Fwd:` for comparison, not the full RFC5256 base-subject algorithm |
 | `imap_status` | ✅ |  |
 | `imap_subscribe` | ✅ | |
-| `imap_thread` | ✅ | client-side RFC5256 REFERENCES threading (matches real ext-imap's own fallback against a server without the THREAD extension); the `.num`/`.next`/`.branch` output keys use c-client's actual (counter-intuitive) convention — `.next` is the *child* pointer, `.branch` is the *sibling* pointer; duplicate Message-IDs aren't given synthetic unique IDs |
+| `imap_thread` | ✅ | duplicate Message-IDs aren't given synthetic unique IDs |
 | `imap_timeout` | ✅ | |
 | `imap_uid` | ✅ | |
 | `imap_undelete` | ✅ | |
