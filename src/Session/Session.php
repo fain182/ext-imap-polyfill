@@ -26,6 +26,15 @@ final class Session
      */
     public static function open(string $mailbox, string $user, string $password, int $flags, int $retries): \IMAP\Connection|false
     {
+        if ($flags && ($flags & ~(OP_READONLY | OP_ANONYMOUS | OP_HALFOPEN | CL_EXPUNGE | OP_DEBUG
+                | OP_SHORTCACHE | OP_SILENT | OP_PROTOTYPE | OP_SECURE)) !== 0) {
+            throw new \ValueError('imap_open(): Argument #4 ($flags) must be a bitmask of the OP_* constants, and CL_EXPUNGE');
+        }
+
+        if ($retries < 0) {
+            throw new \ValueError('imap_open(): Argument #5 ($retries) must be greater than or equal to 0');
+        }
+
         try {
             $spec = MailboxSpec::parse($mailbox);
         } catch (\ValueError $e) {
@@ -68,6 +77,7 @@ final class Session
         }
 
         $connection = new \IMAP\Connection($client, $spec->folder, $mailbox, (bool) ($flags & OP_READONLY));
+        $connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
 
         try {
             $status = $connection->selectOrExamine();
@@ -89,7 +99,15 @@ final class Session
             throw new \ValueError('imap_close(): Argument #2 ($flags) must be CL_EXPUNGE or 0');
         }
 
-        if ($flags & CL_EXPUNGE) {
+        // A flags argument here always wins outright (only CL_EXPUNGE or 0
+        // are allowed); omitting it falls back to whatever CL_EXPUNGE state
+        // was remembered from imap_open()/imap_reopen(), matching c-client's
+        // stream->flags persisting across calls.
+        $shouldExpunge = $flags !== 0
+            ? (bool) ($flags & CL_EXPUNGE)
+            : $this->connection->expungeOnClose();
+
+        if ($shouldExpunge) {
             $this->connection->expunge();
         }
 
@@ -233,9 +251,17 @@ final class Session
      * polyfill doesn't retain the original credentials needed to reconnect
      * to a genuinely different host.
      */
-    public function reopen(string $mailbox, int $flags): bool
+    public function reopen(string $mailbox, int $flags, int $retries = 0): bool
     {
         $this->connection->ensureOpen();
+
+        if ($flags && ($flags & ~(OP_READONLY | OP_ANONYMOUS | OP_HALFOPEN | OP_EXPUNGE | CL_EXPUNGE)) !== 0) {
+            throw new \ValueError('imap_reopen(): Argument #3 ($flags) must be a bitmask of OP_READONLY, OP_ANONYMOUS, OP_HALFOPEN, OP_EXPUNGE, and CL_EXPUNGE');
+        }
+
+        if ($retries < 0) {
+            throw new \ValueError('imap_reopen(): Argument #4 ($retries) must be greater than or equal to 0');
+        }
 
         try {
             $spec = MailboxSpec::parse($mailbox);
@@ -257,6 +283,13 @@ final class Session
 
         $this->connection->reselect($spec->folder, $readOnly);
         $this->connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
+
+        // Mirrors php_imap.c: a nonzero $flags overrides the remembered
+        // CL_EXPUNGE state outright (even clearing it if CL_EXPUNGE isn't in
+        // the new bitmask); $flags === 0 leaves whatever imap_open() set.
+        if ($flags !== 0) {
+            $this->connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
+        }
 
         return true;
     }

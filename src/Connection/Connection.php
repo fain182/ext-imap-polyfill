@@ -24,6 +24,13 @@ final class Connection
     private bool $readOnly;
 
     /**
+     * Mirrors c-client stream flags carried across imap_open()/imap_reopen():
+     * when CL_EXPUNGE was passed, imap_close() auto-expunges even if called
+     * with no flags of its own.
+     */
+    private bool $expungeOnClose = false;
+
+    /**
      * Mirrors c-client's stream->nmsgs: imap_num_msg() is a cached client-side
      * read, not a live query, so it must keep returning the last known count
      * (not false/0) if the connection later breaks.
@@ -63,6 +70,16 @@ final class Connection
     public function isReadOnly(): bool
     {
         return $this->readOnly;
+    }
+
+    public function expungeOnClose(): bool
+    {
+        return $this->expungeOnClose;
+    }
+
+    public function setExpungeOnClose(bool $expungeOnClose): void
+    {
+        $this->expungeOnClose = $expungeOnClose;
     }
 
     public function close(): void

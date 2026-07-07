@@ -432,6 +432,6 @@ if (!function_exists('imap_is_open')) {
 if (!function_exists('imap_reopen')) {
     function imap_reopen(\IMAP\Connection $imap, string $mailbox, int $flags = 0, int $retries = 0): bool
     {
-        return (new \ImapPolyfill\Session\Session($imap))->reopen($mailbox, $flags);
+        return (new \ImapPolyfill\Session\Session($imap))->reopen($mailbox, $flags, $retries);
     }
 }
