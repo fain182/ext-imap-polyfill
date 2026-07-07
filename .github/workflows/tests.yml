@@ -38,6 +38,25 @@ jobs:
       - name: Integration tests
         run: make test-integration
 
+  phpstan:
+    name: "PHPStan"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: ':imap'
+          coverage: none
+
+      - name: Composer install
+        run: make install
+
+      - name: PHPStan
+        run: make phpstan
+
   parity:
     name: "Parity vs real ext-imap (PHP 8.3)"
     runs-on: ubuntu-latest

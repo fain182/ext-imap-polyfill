@@ -39,6 +39,7 @@ final class BodyStructure
      * envelopes and steps into the embedded message for message/rfc822 parts.
      *
      * @param array<int, mixed> $parsed
+     * @return array<int, mixed>|null
      */
     public static function resolveSection(array $parsed, string $section): ?array
     {
@@ -101,6 +102,9 @@ final class BodyStructure
         return self::descend($node[8], $segments);
     }
 
+    /**
+     * @param array<int, mixed> $parsed
+     */
     private static function buildMultipart(array $parsed): \stdClass
     {
         $result = new \stdClass();
@@ -132,6 +136,9 @@ final class BodyStructure
         return $result;
     }
 
+    /**
+     * @param array<int, mixed> $parsed
+     */
     private static function buildSinglePart(array $parsed): \stdClass
     {
         $result = new \stdClass();
@@ -231,6 +238,7 @@ final class BodyStructure
     }
 
     /**
+     * @param array<int, mixed> $pairs
      * @return \stdClass[]
      */
     private static function pairsToObjects(array $pairs): array

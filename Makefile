@@ -9,12 +9,15 @@ GREENMAIL_PORT := 13143
 NETWORK_NAME := ext-imap-polyfill-net
 PARITY_IMAGE := ext-imap-polyfill-parity
 
-.PHONY: install test test-unit test-integration greenmail-up greenmail-down parity parity-build
+.PHONY: install test test-unit test-integration phpstan greenmail-up greenmail-down parity parity-build
 
 ## --ignore-platform-reqs: webklex/php-imap declares ext-zip as a hard
 ## dependency for attachment-archiving helpers this polyfill never calls.
 install:
 	composer install --ignore-platform-reqs
+
+phpstan: install
+	vendor/bin/phpstan analyse --memory-limit=1G
 
 test-unit: install
 	vendor/bin/phpunit --testsuite unit

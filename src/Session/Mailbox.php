@@ -30,7 +30,7 @@ final class Mailbox
 
         $this->connection->ensureOpen();
 
-        $tokens = preg_split('/\s+/', trim($criteria));
+        $tokens = preg_split('/\s+/', trim($criteria)) ?: [];
 
         try {
             $this->connection->selectOrExamine();
@@ -497,7 +497,7 @@ final class Mailbox
         $this->connection->ensureOpen();
 
         $folderName = MailboxReference::parse($folder)->bareReference;
-        $flags = $options !== null ? preg_split('/\s+/', trim($options)) : null;
+        $flags = $options !== null ? (preg_split('/\s+/', trim($options)) ?: []) : null;
 
         try {
             $this->connection->appendMessage($folderName, $message, $flags, $internalDate);

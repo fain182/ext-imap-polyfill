@@ -13,7 +13,7 @@ final class AddressList
 
     public static function parse(string $addresses, string $defaultHostname): self
     {
-        $parts = preg_split('/,(?=(?:[^"]*"[^"]*")*[^"]*$)/', $addresses);
+        $parts = preg_split('/,(?=(?:[^"]*"[^"]*")*[^"]*$)/', $addresses) ?: [];
 
         $result = [];
         foreach ($parts as $part) {

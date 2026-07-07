@@ -8,6 +8,9 @@ if (!function_exists('imap_utf8')) {
 }
 
 if (!function_exists('imap_rfc822_parse_adrlist')) {
+    /**
+     * @return \stdClass[]
+     */
     function imap_rfc822_parse_adrlist(string $string, string $default_hostname): array
     {
         return \ImapPolyfill\Address\AddressList::parse($string, $default_hostname)->toLegacyArray();
@@ -15,6 +18,9 @@ if (!function_exists('imap_rfc822_parse_adrlist')) {
 }
 
 if (!function_exists('imap_open')) {
+    /**
+     * @param array<string, mixed> $options ignored — see README limitations
+     */
     function imap_open(string $mailbox, string $user, string $password, int $flags = 0, int $retries = 0, array $options = []): \IMAP\Connection|false
     {
         $connection = \ImapPolyfill\Session\Session::open($mailbox, $user, $password, $flags, $retries);
@@ -53,6 +59,9 @@ if (!function_exists('imap_last_error')) {
 }
 
 if (!function_exists('imap_errors')) {
+    /**
+     * @return string[]|false
+     */
     function imap_errors(): array|false
     {
         return \ImapPolyfill\Support\ErrorStack::drainErrors();
@@ -60,6 +69,9 @@ if (!function_exists('imap_errors')) {
 }
 
 if (!function_exists('imap_alerts')) {
+    /**
+     * @return string[]|false
+     */
     function imap_alerts(): array|false
     {
         return \ImapPolyfill\Support\ErrorStack::drainAlerts();
@@ -88,6 +100,9 @@ if (!function_exists('imap_mailboxmsginfo')) {
 }
 
 if (!function_exists('imap_search')) {
+    /**
+     * @return int[]|false
+     */
     function imap_search(\IMAP\Connection $imap, string $criteria, int $flags = SE_FREE, string $charset = ''): array|false
     {
         return (new \ImapPolyfill\Session\Mailbox($imap))->search($criteria, $flags, $charset);
@@ -109,6 +124,9 @@ if (!function_exists('imap_headerinfo')) {
 }
 
 if (!function_exists('imap_fetch_overview')) {
+    /**
+     * @return \stdClass[]|false
+     */
     function imap_fetch_overview(\IMAP\Connection $imap, string $sequence, int $flags = 0): array|false
     {
         return (new \ImapPolyfill\Session\Mailbox($imap))->fetchOverview($sequence, $flags);
@@ -214,6 +232,9 @@ if (!function_exists('imap_msgno')) {
 }
 
 if (!function_exists('imap_list')) {
+    /**
+     * @return string[]|false
+     */
     function imap_list(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
         return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->listMailboxes($reference, $pattern);
@@ -221,6 +242,9 @@ if (!function_exists('imap_list')) {
 }
 
 if (!function_exists('imap_lsub')) {
+    /**
+     * @return string[]|false
+     */
     function imap_lsub(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
         return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->listSubscribed($reference, $pattern);
@@ -228,6 +252,9 @@ if (!function_exists('imap_lsub')) {
 }
 
 if (!function_exists('imap_listsubscribed')) {
+    /**
+     * @return string[]|false
+     */
     function imap_listsubscribed(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
         return imap_lsub($imap, $reference, $pattern);
@@ -235,6 +262,9 @@ if (!function_exists('imap_listsubscribed')) {
 }
 
 if (!function_exists('imap_getsubscribed')) {
+    /**
+     * @return \stdClass[]|false
+     */
     function imap_getsubscribed(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
         return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->getSubscribed($reference, $pattern);
@@ -242,6 +272,9 @@ if (!function_exists('imap_getsubscribed')) {
 }
 
 if (!function_exists('imap_listmailbox')) {
+    /**
+     * @return string[]|false
+     */
     function imap_listmailbox(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
         return imap_list($imap, $reference, $pattern);
@@ -249,6 +282,9 @@ if (!function_exists('imap_listmailbox')) {
 }
 
 if (!function_exists('imap_getmailboxes')) {
+    /**
+     * @return \stdClass[]|false
+     */
     function imap_getmailboxes(\IMAP\Connection $imap, string $reference, string $pattern): array|false
     {
         return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->getMailboxes($reference, $pattern);
@@ -378,6 +414,9 @@ if (!function_exists('imap_rfc822_write_address')) {
 }
 
 if (!function_exists('imap_mime_header_decode')) {
+    /**
+     * @return \stdClass[]|false
+     */
     function imap_mime_header_decode(string $string): array|false
     {
         return \ImapPolyfill\Mime\MimeText::decodeSegments($string);

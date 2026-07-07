@@ -1,0 +1,23 @@
+parameters:
+    level: 6
+    paths:
+        - src
+    scanFiles:
+        - src/constants.php
+        - src/functions.php
+    ignoreErrors:
+        # These wrappers deliberately keep the `|false`/`|string` return
+        # signature documented for the real ext-imap function even where the
+        # current implementation (or a PHPStan stub for a builtin like
+        # mb_convert_encoding) never actually produces that branch — fidelity
+        # to the extension's documented contract, not this codebase's
+        # incidental reachability, is the point (see CLAUDE.md).
+        -
+            identifier: return.unusedType
+            paths:
+                - src/functions.php
+                - src/Session/Session.php
+                - src/Session/Mailbox.php
+        -
+            identifier: notIdentical.alwaysTrue
+            path: src/functions.php

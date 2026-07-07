@@ -18,7 +18,7 @@ final class RawHeaderFields
     public static function parse(string $rawHeader): array
     {
         $unfolded = preg_replace('/\r?\n[ \t]+/', ' ', $rawHeader);
-        $lines = preg_split('/\r\n|\n/', (string) $unfolded);
+        $lines = preg_split('/\r\n|\n/', (string) $unfolded) ?: [];
 
         $fields = [];
         foreach ($lines as $line) {

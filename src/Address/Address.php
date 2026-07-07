@@ -25,7 +25,7 @@ final class Address
             return null;
         }
 
-        $personal = trim($matches['name'] ?? '');
+        $personal = trim($matches['name']);
 
         return new self(
             $matches['mailbox'],

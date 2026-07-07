@@ -17,13 +17,28 @@ final class Protocol
     }
 
     /**
+     * webklex's ProtocolInterface only declares the operations its high-level
+     * Client/Folder API needs; the lower-level wire operations this class
+     * gateways to (fetch, requestAndResponse, escapeString, ->stream) only
+     * exist on the concrete ImapProtocol, which is the only protocol this
+     * polyfill supports (see README limitations).
+     */
+    private function connection(): \Webklex\PHPIMAP\Connection\Protocols\ImapProtocol
+    {
+        $connection = $this->client->getConnection();
+        assert($connection instanceof \Webklex\PHPIMAP\Connection\Protocols\ImapProtocol);
+
+        return $connection;
+    }
+
+    /**
      * @param string[] $tokens
      *
      * @return int[]
      */
     public function search(array $tokens, int $uidMode): array
     {
-        return $this->client->getConnection()->search($tokens, $uidMode)->validatedData();
+        return $this->connection()->search($tokens, $uidMode)->validatedData();
     }
 
     /**
@@ -33,7 +48,7 @@ final class Protocol
      */
     public function headers(array $ids, string $type, int $uidMode): array
     {
-        return $this->client->getConnection()->headers($ids, $type, $uidMode)->validatedData();
+        return $this->connection()->headers($ids, $type, $uidMode)->validatedData();
     }
 
     /**
@@ -42,9 +57,9 @@ final class Protocol
      *
      * @return array<int, array<string, mixed>>
      */
-    public function fetch(array $items, array $ids, ?string $criteria, int $uidMode): array
+    public function fetch(array $items, array $ids, ?int $to, int $uidMode): array
     {
-        return $this->client->getConnection()->fetch($items, $ids, $criteria, $uidMode)->validatedData();
+        return $this->connection()->fetch($items, $ids, $to, $uidMode)->validatedData();
     }
 
     /**
@@ -52,7 +67,7 @@ final class Protocol
      */
     public function getUid(): array
     {
-        return $this->client->getConnection()->getUid()->validatedData();
+        return $this->connection()->getUid()->validatedData();
     }
 
     /**
@@ -60,7 +75,7 @@ final class Protocol
      */
     public function getMessageNumber(string $uid): int|string
     {
-        return $this->client->getConnection()->getMessageNumber($uid)->validatedData();
+        return $this->connection()->getMessageNumber($uid)->validatedData();
     }
 
     /**
@@ -68,7 +83,7 @@ final class Protocol
      */
     public function store(string $command, array $args): void
     {
-        $this->client->getConnection()->requestAndResponse($command, $args);
+        $this->connection()->requestAndResponse($command, $args);
     }
 
     /**
@@ -76,7 +91,7 @@ final class Protocol
      */
     public function folders(string $reference, string $pattern): array
     {
-        return $this->client->getConnection()->folders($reference, $pattern)->validatedData();
+        return $this->connection()->folders($reference, $pattern)->validatedData();
     }
 
     /**
@@ -87,7 +102,7 @@ final class Protocol
      */
     public function subscribedFolders(string $reference, string $pattern): array
     {
-        $connection = $this->client->getConnection();
+        $connection = $this->connection();
         $response = $connection
             ->requestAndResponse('LSUB', $connection->escapeString($reference, $pattern))
             ->setCanBeEmpty(true);

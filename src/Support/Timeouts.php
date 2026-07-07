@@ -8,6 +8,7 @@ namespace ImapPolyfill\Support;
  */
 final class Timeouts
 {
+    /** @var array<int, int>|null */
     private static ?array $values = null;
 
     public static function get(int $type): int|false
