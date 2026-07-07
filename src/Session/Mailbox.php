@@ -2,14 +2,13 @@
 
 namespace ImapPolyfill\Session;
 
-use ImapPolyfill\Address\AddressList;
 use ImapPolyfill\Mailbox\MailboxReference;
 use ImapPolyfill\Message\BodyStructure;
 use ImapPolyfill\Message\HeaderInfo;
 use ImapPolyfill\Message\HeadersLine;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\Overview;
-use ImapPolyfill\Message\RawHeaderFields;
+use ImapPolyfill\Message\SortKey;
 use ImapPolyfill\Message\ThreadBuilder;
 use ImapPolyfill\Support\ErrorStack;
 
@@ -529,9 +528,10 @@ final class Mailbox
                 return [];
             }
 
+            $ids = range(1, $exists);
             $data = $this->connection->protocol()->fetch(
                 ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
-                range(1, $exists),
+                $ids,
                 null,
                 \Webklex\PHPIMAP\IMAP::ST_MSGN,
             );
@@ -542,7 +542,7 @@ final class Mailbox
         }
 
         $result = [];
-        foreach (range(1, $exists) as $msgno) {
+        foreach ($ids as $msgno) {
             if (!isset($data[$msgno])) {
                 continue;
             }
@@ -618,7 +618,7 @@ final class Mailbox
             $entries[] = [
                 'msgno' => $msgno,
                 'uid' => (int) $message['UID'],
-                'key' => $this->sortKey($criteria, $message, $host),
+                'key' => SortKey::resolve($criteria, $message, $host),
             ];
         }
 
@@ -637,36 +637,6 @@ final class Mailbox
     }
 
     /**
-     * @param array<string, mixed> $message
-     */
-    private function sortKey(int $criteria, array $message, string $defaultHost): int|string
-    {
-        $fields = RawHeaderFields::parse($message['RFC822.HEADER']);
-
-        return match ($criteria) {
-            SORTDATE => strtotime($fields['date'] ?? '') ?: 0,
-            SORTARRIVAL => strtotime($message['INTERNALDATE']) ?: 0,
-            SORTSIZE => (int) $message['RFC822.SIZE'],
-            SORTFROM => self::mailboxKey($fields['from'] ?? null, $defaultHost),
-            SORTTO => self::mailboxKey($fields['to'] ?? null, $defaultHost),
-            SORTCC => self::mailboxKey($fields['cc'] ?? null, $defaultHost),
-            SORTSUBJECT => \ImapPolyfill\Message\BaseSubject::of($fields['subject'] ?? ''),
-            default => 0,
-        };
-    }
-
-    private static function mailboxKey(?string $addressHeader, string $defaultHost): string
-    {
-        if ($addressHeader === null) {
-            return '';
-        }
-
-        $address = AddressList::parse($addressHeader, $defaultHost)->first();
-
-        return $address === null ? '' : strtolower($address->mailbox);
-    }
-
-    /**
      * @return array<string, int>|false
      */
     public function thread(int $flags): array|false
@@ -681,9 +651,10 @@ final class Mailbox
                 return false;
             }
 
+            $ids = range(1, $exists);
             $data = $this->connection->protocol()->fetch(
                 ['UID', 'INTERNALDATE', 'RFC822.HEADER'],
-                range(1, $exists),
+                $ids,
                 null,
                 \Webklex\PHPIMAP\IMAP::ST_MSGN,
             );
@@ -693,26 +664,7 @@ final class Mailbox
             return false;
         }
 
-        $messages = [];
-        foreach (range(1, $exists) as $msgno) {
-            if (!isset($data[$msgno])) {
-                continue;
-            }
-
-            $message = $data[$msgno];
-            $fields = RawHeaderFields::parse($message['RFC822.HEADER']);
-            $refsHeader = $fields['references'] ?? $fields['in-reply-to'] ?? '';
-
-            $messages[] = [
-                'msgno' => $msgno,
-                'uid' => (int) $message['UID'],
-                'messageId' => isset($fields['message-id']) ? trim($fields['message-id'], " \t<>") : null,
-                'refs' => $refsHeader === '' ? [] : (preg_split('/\s+/', trim($refsHeader)) ?: []),
-                'subject' => $fields['subject'] ?? '',
-                'date' => strtotime($fields['date'] ?? '') ?: (strtotime($message['INTERNALDATE']) ?: 0),
-            ];
-        }
-
+        $messages = ThreadBuilder::messagesFromFetch($data, $ids);
         $root = ThreadBuilder::build($messages);
         $tree = ThreadBuilder::flatten($root, (bool) ($flags & SE_UID));
 

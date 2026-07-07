@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Connection\Pop3;
 
+use ImapPolyfill\Message\RawHeaderFields;
+
 /**
  * Builds the same positional BODYSTRUCTURE array shape ImapSexpParser
  * produces for a raw IMAP FETCH response, by parsing MIME headers directly —
@@ -17,24 +19,10 @@ final class Pop3MimeStructure
      */
     public static function parse(string $rawMessage): array
     {
-        [$headerBlock, $body] = self::splitHeaderBody($rawMessage);
-        $headers = self::parseHeaderParams($headerBlock);
+        [$headerBlock, $body] = RawMessage::splitHeaderBody($rawMessage);
+        $headers = RawHeaderFields::parse($headerBlock);
 
         return self::parsePart($headers, $body);
-    }
-
-    /**
-     * @return array{0: string, 1: string}
-     */
-    private static function splitHeaderBody(string $raw): array
-    {
-        $pos = preg_match('/\r?\n\r?\n/', $raw, $m, PREG_OFFSET_CAPTURE) ? $m[0][1] : null;
-
-        if ($pos === null) {
-            return [$raw, ''];
-        }
-
-        return [substr($raw, 0, $pos), substr($raw, $pos + strlen($m[0][0]))];
     }
 
     /**
@@ -70,8 +58,8 @@ final class Pop3MimeStructure
                 continue;
             }
 
-            [$partHeaderBlock, $partBody] = self::splitHeaderBody($segment);
-            $parts[] = self::parsePart(self::parseHeaderParams($partHeaderBlock), $partBody);
+            [$partHeaderBlock, $partBody] = RawMessage::splitHeaderBody($segment);
+            $parts[] = self::parsePart(RawHeaderFields::parse($partHeaderBlock), $partBody);
         }
 
         $paramPairs = self::flattenParams($params);
@@ -136,27 +124,6 @@ final class Pop3MimeStructure
         }
 
         return [$head, $params];
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private static function parseHeaderParams(string $headerBlock): array
-    {
-        $unfolded = preg_replace('/\r?\n[ \t]+/', ' ', $headerBlock);
-        $lines = preg_split('/\r\n|\n/', (string) $unfolded) ?: [];
-
-        $headers = [];
-        foreach ($lines as $line) {
-            $colon = strpos($line, ':');
-            if ($colon === false) {
-                continue;
-            }
-
-            $headers[strtolower(trim(substr($line, 0, $colon)))] = trim(substr($line, $colon + 1));
-        }
-
-        return $headers;
     }
 
     /**

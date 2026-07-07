@@ -21,7 +21,7 @@ final class Pop3SearchEvaluator
      */
     public static function matches(array $tokens, string $rawMessage, array $flags): bool
     {
-        [$header] = self::splitHeaderBody($rawMessage);
+        [$header, $body] = RawMessage::splitHeaderBody($rawMessage);
         $fields = RawHeaderFields::parse($header);
 
         $i = 0;
@@ -45,7 +45,7 @@ final class Pop3SearchEvaluator
                 'RECENT', 'NEW' => true, // every POP3 message is "recent" for the session
                 'OLD' => false,
                 'FROM', 'TO', 'CC', 'BCC', 'SUBJECT' => self::substringMatch($fields, strtolower($token), self::nextToken($tokens, $i)),
-                'BODY' => str_contains(strtolower(self::splitHeaderBody($rawMessage)[1]), strtolower(self::nextToken($tokens, $i))),
+                'BODY' => str_contains(strtolower($body), strtolower(self::nextToken($tokens, $i))),
                 'TEXT' => str_contains(strtolower($rawMessage), strtolower(self::nextToken($tokens, $i))),
                 'SINCE', 'BEFORE', 'ON' => self::dateMatch($token, $fields['date'] ?? null, self::nextToken($tokens, $i)),
                 default => true, // unrecognized keyword: don't exclude the message on it
@@ -101,19 +101,5 @@ final class Pop3SearchEvaluator
             'ON' => $messageDay === $criterionDay,
             default => false,
         };
-    }
-
-    /**
-     * @return array{0: string, 1: string}
-     */
-    private static function splitHeaderBody(string $raw): array
-    {
-        $pos = preg_match('/\r?\n\r?\n/', $raw, $m, PREG_OFFSET_CAPTURE) ? $m[0][1] : null;
-
-        if ($pos === null) {
-            return [$raw, ''];
-        }
-
-        return [substr($raw, 0, $pos), substr($raw, $pos + strlen($m[0][0]))];
     }
 }

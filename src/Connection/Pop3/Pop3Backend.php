@@ -142,7 +142,7 @@ final class Pop3Backend implements ConnectionBackend
         $result = [];
         foreach ($ids as $id) {
             $msgno = $uidMode === self::UID_MODE ? $this->resolveMsgno($id) : $id;
-            [$header] = $this->splitHeaderBody($this->rawMessage($msgno));
+            [$header] = RawMessage::splitHeaderBody($this->rawMessage($msgno));
             $result[$id] = $header."\r\n";
         }
 
@@ -155,7 +155,7 @@ final class Pop3Backend implements ConnectionBackend
         foreach ($ids as $id) {
             $msgno = $uidMode === self::UID_MODE ? $this->resolveMsgno($id) : $id;
             $raw = $this->rawMessage($msgno);
-            [$header, $body] = $this->splitHeaderBody($raw);
+            [$header, $body] = RawMessage::splitHeaderBody($raw);
 
             $entry = [];
             foreach ($items as $item) {
@@ -274,20 +274,6 @@ final class Pop3Backend implements ConnectionBackend
     private function rawMessage(int $msgno): string
     {
         return $this->rawMessageCache[$msgno] ??= $this->protocol->retr($msgno);
-    }
-
-    /**
-     * @return array{0: string, 1: string}
-     */
-    private function splitHeaderBody(string $raw): array
-    {
-        $pos = preg_match('/\r?\n\r?\n/', $raw, $m, PREG_OFFSET_CAPTURE) ? $m[0][1] : null;
-
-        if ($pos === null) {
-            return [$raw, ''];
-        }
-
-        return [substr($raw, 0, $pos), substr($raw, $pos + strlen($m[0][0]))];
     }
 
     private function resolveMsgno(int|string $uid): int

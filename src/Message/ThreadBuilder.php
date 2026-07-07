@@ -19,6 +19,43 @@ namespace ImapPolyfill\Message;
 final class ThreadBuilder
 {
     /**
+     * Extracts the fields build() needs (Message-ID, references, base
+     * subject inputs, date) out of a raw UID/INTERNALDATE/RFC822.HEADER
+     * wire fetch — the same "Mailbox fetches, Message/* interprets" split
+     * every other imap_* builder in this namespace follows.
+     *
+     * @param array<int, array<string, mixed>> $data msgno => wire fetch data
+     * @param int[] $ids msgnos to include, in order
+     *
+     * @return array<int, array{msgno: int, uid: int, messageId: ?string, refs: string[], subject: string, date: int}>
+     */
+    public static function messagesFromFetch(array $data, array $ids): array
+    {
+        $messages = [];
+
+        foreach ($ids as $msgno) {
+            if (!isset($data[$msgno])) {
+                continue;
+            }
+
+            $message = $data[$msgno];
+            $fields = RawHeaderFields::parse($message['RFC822.HEADER']);
+            $refsHeader = $fields['references'] ?? $fields['in-reply-to'] ?? '';
+
+            $messages[] = [
+                'msgno' => $msgno,
+                'uid' => (int) $message['UID'],
+                'messageId' => isset($fields['message-id']) ? self::normalizeId($fields['message-id']) : null,
+                'refs' => $refsHeader === '' ? [] : (preg_split('/\s+/', trim($refsHeader)) ?: []),
+                'subject' => $fields['subject'] ?? '',
+                'date' => strtotime($fields['date'] ?? '') ?: (strtotime($message['INTERNALDATE']) ?: 0),
+            ];
+        }
+
+        return $messages;
+    }
+
+    /**
      * @param array<int, array{msgno: int, uid: int, messageId: ?string, refs: string[], subject: string, date: int}> $messages
      *
      * @return ThreadContainer[] the pruned, sorted, subject-grouped root-level forest
@@ -214,6 +251,10 @@ final class ThreadBuilder
         // subject merges into the dummy instead of the original pick.
         $original = $table;
         $result = [];
+        // Tracks each result-array position by object identity, so a
+        // representative's slot can be replaced with a wrapping dummy in
+        // O(1) instead of scanning $result for it on every merge.
+        $resultIndex = [];
         foreach ($root as $node) {
             $subject = $node->isDummy() ? ($node->children[0]->baseSubject ?? '') : $node->baseSubject;
 
@@ -222,6 +263,7 @@ final class ThreadBuilder
                 // wrapped it in a dummy yet (which would have already been
                 // placed in $result at this position).
                 if ($subject === '' || $table[$subject] === $node) {
+                    $resultIndex[spl_object_id($node)] = count($result);
                     $result[] = $node;
                 }
 
@@ -248,10 +290,12 @@ final class ThreadBuilder
                 $dummy->children = [$representative, $node];
                 $table[$subject] = $dummy;
 
-                $index = array_search($representative, $result, true);
-                if ($index !== false) {
+                $index = $resultIndex[spl_object_id($representative)] ?? null;
+                if ($index !== null) {
                     $result[$index] = $dummy;
+                    $resultIndex[spl_object_id($dummy)] = $index;
                 } else {
+                    $resultIndex[spl_object_id($dummy)] = count($result);
                     $result[] = $dummy;
                 }
             }
