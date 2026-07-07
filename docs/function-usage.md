@@ -44,7 +44,7 @@
 | `imap_listmailbox` | 10 | ✅ |
 | `imap_status` | 8 | ✅ |
 | `imap_reopen` | 8 | ✅ |
-| `imap_thread` | 7 | ❌ |
+| `imap_thread` | 7 | ✅ |
 | `imap_savebody` | 6 | ✅ |
 | `imap_fetchmime` | 6 | ✅ |
 | `imap_createmailbox` | 6 | ✅ |

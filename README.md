@@ -16,7 +16,7 @@ No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the po
 
 ## Coverage
 
-This is not a reimplementation of all `imap_*` functions — **64 of 75 (85%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — **65 of 75 (87%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
 
 Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the notes column; anything not noted is expected to match exactly.
 
@@ -88,7 +88,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_sort` | ✅ | client-side sort (matches real ext-imap's own fallback against a server without the SORT extension, e.g. Greenmail); `SORTSUBJECT` strips a leading `Re:`/`Fwd:` for comparison, not the full RFC5256 base-subject algorithm |
 | `imap_status` | ✅ |  |
 | `imap_subscribe` | ✅ | |
-| `imap_thread` | ❌ | |
+| `imap_thread` | ✅ | client-side RFC5256 REFERENCES threading (matches real ext-imap's own fallback against a server without the THREAD extension); the `.num`/`.next`/`.branch` output keys use c-client's actual (counter-intuitive) convention — `.next` is the *child* pointer, `.branch` is the *sibling* pointer; duplicate Message-IDs aren't given synthetic unique IDs |
 | `imap_timeout` | ✅ | |
 | `imap_uid` | ✅ | |
 | `imap_undelete` | ✅ | |

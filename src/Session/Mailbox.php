@@ -10,6 +10,7 @@ use ImapPolyfill\Message\HeadersLine;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\Overview;
 use ImapPolyfill\Message\RawHeaderFields;
+use ImapPolyfill\Message\ThreadBuilder;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -649,7 +650,7 @@ final class Mailbox
             SORTFROM => self::mailboxKey($fields['from'] ?? null, $defaultHost),
             SORTTO => self::mailboxKey($fields['to'] ?? null, $defaultHost),
             SORTCC => self::mailboxKey($fields['cc'] ?? null, $defaultHost),
-            SORTSUBJECT => strtolower(preg_replace('/^\s*(re|fwd?)\s*:\s*/i', '', $fields['subject'] ?? '') ?? ''),
+            SORTSUBJECT => \ImapPolyfill\Message\BaseSubject::of($fields['subject'] ?? ''),
             default => 0,
         };
     }
@@ -663,5 +664,62 @@ final class Mailbox
         $address = AddressList::parse($addressHeader, $defaultHost)->first();
 
         return $address === null ? '' : strtolower($address->mailbox);
+    }
+
+    /**
+     * @return array<string, int>|false
+     */
+    public function thread(int $flags): array|false
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            $status = $this->connection->selectOrExamine();
+            $exists = $status['exists'] ?? 0;
+
+            if ($exists === 0) {
+                return false;
+            }
+
+            $data = $this->connection->protocol()->fetch(
+                ['UID', 'INTERNALDATE', 'RFC822.HEADER'],
+                range(1, $exists),
+                null,
+                \Webklex\PHPIMAP\IMAP::ST_MSGN,
+            );
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        $messages = [];
+        foreach (range(1, $exists) as $msgno) {
+            if (!isset($data[$msgno])) {
+                continue;
+            }
+
+            $message = $data[$msgno];
+            $fields = RawHeaderFields::parse($message['RFC822.HEADER']);
+            $refsHeader = $fields['references'] ?? $fields['in-reply-to'] ?? '';
+
+            $messages[] = [
+                'msgno' => $msgno,
+                'uid' => (int) $message['UID'],
+                'messageId' => isset($fields['message-id']) ? trim($fields['message-id'], " \t<>") : null,
+                'refs' => $refsHeader === '' ? [] : (preg_split('/\s+/', trim($refsHeader)) ?: []),
+                'subject' => $fields['subject'] ?? '',
+                'date' => strtotime($fields['date'] ?? '') ?: (strtotime($message['INTERNALDATE']) ?: 0),
+            ];
+        }
+
+        $root = ThreadBuilder::build($messages);
+        $tree = ThreadBuilder::flatten($root, (bool) ($flags & SE_UID));
+
+        if ($tree === []) {
+            return false;
+        }
+
+        return $tree;
     }
 }

@@ -109,6 +109,16 @@ if (!function_exists('imap_search')) {
     }
 }
 
+if (!function_exists('imap_thread')) {
+    /**
+     * @return array<string, int>|false
+     */
+    function imap_thread(\IMAP\Connection $imap, int $flags = SE_FREE): array|false
+    {
+        return (new \ImapPolyfill\Session\Mailbox($imap))->thread($flags);
+    }
+}
+
 if (!function_exists('imap_headers')) {
     /**
      * @return string[]
