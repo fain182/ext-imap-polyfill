@@ -24,5 +24,6 @@ trait ResetsErrorStack
         $reflection->getProperty('errors')->setValue(null, []);
         $reflection->getProperty('alerts')->setValue(null, []);
         $reflection->getProperty('lastError')->setValue(null, false);
+        $reflection->getProperty('shutdownRegistered')->setValue(null, false);
     }
 }

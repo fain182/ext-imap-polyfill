@@ -5,6 +5,15 @@ namespace ImapPolyfill\Support;
 /**
  * ext-imap keeps a single global error/alert stack shared by all connections
  * (imap_errors/imap_last_error/imap_alerts take no connection argument).
+ *
+ * php_imap.c resets this stack in PHP_RINIT_FUNCTION, so the real extension
+ * never leaks errors from one request into the next even under threaded/
+ * persistent SAPIs. A plain PHP `static` only mimics that by accident on
+ * shared-nothing SAPIs (FPM/CGI tear down userland statics between
+ * requests); on worker-mode runtimes (Swoole, RoadRunner, FrankenPHP worker
+ * mode) it wouldn't. Self-registering a shutdown function reproduces the
+ * RINIT reset regardless of SAPI, since shutdown functions are request-
+ * scoped even when class statics aren't.
  */
 final class ErrorStack
 {
@@ -16,15 +25,37 @@ final class ErrorStack
 
     private static string|false $lastError = false;
 
+    private static bool $shutdownRegistered = false;
+
     public static function push(string $error): void
     {
+        self::registerShutdownReset();
         self::$errors[] = $error;
         self::$lastError = $error;
     }
 
     public static function pushAlert(string $alert): void
     {
+        self::registerShutdownReset();
         self::$alerts[] = $alert;
+    }
+
+    private static function registerShutdownReset(): void
+    {
+        if (self::$shutdownRegistered) {
+            return;
+        }
+
+        self::$shutdownRegistered = true;
+        register_shutdown_function(self::resetForNextRequest(...));
+    }
+
+    private static function resetForNextRequest(): void
+    {
+        self::$errors = [];
+        self::$alerts = [];
+        self::$lastError = false;
+        self::$shutdownRegistered = false;
     }
 
     public static function last(): string|false
