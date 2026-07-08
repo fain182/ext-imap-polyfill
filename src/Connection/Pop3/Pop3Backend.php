@@ -31,7 +31,7 @@ final class Pop3Backend implements ConnectionBackend
     /** @var array<int, string[]> msgno => IMAP flag names set on it, session-scoped */
     private array $flags = [];
 
-    /** @var array<int, string> raw RETR cache for the lifetime of the connection */
+    /** @var array<int, RawMessage> RETR cache for the lifetime of the connection */
     private array $rawMessageCache = [];
 
     private int $exists = 0;
@@ -142,8 +142,7 @@ final class Pop3Backend implements ConnectionBackend
         $result = [];
         foreach ($ids as $id) {
             $msgno = $uidMode === self::UID_MODE ? $this->resolveMsgno($id) : $id;
-            [$header] = RawMessage::splitHeaderBody($this->rawMessage($msgno));
-            $result[$id] = $header."\r\n";
+            $result[$id] = $this->rawMessage($msgno)->getHeader()."\r\n";
         }
 
         return $result;
@@ -154,12 +153,11 @@ final class Pop3Backend implements ConnectionBackend
         $result = [];
         foreach ($ids as $id) {
             $msgno = $uidMode === self::UID_MODE ? $this->resolveMsgno($id) : $id;
-            $raw = $this->rawMessage($msgno);
-            [$header, $body] = RawMessage::splitHeaderBody($raw);
+            $message = $this->rawMessage($msgno);
 
             $entry = [];
             foreach ($items as $item) {
-                $entry[$item] = $this->fetchItem($item, $msgno, $raw, $header, $body);
+                $entry[$item] = $this->fetchItem($item, $msgno, $message);
             }
 
             // Mirrors webklex's own fetch() response shape: a single
@@ -172,28 +170,28 @@ final class Pop3Backend implements ConnectionBackend
         return $result;
     }
 
-    private function fetchItem(string $item, int $msgno, string $raw, string $header, string $body): mixed
+    private function fetchItem(string $item, int $msgno, RawMessage $message): mixed
     {
         return match (true) {
             $item === 'FLAGS' => $this->flags[$msgno] ?? [],
             $item === 'INTERNALDATE' => self::FAKE_INTERNAL_DATE,
-            $item === 'RFC822.SIZE' => (string) strlen($raw),
-            $item === 'RFC822.HEADER' => $header."\r\n",
+            $item === 'RFC822.SIZE' => (string) strlen($message->getRaw()),
+            $item === 'RFC822.HEADER' => $message->getHeader()."\r\n",
             $item === 'UID' => $this->uidByMsgno[$msgno] ?? '',
-            str_starts_with($item, 'BODY.PEEK[') || str_starts_with($item, 'BODY[') => $this->fetchSection($item, $header, $body),
+            str_starts_with($item, 'BODY.PEEK[') || str_starts_with($item, 'BODY[') => $this->fetchSection($item, $message),
             default => '',
         };
     }
 
-    private function fetchSection(string $item, string $header, string $body): string
+    private function fetchSection(string $item, RawMessage $message): string
     {
         $section = substr($item, strpos($item, '[') + 1, -1);
 
         return match (true) {
-            $section === 'TEXT' => $body,
-            $section === 'HEADER' => $header."\r\n",
-            str_ends_with($section, '.MIME') => $header."\r\n",
-            default => $body,
+            $section === 'TEXT' => $message->getBody(),
+            $section === 'HEADER' => $message->getHeader()."\r\n",
+            str_ends_with($section, '.MIME') => $message->getHeader()."\r\n",
+            default => $message->getBody(),
         };
     }
 
@@ -271,9 +269,9 @@ final class Pop3Backend implements ConnectionBackend
         ];
     }
 
-    private function rawMessage(int $msgno): string
+    private function rawMessage(int $msgno): RawMessage
     {
-        return $this->rawMessageCache[$msgno] ??= $this->protocol->retr($msgno);
+        return $this->rawMessageCache[$msgno] ??= new RawMessage($this->protocol->retr($msgno));
     }
 
     private function resolveMsgno(int|string $uid): int

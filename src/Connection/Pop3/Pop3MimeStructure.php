@@ -17,12 +17,11 @@ final class Pop3MimeStructure
     /**
      * @return array<int, mixed>
      */
-    public static function parse(string $rawMessage): array
+    public static function parse(RawMessage $message): array
     {
-        [$headerBlock, $body] = RawMessage::splitHeaderBody($rawMessage);
-        $headers = RawHeaderFields::parse($headerBlock);
+        $headers = RawHeaderFields::parse($message->getHeader());
 
-        return self::parsePart($headers, $body);
+        return self::parsePart($headers, $message->getBody());
     }
 
     /**
@@ -58,8 +57,8 @@ final class Pop3MimeStructure
                 continue;
             }
 
-            [$partHeaderBlock, $partBody] = RawMessage::splitHeaderBody($segment);
-            $parts[] = self::parsePart(RawHeaderFields::parse($partHeaderBlock), $partBody);
+            $part = new RawMessage($segment);
+            $parts[] = self::parsePart(RawHeaderFields::parse($part->getHeader()), $part->getBody());
         }
 
         $paramPairs = self::flattenParams($params);

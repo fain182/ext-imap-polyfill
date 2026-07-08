@@ -19,10 +19,9 @@ final class Pop3SearchEvaluator
      * @param string[] $tokens
      * @param string[] $flags
      */
-    public static function matches(array $tokens, string $rawMessage, array $flags): bool
+    public static function matches(array $tokens, RawMessage $message, array $flags): bool
     {
-        [$header, $body] = RawMessage::splitHeaderBody($rawMessage);
-        $fields = RawHeaderFields::parse($header);
+        $fields = RawHeaderFields::parse($message->getHeader());
 
         $i = 0;
         $count = count($tokens);
@@ -45,8 +44,8 @@ final class Pop3SearchEvaluator
                 'RECENT', 'NEW' => true, // every POP3 message is "recent" for the session
                 'OLD' => false,
                 'FROM', 'TO', 'CC', 'BCC', 'SUBJECT' => self::substringMatch($fields, strtolower($token), self::nextToken($tokens, $i)),
-                'BODY' => str_contains(strtolower($body), strtolower(self::nextToken($tokens, $i))),
-                'TEXT' => str_contains(strtolower($rawMessage), strtolower(self::nextToken($tokens, $i))),
+                'BODY' => str_contains(strtolower($message->getBody()), strtolower(self::nextToken($tokens, $i))),
+                'TEXT' => str_contains(strtolower($message->getRaw()), strtolower(self::nextToken($tokens, $i))),
                 'SINCE', 'BEFORE', 'ON' => self::dateMatch($token, $fields['date'] ?? null, self::nextToken($tokens, $i)),
                 default => true, // unrecognized keyword: don't exclude the message on it
             };

@@ -16,7 +16,11 @@ final class ImapHeadersTest extends GreenmailTestCase
 
         $headers = imap_headers($connection);
 
-        $this->assertSame(' U       1) 7-Jul-2026 Alice Smith          First message (6 chars)', $headers[0]);
+        // The date column comes from INTERNALDATE (server-assigned at
+        // APPEND time), not the message's own Date: header — so it tracks
+        // whatever "today" is when this test runs, not the fixed Date:
+        // above.
+        $this->assertSame(' U       1)'.self::todayField().' Alice Smith          First message (6 chars)', $headers[0]);
 
         imap_close($connection);
     }
@@ -33,9 +37,17 @@ final class ImapHeadersTest extends GreenmailTestCase
 
         $headers = imap_headers($connection);
 
-        $this->assertSame(' U       1) 7-Jul-2026 carol@example.com    This subject is definitel (4 chars)', $headers[0]);
+        $this->assertSame(' U       1)'.self::todayField().' carol@example.com    This subject is definitel (4 chars)', $headers[0]);
 
         imap_close($connection);
+    }
+
+    /**
+     * c-client's mail_date() format: space-padded day, e.g. " 7-Jul-2026".
+     */
+    private static function todayField(): string
+    {
+        return sprintf('%2d-%s-%s', (int) gmdate('j'), gmdate('M'), gmdate('Y'));
     }
 
     public function test_headers_empty_mailbox_returns_empty_array(): void
