@@ -51,7 +51,10 @@ final class Session
             return false;
         }
 
-        $connection = new \IMAP\Connection($backend, $spec->folder, $mailbox, (bool) ($flags & OP_READONLY));
+        // c-client treats a /readonly flag in the spec the same as passing
+        // OP_READONLY (mail_valid_net_parse sets the stream read-only bit).
+        $readOnly = (bool) ($flags & OP_READONLY) || $spec->hasFlag('readonly');
+        $connection = new \IMAP\Connection($backend, $spec->folder, $mailbox, $readOnly);
         $connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
 
         try {
@@ -91,6 +94,13 @@ final class Session
                 $client->connect();
 
                 return new \ImapPolyfill\Connection\Imap\ImapBackend($client);
+            } catch (\Webklex\PHPIMAP\Exceptions\ConnectionFailedException $e) {
+                // webklex's own message is a bare "connection failed";
+                // c-client reports "Can't connect to host,port: reason", and
+                // naming the attempted port is the only way the default-port
+                // choice stays observable (and parity-testable) from outside.
+                $reason = $e->getPrevious()?->getMessage() ?? $e->getMessage();
+                ErrorStack::push("Can't connect to {$spec->host},{$spec->port}: {$reason}");
             } catch (\Throwable $e) {
                 ErrorStack::push($e->getMessage());
             }
@@ -322,7 +332,8 @@ final class Session
             return false;
         }
 
-        $readOnly = (bool) ($flags & OP_READONLY);
+        // Like imap_open(): a /readonly flag in the spec counts as OP_READONLY.
+        $readOnly = (bool) ($flags & OP_READONLY) || $spec->hasFlag('readonly');
 
         try {
             $status = $this->connection->selectOrExamineFolder($spec->folder, $readOnly);

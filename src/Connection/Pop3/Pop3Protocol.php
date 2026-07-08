@@ -38,7 +38,8 @@ final class Pop3Protocol
         );
 
         if ($stream === false) {
-            throw new \RuntimeException("Can't connect to {$host}:{$port}: {$errstr}");
+            // Same "host,port" shape as c-client's tcp_open error.
+            throw new \RuntimeException("Can't connect to {$host},{$port}: {$errstr}");
         }
 
         $this->stream = $stream;

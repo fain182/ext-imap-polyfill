@@ -32,6 +32,20 @@ class MailboxSpecTest extends TestCase
         $this->assertSame(143, $spec->port);
     }
 
+    public function test_defaults_port_to_110_for_pop3(): void
+    {
+        $spec = MailboxSpec::parse('{pop3.example.com/pop3}INBOX');
+
+        $this->assertSame(110, $spec->port);
+    }
+
+    public function test_defaults_port_to_995_for_pop3_with_ssl(): void
+    {
+        $spec = MailboxSpec::parse('{pop3.example.com/pop3/ssl}INBOX');
+
+        $this->assertSame(995, $spec->port);
+    }
+
     public function test_supports_subfolder_names(): void
     {
         $spec = MailboxSpec::parse('{127.0.0.1:13143/imap}INBOX.Sent');

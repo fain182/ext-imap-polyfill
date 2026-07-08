@@ -48,8 +48,13 @@ final class MailboxSpec
             [$host, $port] = explode(':', $hostPort, 2);
             $port = (int) $port;
         } else {
+            // c-client picks the default port per service: IMAP 143 (993
+            // over SSL), POP3 110 (995 over SSL).
             $host = $hostPort;
-            $port = in_array('ssl', $flags, true) ? 993 : 143;
+            $ssl = in_array('ssl', $flags, true);
+            $port = in_array('pop3', $flags, true)
+                ? ($ssl ? 995 : 110)
+                : ($ssl ? 993 : 143);
         }
 
         return new self($host, $port, $flags, $folder);
