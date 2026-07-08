@@ -14,9 +14,46 @@ composer require fain182/ext-imap-polyfill
 
 No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the polyfill is a no-op — safe to add before you upgrade, not just after.
 
+Requires PHP 8.1+. The webklex/php-imap dependency declares a handful of extension requirements (`ext-mbstring`, `ext-iconv`, `ext-openssl`, `ext-libxml`, `ext-json`, `ext-fileinfo`, `ext-zip`); all but `ext-zip` are enabled in virtually every PHP build. `ext-zip` is only used by webklex code paths this polyfill never calls, so if you can't (or don't want to) install it:
+
+```bash
+composer require fain182/ext-imap-polyfill --ignore-platform-req=ext-zip
+```
+
+The package declares `provide: ext-imap`, so other dependencies that require `ext-imap` install cleanly alongside it.
+
+## Usage
+
+Your existing `imap_*` code runs unchanged:
+
+```php
+$imap = imap_open('{imap.example.com:993/imap/ssl}INBOX', 'user@example.com', $password);
+
+foreach (imap_search($imap, 'UNSEEN') ?: [] as $msgno) {
+    $overview = imap_fetch_overview($imap, (string) $msgno)[0];
+    echo "{$overview->from}: {$overview->subject}\n";
+}
+
+imap_close($imap);
+```
+
+### Connection string flags
+
+In the `{host[:port][/flag...]}folder` mailbox spec, the flags that change behavior are:
+
+- `/ssl` — implicit TLS
+- `/tls` — STARTTLS
+- `/novalidate-cert` — skip TLS certificate validation
+- `/pop3` — connect over POP3 instead of IMAP
+- `/readonly` — open the mailbox read-only, same as passing `OP_READONLY`
+
+When no port is given, the default follows the service and encryption, like c-client: IMAP 143 (993 with `/ssl`), POP3 110 (995 with `/ssl`).
+
+Any other flag (`/imap`, `/norsh`, `/secure`, `/debug`, …) is accepted and ignored, so existing connection strings parse fine.
+
 ## Coverage
 
-This is not a reimplementation of all `imap_*` functions — **65 of 75 (87%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. Calling any function marked ❌ below will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — **65 of 75 (87%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing ten are ACL and quota management (`imap_getacl`, `imap_setacl`, `imap_get_quota`, `imap_get_quotaroot`, `imap_set_quota`), scanning mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`), and outbound mail (`imap_mail`, `imap_mail_compose`). Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
 
 Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the notes column; anything not noted is expected to match exactly.
 
@@ -69,7 +106,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_mutf7_to_utf8` | ✅ | |
 | `imap_num_msg` | ✅ | |
 | `imap_num_recent` | ✅ | cached client-side read, like `imap_num_msg` |
-| `imap_open` | ✅ | |
+| `imap_open` | ✅ | of the `$flags` bitmask, only `OP_READONLY` and `CL_EXPUNGE` change behavior — the other `OP_*` flags are validated, then ignored; the `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored |
 | `imap_ping` | ✅ |  |
 | `imap_qprint` | ✅ | |
 | `imap_rename` | ✅ | |
@@ -100,15 +137,11 @@ Every implemented function's object/array shape (property names, casing, flag se
 
 ## Limitations
 
-A few deviations from the real extension that a package evaluator should know about before relying on it:
+Cross-cutting divergences from the real extension (per-function ones are in the coverage table's notes column):
 
-- `{host/nntp}` is parsed but ignored (falls back to IMAP); `{host/pop3}` genuinely connects over POP3 — see the POP3 notes below.
-- **POP3** (`{host/pop3}`): matches real ext-imap's own treatment of POP3 — a single mailbox always named `INBOX` (any other folder in the spec fails to open, and `OP_READONLY` fails to open at all, both like the real extension); `SEARCH`, `STATUS`, and `BODYSTRUCTURE` are all synthesized client-side, since POP3 has none of them on the wire; flags (`imap_setflag_full`/`imap_clearflag_full`/`\Seen` etc.) exist only for the lifetime of the connection, since POP3 has no persistent flag storage; `imap_mail_copy`/`imap_mail_move`/`imap_append`/mailbox-creation-or-rename all fail outright, same as real ext-imap. `imap_search()`'s criteria grammar over POP3 is a practical subset (`ALL`, `SEEN`/`UNSEEN`, `ANSWERED`/`UNANSWERED`, `DELETED`/`UNDELETED`, `FLAGGED`/`UNFLAGGED`, `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT` substring match, `SINCE`/`BEFORE`/`ON`), not the full RFC3501 grammar.
-- Warnings are raised as `E_USER_WARNING`, not `E_WARNING` — userland code can't raise the exact error level the C extension uses.
-- `OP_HALFOPEN` and most other `OP_*` open flags are accepted (to avoid spurious `ValueError`s) but have no effect; only `OP_READONLY` and `CL_EXPUNGE` actually change behavior.
-- `imap_reopen()` only switches folders on the already-open connection — it can't reconnect to a different host, since `imap_open()`'s credentials aren't retained.
-- `imap_alerts()` is never populated; this polyfill doesn't surface server `* OK [ALERT]` responses.
-- `imap_open()`'s `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored.
+- **No NNTP**: `{host/nntp}` is parsed but ignored — the connection silently falls back to IMAP instead of talking NNTP.
+- **POP3** support mirrors real ext-imap's own treatment of POP3: a single mailbox always named `INBOX`, `SEARCH`/`STATUS`/`BODYSTRUCTURE` synthesized client-side, flags lasting only for the lifetime of the connection, and copy/move/append/mailbox-management failing outright. The one divergence: `imap_search()`'s criteria grammar over POP3 is a practical subset (`ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT` substring match, `SINCE`/`BEFORE`/`ON`), not the full RFC3501 grammar.
+- **Warnings** are raised as `E_USER_WARNING`, not `E_WARNING` — userland code can't raise the exact error level the C extension uses.
 
 ## Development
 
