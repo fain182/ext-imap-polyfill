@@ -2,8 +2,6 @@
 
 namespace ImapPolyfill\Connection\Pop3;
 
-use ImapPolyfill\Message\RawHeaderFields;
-
 /**
  * Builds the same positional BODYSTRUCTURE array shape ImapSexpParser
  * produces for a raw IMAP FETCH response, by parsing MIME headers directly —
@@ -19,9 +17,7 @@ final class Pop3MimeStructure
      */
     public static function parse(RawMessage $message): array
     {
-        $headers = RawHeaderFields::parse($message->getHeader());
-
-        return self::parsePart($headers, $message->getBody());
+        return self::parsePart($message->getHeaders(), $message->getBody());
     }
 
     /**
@@ -58,7 +54,7 @@ final class Pop3MimeStructure
             }
 
             $part = new RawMessage($segment);
-            $parts[] = self::parsePart(RawHeaderFields::parse($part->getHeader()), $part->getBody());
+            $parts[] = self::parsePart($part->getHeaders(), $part->getBody());
         }
 
         $paramPairs = self::flattenParams($params);

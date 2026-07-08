@@ -2,8 +2,6 @@
 
 namespace ImapPolyfill\Connection\Pop3;
 
-use ImapPolyfill\Message\RawHeaderFields;
-
 /**
  * Client-side evaluator for the SEARCH criteria this polyfill's Mailbox
  * hands over as whitespace-split tokens (see Mailbox::search()) — POP3 has
@@ -21,7 +19,7 @@ final class Pop3SearchEvaluator
      */
     public static function matches(array $tokens, RawMessage $message, array $flags): bool
     {
-        $fields = RawHeaderFields::parse($message->getHeader());
+        $fields = $message->getHeaders();
 
         $i = 0;
         $count = count($tokens);

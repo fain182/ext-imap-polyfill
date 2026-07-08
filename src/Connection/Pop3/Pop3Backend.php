@@ -142,7 +142,7 @@ final class Pop3Backend implements ConnectionBackend
         $result = [];
         foreach ($ids as $id) {
             $msgno = $uidMode === self::UID_MODE ? $this->resolveMsgno($id) : $id;
-            $result[$id] = $this->rawMessage($msgno)->getHeader()."\r\n";
+            $result[$id] = $this->rawMessage($msgno)->getRawHeader()."\r\n";
         }
 
         return $result;
@@ -176,7 +176,7 @@ final class Pop3Backend implements ConnectionBackend
             $item === 'FLAGS' => $this->flags[$msgno] ?? [],
             $item === 'INTERNALDATE' => self::FAKE_INTERNAL_DATE,
             $item === 'RFC822.SIZE' => (string) strlen($message->getRaw()),
-            $item === 'RFC822.HEADER' => $message->getHeader()."\r\n",
+            $item === 'RFC822.HEADER' => $message->getRawHeader()."\r\n",
             $item === 'UID' => $this->uidByMsgno[$msgno] ?? '',
             str_starts_with($item, 'BODY.PEEK[') || str_starts_with($item, 'BODY[') => $this->fetchSection($item, $message),
             default => '',
@@ -189,8 +189,8 @@ final class Pop3Backend implements ConnectionBackend
 
         return match (true) {
             $section === 'TEXT' => $message->getBody(),
-            $section === 'HEADER' => $message->getHeader()."\r\n",
-            str_ends_with($section, '.MIME') => $message->getHeader()."\r\n",
+            $section === 'HEADER' => $message->getRawHeader()."\r\n",
+            str_ends_with($section, '.MIME') => $message->getRawHeader()."\r\n",
             default => $message->getBody(),
         };
     }

@@ -2,16 +2,23 @@
 
 namespace ImapPolyfill\Connection\Pop3;
 
+use ImapPolyfill\Message\RawHeaderFields;
+
 /**
  * A RETR'd message, split into header and body once at construction time.
- * Shared by every POP3-side consumer that needs the split (Pop3Backend's
- * own FETCH emulation, Pop3MimeStructure, Pop3SearchEvaluator).
+ * Shared by every POP3-side consumer that needs the split or the parsed
+ * header fields (Pop3Backend's own FETCH emulation, Pop3MimeStructure,
+ * Pop3SearchEvaluator) — each of those otherwise ends up parsing the same
+ * message's headers independently.
  */
 final class RawMessage
 {
     private readonly string $header;
 
     private readonly string $body;
+
+    /** @var array<string, string>|null lazily parsed, memoized on first access */
+    private ?array $fields = null;
 
     public function __construct(private readonly string $raw)
     {
@@ -31,7 +38,7 @@ final class RawMessage
         return $this->raw;
     }
 
-    public function getHeader(): string
+    public function getRawHeader(): string
     {
         return $this->header;
     }
@@ -39,5 +46,13 @@ final class RawMessage
     public function getBody(): string
     {
         return $this->body;
+    }
+
+    /**
+     * @return array<string, string> lowercase header name => value
+     */
+    public function getHeaders(): array
+    {
+        return $this->fields ??= RawHeaderFields::parse($this->header);
     }
 }
