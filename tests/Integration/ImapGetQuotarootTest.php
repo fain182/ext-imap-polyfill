@@ -7,7 +7,6 @@ class ImapGetQuotarootTest extends GreenmailTestCase
     public function test_reports_each_resource_plus_legacy_top_level_storage_keys(): void
     {
         $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
-        // See ImapSetQuotaTest for why the root is "INBOX" and not "".
         $this->assertTrue(imap_set_quota($connection, 'INBOX', 512));
 
         $quota = imap_get_quotaroot($connection, 'INBOX');

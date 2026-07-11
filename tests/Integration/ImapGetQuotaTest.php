@@ -4,20 +4,19 @@ namespace ImapPolyfill\Tests\Integration;
 
 class ImapGetQuotaTest extends GreenmailTestCase
 {
-    public function test_returns_false_when_the_server_rejects_getquota(): void
+    public function test_reports_the_quota_set_on_a_root(): void
     {
-        // GreenMail advertises QUOTA but only implements SETQUOTA and
-        // GETQUOTAROOT: GETQUOTA draws a BAD, which both the real extension
-        // and this polyfill surface as a warning, false, and a pushed error.
-        // (The success path's QUOTA-response parsing is shared with
-        // imap_get_quotaroot(), covered in ImapGetQuotarootTest.)
         $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
-        imap_errors();
+        $this->assertTrue(imap_set_quota($connection, 'INBOX', 768));
 
-        $this->assertFalse(@imap_get_quota($connection, ''));
+        $quota = imap_get_quota($connection, 'INBOX');
 
-        $errors = imap_errors();
-        $this->assertIsArray($errors);
-        $this->assertStringContainsString('Invalid command', implode(' ', $errors));
+        $this->assertIsArray($quota);
+        $this->assertArrayHasKey('STORAGE', $quota);
+        $this->assertIsInt($quota['STORAGE']['usage']);
+        $this->assertSame(768, $quota['STORAGE']['limit']);
+        // The STORAGE resource is mirrored into top-level usage/limit keys.
+        $this->assertSame($quota['STORAGE']['usage'], $quota['usage']);
+        $this->assertSame(768, $quota['limit']);
     }
 }

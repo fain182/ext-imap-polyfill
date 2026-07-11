@@ -3,7 +3,7 @@
 SHELL := /bin/bash
 
 CONTAINER_RUNTIME ?= $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
-GREENMAIL_IMAGE := docker.io/greenmail/standalone:2.1.0
+GREENMAIL_IMAGE := docker.io/greenmail/standalone:2.1.9
 GREENMAIL_NAME := ext-imap-polyfill-greenmail
 GREENMAIL_PORT := 13143
 GREENMAIL_POP3_PORT := 13110

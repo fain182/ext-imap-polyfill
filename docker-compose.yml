@@ -1,6 +1,6 @@
 services:
   greenmail:
-    image: docker.io/greenmail/standalone:2.1.0
+    image: docker.io/greenmail/standalone:2.1.9
     ports:
       - "13143:3143"
       - "13110:3110"
