@@ -127,7 +127,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_setacl` | ❌ | |
 | `imap_setflag_full` | ✅ | |
 | `imap_set_quota` | ✅ | |
-| `imap_sort` | ✅ | `SORTSUBJECT` strips a leading `Re:`/`Fwd:` for comparison, not the full RFC5256 base-subject algorithm |
+| `imap_sort` | ✅ | always sorts client-side (a port of c-client's algorithms, including RFC 5256 base subjects for `SORTSUBJECT`); real ext-imap hands sorting to the server when it advertises the `SORT` capability, so results can differ on servers whose `SORT` deviates from RFC 5256 |
 | `imap_status` | ✅ |  |
 | `imap_subscribe` | ✅ | |
 | `imap_thread` | ✅ | duplicate Message-IDs aren't given synthetic unique IDs |
