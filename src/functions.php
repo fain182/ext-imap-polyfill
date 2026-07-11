@@ -380,7 +380,7 @@ if (!function_exists('imap_qprint')) {
 if (!function_exists('imap_8bit')) {
     function imap_8bit(string $string): string|false
     {
-        return quoted_printable_encode($string);
+        return \ImapPolyfill\Mime\QuotedPrintableText::encode($string);
     }
 }
 

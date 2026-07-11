@@ -360,7 +360,7 @@ final class ComposedMessage
         }
 
         if ($body->encoding === ENC8BIT) {
-            $body->contents = quoted_printable_encode($body->contents);
+            $body->contents = QuotedPrintableText::encode($body->contents);
             $body->encoding = ENCQUOTEDPRINTABLE;
         } elseif ($body->encoding === ENCBINARY) {
             $body->contents = Base64Text::encode($body->contents);

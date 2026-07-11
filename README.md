@@ -103,7 +103,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_lsub` | ✅ |  |
 | `imap_mail` | ✅ | delivery always goes through the `sendmail_path` pipe (false when that ini is empty) — the real extension's Windows build spoke SMTP via the `SMTP`/`smtp_port` ini settings instead |
 | `imap_mailboxmsginfo` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
-| `imap_mail_compose` | ✅ | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax); `8BIT` bodies are re-encoded with `quoted_printable_encode()`, whose soft-line-break positions can differ from c-client's `rfc822_8bit` |
+| `imap_mail_compose` | ✅ | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax) |
 | `imap_mail_copy` | ✅ |  |
 | `imap_mail_move` | ✅ | |
 | `imap_mime_header_decode` | ✅ | |
