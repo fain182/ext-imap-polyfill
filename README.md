@@ -130,7 +130,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_sort` | ✅ | always sorts client-side (a port of c-client's algorithms, including RFC 5256 base subjects for `SORTSUBJECT`); real ext-imap hands sorting to the server when it advertises the `SORT` capability, so results can differ on servers whose `SORT` deviates from RFC 5256 |
 | `imap_status` | ✅ |  |
 | `imap_subscribe` | ✅ | |
-| `imap_thread` | ✅ | duplicate Message-IDs aren't given synthetic unique IDs |
+| `imap_thread` | ✅ | always threads client-side (a port of c-client's REFERENCES fallback); real ext-imap hands threading to the server when it advertises `THREAD=REFERENCES`, so results can differ on servers whose THREAD deviates from RFC 5256 |
 | `imap_timeout` | ✅ | |
 | `imap_uid` | ✅ | |
 | `imap_undelete` | ✅ | |

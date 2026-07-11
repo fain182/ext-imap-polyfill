@@ -49,6 +49,54 @@ final class ImapThreadTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    public function test_duplicate_message_ids_each_keep_their_own_node(): void
+    {
+        $folderName = 'ImapThread'.random_int(10000, 99999);
+        $client = $this->makeFolder($folderName);
+        $folder = $client->getFolder($folderName);
+        $folder->appendMessage("Message-ID: <dup@example.com>\r\nSubject: Alpha\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nFirst claimant");
+        $folder->appendMessage("Message-ID: <dup@example.com>\r\nSubject: Beta\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nDuplicate");
+        $folder->appendMessage("Message-ID: <r@example.com>\r\nReferences: <dup@example.com>\r\nSubject: Re: Alpha\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nReply");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        // The first message claiming <dup@...> owns it (the reply threads
+        // under it); the duplicate gets its own parentless node instead of
+        // clobbering the first.
+        $this->assertSame([
+            '0.num' => 1, '0.next' => 1,
+            '1.num' => 3, '1.next' => 0, '1.branch' => 0,
+            '0.branch' => 2,
+            '2.num' => 2, '2.next' => 0, '2.branch' => 0,
+        ], imap_thread($connection));
+
+        imap_close($connection);
+    }
+
+    public function test_a_messages_own_references_override_links_from_other_chains(): void
+    {
+        $folderName = 'ImapThread'.random_int(10000, 99999);
+        $client = $this->makeFolder($folderName);
+        $folder = $client->getFolder($folderName);
+        $folder->appendMessage("Message-ID: <t1@example.com>\r\nSubject: One\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nOne");
+        // This chain claims t3 hangs under t1...
+        $folder->appendMessage("Message-ID: <t2@example.com>\r\nReferences: <t1@example.com> <t3@example.com>\r\nSubject: Two\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nTwo");
+        // ...but t3's own (empty) References are authoritative: it detaches
+        // from t1 and roots its own thread (c-client step 1B).
+        $folder->appendMessage("Message-ID: <t3@example.com>\r\nSubject: Three\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nThree");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $this->assertSame([
+            '0.num' => 1, '0.next' => 0, '0.branch' => 1,
+            '1.num' => 3, '1.next' => 2,
+            '2.num' => 2, '2.next' => 0, '2.branch' => 0,
+            '1.branch' => 0,
+        ], imap_thread($connection));
+
+        imap_close($connection);
+    }
+
     public function test_se_uid_returns_uids_instead_of_msgnos(): void
     {
         $folderName = 'ImapThread'.random_int(10000, 99999);

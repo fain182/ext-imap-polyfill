@@ -6,13 +6,8 @@ namespace ImapPolyfill\Message;
  * Client-side implementation of RFC5256's THREAD=REFERENCES algorithm,
  * for drivers (POP3, or any IMAP server without the THREAD extension —
  * e.g. Greenmail) that have no wire THREAD command. This mirrors what
- * c-client itself falls back to in that case, verified against real
- * ext-imap via `make parity`.
- *
- * Simplifications vs. the full RFC: duplicate Message-IDs across messages
- * aren't given synthetic unique IDs (the second message just doesn't get
- * its own container), and base-subject extraction (see BaseSubject) is a
- * practical subset of the full ABNF grammar.
+ * c-client itself falls back to in that case (mail_thread_references in
+ * mail.c), verified against real ext-imap via `make parity`.
  *
  * @see BaseSubject
  */
@@ -65,8 +60,24 @@ final class ThreadBuilder
         $byId = [];
         $all = [];
 
-        foreach ($messages as $message) {
-            $container = self::containerFor($message['messageId'], $byId, $all);
+        // c-client's "Step 1 (preliminary)": every message gets its own
+        // container up front, so a reference never resolves to a message
+        // appearing later under a duplicated ID. The first message claiming
+        // a Message-ID owns it; later claimants get an anonymous container
+        // (c-client keys those by a synthetic unique string nothing else
+        // can reference).
+        $containers = [];
+        foreach ($messages as $index => $message) {
+            $id = $message['messageId'];
+            $containers[$index] = self::containerFor(
+                $id !== null && isset($byId[$id]) ? null : $id,
+                $byId,
+                $all,
+            );
+        }
+
+        foreach ($messages as $index => $message) {
+            $container = $containers[$index];
             $container->msgno = $message['msgno'];
             $container->uid = $message['uid'];
             $container->date = $message['date'];
@@ -89,8 +100,15 @@ final class ThreadBuilder
                 $parentId = $refId;
             }
 
-            if ($parentId !== null) {
-                self::link(self::containerFor($parentId, $byId, $all), $container);
+            // Step 1B: the message's own References decide its parent — a
+            // link set earlier by another message's reference chain is
+            // broken, even when this message has no references at all.
+            $refParent = $parentId === null ? null : self::containerFor($parentId, $byId, $all);
+            if ($container->parent !== null && $container->parent !== $refParent) {
+                self::unlink($container);
+            }
+            if ($refParent !== null) {
+                self::link($refParent, $container);
             }
         }
 
@@ -170,6 +188,20 @@ final class ThreadBuilder
 
         $child->parent = $parent;
         $parent->children[] = $child;
+    }
+
+    private static function unlink(ThreadContainer $child): void
+    {
+        $parent = $child->parent;
+        if ($parent === null) {
+            return;
+        }
+
+        $index = array_search($child, $parent->children, true);
+        if ($index !== false) {
+            array_splice($parent->children, $index, 1);
+        }
+        $child->parent = null;
     }
 
     /**
