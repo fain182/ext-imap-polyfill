@@ -82,6 +82,10 @@ class ImapFunctionSignaturesTest extends TestCase
         'imap_mutf7_to_utf8' => ['string'],
         'imap_mime_header_decode' => ['string'],
         'imap_timeout' => ['timeout_type', 'timeout?'],
+        'imap_mail_compose' => ['envelope', 'bodies'],
+        'imap_get_quota' => ['imap', 'quota_root'],
+        'imap_get_quotaroot' => ['imap', 'mailbox'],
+        'imap_set_quota' => ['imap', 'quota_root', 'mailbox_size'],
     ];
 
     public function test_every_implemented_function_matches_the_stub_signature(): void

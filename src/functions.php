@@ -387,8 +387,7 @@ if (!function_exists('imap_8bit')) {
 if (!function_exists('imap_binary')) {
     function imap_binary(string $string): string|false
     {
-        // Matches c-client's rfc822_binary: base64 wrapped at 60 chars/line.
-        return chunk_split(base64_encode($string), 60, "\n");
+        return \ImapPolyfill\Mime\Base64Text::encode($string);
     }
 }
 
@@ -506,6 +505,56 @@ if (!function_exists('imap_unsubscribe')) {
     function imap_unsubscribe(\IMAP\Connection $imap, string $mailbox): bool
     {
         return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->unsubscribe($mailbox);
+    }
+}
+
+if (!function_exists('imap_mail_compose')) {
+    /**
+     * @param array<array-key, mixed> $envelope
+     * @param array<array-key, mixed> $bodies
+     */
+    function imap_mail_compose(array $envelope, array $bodies): string|false
+    {
+        return \ImapPolyfill\Mime\ComposedMessage::compose($envelope, $bodies);
+    }
+}
+
+if (!function_exists('imap_get_quota')) {
+    /**
+     * @return array<string, int|array<string, int>>|false
+     */
+    function imap_get_quota(\IMAP\Connection $imap, string $quota_root): array|false
+    {
+        $quota = (new \ImapPolyfill\Session\MailboxHierarchy($imap))->getQuota($quota_root);
+
+        if ($quota === false) {
+            trigger_error('imap_get_quota(): C-client imap_getquota failed', E_USER_WARNING);
+        }
+
+        return $quota;
+    }
+}
+
+if (!function_exists('imap_get_quotaroot')) {
+    /**
+     * @return array<string, int|array<string, int>>|false
+     */
+    function imap_get_quotaroot(\IMAP\Connection $imap, string $mailbox): array|false
+    {
+        $quota = (new \ImapPolyfill\Session\MailboxHierarchy($imap))->getQuotaRoot($mailbox);
+
+        if ($quota === false) {
+            trigger_error('imap_get_quotaroot(): C-client imap_getquotaroot failed', E_USER_WARNING);
+        }
+
+        return $quota;
+    }
+}
+
+if (!function_exists('imap_set_quota')) {
+    function imap_set_quota(\IMAP\Connection $imap, string $quota_root, int $mailbox_size): bool
+    {
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->setQuota($quota_root, $mailbox_size);
     }
 }
 

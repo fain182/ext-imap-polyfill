@@ -161,6 +161,84 @@ final class MailboxHierarchy
         return $result;
     }
 
+    /**
+     * The quota root is sent verbatim (c-client passes it as a plain
+     * ASTRING), so unlike status()/append() there is no {host} prefix
+     * parsing here.
+     *
+     * @return array<string, int|array<string, int>>|false
+     */
+    public function getQuota(string $quotaRoot): array|false
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            $resources = $this->connection->protocol()->getQuota($quotaRoot);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return $this->quotaArray($resources);
+    }
+
+    /**
+     * @return array<string, int|array<string, int>>|false
+     */
+    public function getQuotaRoot(string $mailbox): array|false
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            $resources = $this->connection->protocol()->getQuotaRoot($mailbox);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return $this->quotaArray($resources);
+    }
+
+    public function setQuota(string $quotaRoot, int $mailboxSize): bool
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            $this->connection->protocol()->setQuota($quotaRoot, $mailboxSize);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * php_imap.c's mail_getquota callback: every resource gets its own
+     * ['usage', 'limit'] entry, and any resource whose name merely *starts*
+     * with STORAGE also feeds the top-level usage/limit legacy keys.
+     *
+     * @param array<int, array{name: string, usage: int, limit: int}> $resources
+     *
+     * @return array<string, int|array<string, int>>
+     */
+    private function quotaArray(array $resources): array
+    {
+        $result = [];
+        foreach ($resources as $resource) {
+            if (str_starts_with($resource['name'], 'STORAGE')) {
+                $result['usage'] = $resource['usage'];
+                $result['limit'] = $resource['limit'];
+            }
+            $result[$resource['name']] = ['usage' => $resource['usage'], 'limit' => $resource['limit']];
+        }
+
+        return $result;
+    }
+
     public function createMailbox(string $mailbox): bool
     {
         $this->connection->ensureOpen();

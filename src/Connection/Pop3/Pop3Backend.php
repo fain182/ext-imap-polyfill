@@ -269,6 +269,21 @@ final class Pop3Backend implements ConnectionBackend
         ];
     }
 
+    public function getQuota(string $quotaRoot): array
+    {
+        throw new \RuntimeException('Quota not available on this IMAP server');
+    }
+
+    public function getQuotaRoot(string $mailbox): array
+    {
+        throw new \RuntimeException('Quota not available on this IMAP server');
+    }
+
+    public function setQuota(string $quotaRoot, int $mailboxSize): void
+    {
+        throw new \RuntimeException('Quota not available on this IMAP server');
+    }
+
     private function rawMessage(int $msgno): RawMessage
     {
         return $this->rawMessageCache[$msgno] ??= new RawMessage($this->protocol->retr($msgno));

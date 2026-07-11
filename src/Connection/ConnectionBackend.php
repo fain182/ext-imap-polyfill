@@ -102,4 +102,16 @@ interface ConnectionBackend
      * @return array<string, int>
      */
     public function folderStatus(string $folder, array $items): array;
+
+    /**
+     * @return array<int, array{name: string, usage: int, limit: int}>
+     */
+    public function getQuota(string $quotaRoot): array;
+
+    /**
+     * @return array<int, array{name: string, usage: int, limit: int}>
+     */
+    public function getQuotaRoot(string $mailbox): array;
+
+    public function setQuota(string $quotaRoot, int $mailboxSize): void;
 }

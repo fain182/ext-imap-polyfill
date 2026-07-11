@@ -139,4 +139,68 @@ final class Protocol
     {
         return $this->client->getConnection()->folderStatus($folder, $items)->validatedData();
     }
+
+    public function hasCapability(string $capability): bool
+    {
+        return in_array($capability, $this->connection()->getCapabilities()->validatedData(), true);
+    }
+
+    /**
+     * webklex's getQuota() hardcodes a "#user/" quota-root prefix, so both
+     * quota reads speak the RFC 2087 wire commands directly. GETQUOTAROOT
+     * answers with the same untagged QUOTA responses as GETQUOTA (plus a
+     * QUOTAROOT line this polyfill doesn't surface, since ext-imap's
+     * callback only fires on QUOTA).
+     *
+     * @return array<int, array{name: string, usage: int, limit: int}>
+     */
+    public function getQuota(string $quotaRoot): array
+    {
+        return $this->quotaCommand('GETQUOTA', $quotaRoot);
+    }
+
+    /**
+     * @return array<int, array{name: string, usage: int, limit: int}>
+     */
+    public function getQuotaRoot(string $mailbox): array
+    {
+        return $this->quotaCommand('GETQUOTAROOT', $mailbox);
+    }
+
+    public function setQuota(string $quotaRoot, int $mailboxSize): void
+    {
+        $connection = $this->connection();
+        $root = $connection->escapeString($quotaRoot);
+        assert(is_string($root));
+        $connection->requestAndResponse('SETQUOTA', [$root, "(STORAGE {$mailboxSize})"]);
+    }
+
+    /**
+     * @return array<int, array{name: string, usage: int, limit: int}>
+     */
+    private function quotaCommand(string $command, string $argument): array
+    {
+        $connection = $this->connection();
+        $escaped = $connection->escapeString($argument);
+        assert(is_string($escaped));
+        $response = $connection->requestAndResponse($command, [$escaped])->setCanBeEmpty(true);
+
+        $resources = [];
+        foreach ($response->validatedData() as $line) {
+            if (!is_array($line) || ($line[0] ?? null) !== 'QUOTA' || !is_array($line[2] ?? null)) {
+                continue;
+            }
+            // The parenthesized quota list is (name usage limit) triples.
+            $triple = array_values($line[2]);
+            for ($i = 0; $i + 3 <= count($triple); $i += 3) {
+                $resources[] = [
+                    'name' => (string) $triple[$i],
+                    'usage' => (int) $triple[$i + 1],
+                    'limit' => (int) $triple[$i + 2],
+                ];
+            }
+        }
+
+        return $resources;
+    }
 }

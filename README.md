@@ -58,19 +58,19 @@ Any other flag (`/imap`, `/norsh`, `/secure`, `/debug`, …) is accepted and ign
 
 ## Coverage
 
-This is not a reimplementation of all `imap_*` functions — **65 of 75 (87%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing ten are ACL and quota management (`imap_getacl`, `imap_setacl`, `imap_get_quota`, `imap_get_quotaroot`, `imap_set_quota`), scanning mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`), and outbound mail (`imap_mail`, `imap_mail_compose`). Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — **69 of 75 (92%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing six are ACL management (`imap_getacl`, `imap_setacl`), scanning mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`), and sending mail (`imap_mail`). Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
 
-Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the notes column; anything not noted is expected to match exactly.
+Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the last column; an empty cell means the function is expected to match exactly.
 
-| Function | Implemented | Notes |
+| Function | Implemented | Divergences |
 |---|---|---|
 | `imap_8bit` | ✅ | |
 | `imap_alerts` | ✅ | never populated — this polyfill doesn't surface server `* OK [ALERT]` responses |
 | `imap_append` | ✅ | |
 | `imap_base64` | ✅ | |
-| `imap_binary` | ✅ | wraps output at 60 chars/line like c-client's `rfc822_binary` |
+| `imap_binary` | ✅ | |
 | `imap_body` | ✅ |  |
-| `imap_bodystruct` | ✅ | msgno-only, never uid — c-client's `mail_body()` has no UID equivalent, unlike `imap_fetchbody()` |
+| `imap_bodystruct` | ✅ | |
 | `imap_check` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
 | `imap_clearflag_full` | ✅ | |
 | `imap_close` | ✅ | |
@@ -85,32 +85,32 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_fetchmime` | ✅ | |
 | `imap_fetch_overview` | ✅ | |
 | `imap_fetchstructure` | ✅ | |
-| `imap_fetchtext` | ✅ | alias of `imap_body` |
-| `imap_gc` | ✅ | this polyfill keeps no cache, so once the flags bitmask is validated it's a no-op that always returns `true`, like the real extension |
+| `imap_fetchtext` (alias of `imap_body`) | ✅ | |
+| `imap_gc` | ✅ | |
 | `imap_getacl` | ❌ | |
 | `imap_getmailboxes` | ✅ | |
-| `imap_get_quota` | ❌ | |
-| `imap_get_quotaroot` | ❌ | |
+| `imap_get_quota` | ✅ | |
+| `imap_get_quotaroot` | ✅ | |
 | `imap_getsubscribed` | ✅ |  |
 | `imap_headerinfo` | ✅ | `fetchfrom`/`fetchsubject` (nonzero `$from_length`/`$subject_length`) not implemented |
 | `imap_headers` | ✅ | custom user-defined flags (the `{flag}` segment) are never populated, since this polyfill doesn't track them |
 | `imap_is_open` | ✅ | |
 | `imap_last_error` | ✅ | |
 | `imap_list` | ✅ | |
-| `imap_listmailbox` | ✅ | alias of `imap_list` |
+| `imap_listmailbox` (alias of `imap_list`) | ✅ | |
 | `imap_listscan` | ❌ | |
-| `imap_listsubscribed` | ✅ | alias of `imap_lsub` |
+| `imap_listsubscribed` (alias of `imap_lsub`) | ✅ | |
 | `imap_lsub` | ✅ |  |
 | `imap_mail` | ❌ | |
 | `imap_mailboxmsginfo` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
-| `imap_mail_compose` | ❌ | |
+| `imap_mail_compose` | ✅ | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax); `8BIT` bodies are re-encoded with `quoted_printable_encode()`, whose soft-line-break positions can differ from c-client's `rfc822_8bit` |
 | `imap_mail_copy` | ✅ |  |
-| `imap_mail_move` | ✅ | copies and marks the source `\Deleted` without expunging, like c-client; target is a bare folder name |
+| `imap_mail_move` | ✅ | |
 | `imap_mime_header_decode` | ✅ | |
 | `imap_msgno` | ✅ | |
 | `imap_mutf7_to_utf8` | ✅ | |
 | `imap_num_msg` | ✅ | |
-| `imap_num_recent` | ✅ | cached client-side read, like `imap_num_msg` |
+| `imap_num_recent` | ✅ | |
 | `imap_open` | ✅ | of the `$flags` bitmask, only `OP_READONLY` and `CL_EXPUNGE` change behavior — the other `OP_*` flags are validated, then ignored; the `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored |
 | `imap_ping` | ✅ |  |
 | `imap_qprint` | ✅ | |
@@ -120,13 +120,13 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_rfc822_parse_adrlist` | ✅ | |
 | `imap_rfc822_parse_headers` | ✅ | |
 | `imap_rfc822_write_address` | ✅ | |
-| `imap_savebody` | ✅ | accepts a file path or an open stream resource; like the real extension, returns `true` regardless of whether the section fetch itself found anything, as long as the destination could be opened |
+| `imap_savebody` | ✅ | |
 | `imap_scan` | ❌ | |
 | `imap_scanmailbox` | ❌ | |
 | `imap_search` | ✅ | |
 | `imap_setacl` | ❌ | |
 | `imap_setflag_full` | ✅ | |
-| `imap_set_quota` | ❌ | |
+| `imap_set_quota` | ✅ | |
 | `imap_sort` | ✅ | `SORTSUBJECT` strips a leading `Re:`/`Fwd:` for comparison, not the full RFC5256 base-subject algorithm |
 | `imap_status` | ✅ |  |
 | `imap_subscribe` | ✅ | |
@@ -142,7 +142,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 
 ## Limitations
 
-Cross-cutting divergences from the real extension (per-function ones are in the coverage table's notes column):
+Cross-cutting divergences from the real extension (per-function ones are in the coverage table's Divergences column):
 
 - **No NNTP**: `{host/nntp}` is parsed but ignored — the connection silently falls back to IMAP instead of talking NNTP.
 - **POP3** support mirrors real ext-imap's own treatment of POP3: a single mailbox always named `INBOX`, `SEARCH`/`STATUS`/`BODYSTRUCTURE` synthesized client-side, flags lasting only for the lifetime of the connection, and copy/move/append/mailbox-management failing outright. The one divergence: `imap_search()`'s criteria grammar over POP3 is a practical subset (`ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT` substring match, `SINCE`/`BEFORE`/`ON`), not the full RFC3501 grammar.

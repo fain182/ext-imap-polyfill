@@ -21,19 +21,29 @@ class ImapEncodingHelpersTest extends TestCase
         $this->assertSame('Hello=3DWorld', imap_8bit('Hello=World'));
     }
 
-    public function test_imap_binary_encodes_to_base64(): void
+    public function test_imap_binary_encodes_to_base64_with_final_crlf(): void
     {
-        $this->assertSame(base64_encode('Hello World'), rtrim(imap_binary('Hello World')));
+        $this->assertSame(base64_encode('Hello World')."\r\n", imap_binary('Hello World'));
     }
 
-    public function test_imap_binary_wraps_long_output_at_60_chars_per_line(): void
+    public function test_imap_binary_wraps_long_output_at_60_chars_per_line_with_crlf(): void
     {
         $text = str_repeat('a', 100);
 
         $result = imap_binary($text);
 
-        $lines = explode("\n", rtrim($result, "\n"));
+        $lines = explode("\r\n", rtrim($result, "\r\n"));
         $this->assertSame(60, strlen($lines[0]));
         $this->assertSame(base64_encode($text), implode('', $lines));
+    }
+
+    public function test_imap_binary_ends_with_blank_line_when_output_is_an_exact_line_multiple(): void
+    {
+        // 45 input bytes encode to exactly one full 60-char line, so the
+        // line's own CRLF is followed by rfc822_binary's unconditional
+        // final CRLF.
+        $text = str_repeat('a', 45);
+
+        $this->assertSame(base64_encode($text)."\r\n\r\n", imap_binary($text));
     }
 }

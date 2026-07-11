@@ -180,6 +180,68 @@ if (!defined('SA_ALL')) {
     define('SA_ALL', SA_MESSAGES | SA_RECENT | SA_UNSEEN | SA_UIDNEXT | SA_UIDVALIDITY);
 }
 
+// Body type and encoding codes from c-client's mail.h, used by
+// imap_mail_compose() and imap_fetchstructure()/imap_bodystruct() consumers.
+if (!defined('TYPETEXT')) {
+    define('TYPETEXT', 0);
+}
+
+if (!defined('TYPEMULTIPART')) {
+    define('TYPEMULTIPART', 1);
+}
+
+if (!defined('TYPEMESSAGE')) {
+    define('TYPEMESSAGE', 2);
+}
+
+if (!defined('TYPEAPPLICATION')) {
+    define('TYPEAPPLICATION', 3);
+}
+
+if (!defined('TYPEAUDIO')) {
+    define('TYPEAUDIO', 4);
+}
+
+if (!defined('TYPEIMAGE')) {
+    define('TYPEIMAGE', 5);
+}
+
+if (!defined('TYPEVIDEO')) {
+    define('TYPEVIDEO', 6);
+}
+
+if (!defined('TYPEMODEL')) {
+    define('TYPEMODEL', 7);
+}
+
+if (!defined('TYPEOTHER')) {
+    define('TYPEOTHER', 8);
+}
+
+if (!defined('ENC7BIT')) {
+    define('ENC7BIT', 0);
+}
+
+if (!defined('ENC8BIT')) {
+    define('ENC8BIT', 1);
+}
+
+if (!defined('ENCBINARY')) {
+    define('ENCBINARY', 2);
+}
+
+if (!defined('ENCBASE64')) {
+    define('ENCBASE64', 3);
+}
+
+if (!defined('ENCQUOTEDPRINTABLE')) {
+    define('ENCQUOTEDPRINTABLE', 4);
+}
+
+if (!defined('ENCOTHER')) {
+    define('ENCOTHER', 5);
+}
+
 // Values from c-client's mail.h GC_* defines.
 if (!defined('IMAP_GC_ELT')) {
     define('IMAP_GC_ELT', 0x1);

@@ -135,6 +135,37 @@ final class ImapBackend implements ConnectionBackend
         return $this->protocol()->folderStatus($folder, $items);
     }
 
+    public function getQuota(string $quotaRoot): array
+    {
+        $this->ensureQuotaCapability();
+
+        return $this->protocol()->getQuota($quotaRoot);
+    }
+
+    public function getQuotaRoot(string $mailbox): array
+    {
+        $this->ensureQuotaCapability();
+
+        return $this->protocol()->getQuotaRoot($mailbox);
+    }
+
+    public function setQuota(string $quotaRoot, int $mailboxSize): void
+    {
+        $this->ensureQuotaCapability();
+        $this->protocol()->setQuota($quotaRoot, $mailboxSize);
+    }
+
+    /**
+     * c-client's LEVELQUOTA gate: without the capability no command is sent
+     * and this exact message lands on the error stack.
+     */
+    private function ensureQuotaCapability(): void
+    {
+        if (!$this->protocol()->hasCapability('QUOTA')) {
+            throw new \RuntimeException('Quota not available on this IMAP server');
+        }
+    }
+
     private function protocol(): Protocol
     {
         return $this->protocol ??= new Protocol($this->client);
