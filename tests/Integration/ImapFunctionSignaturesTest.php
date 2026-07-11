@@ -83,6 +83,7 @@ class ImapFunctionSignaturesTest extends TestCase
         'imap_mime_header_decode' => ['string'],
         'imap_timeout' => ['timeout_type', 'timeout?'],
         'imap_mail_compose' => ['envelope', 'bodies'],
+        'imap_mail' => ['to', 'subject', 'message', 'additional_headers?', 'cc?', 'bcc?', 'return_path?'],
         'imap_get_quota' => ['imap', 'quota_root'],
         'imap_get_quotaroot' => ['imap', 'mailbox'],
         'imap_set_quota' => ['imap', 'quota_root', 'mailbox_size'],

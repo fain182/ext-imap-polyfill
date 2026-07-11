@@ -58,7 +58,7 @@ Any other flag (`/imap`, `/norsh`, `/secure`, `/debug`, …) is accepted and ign
 
 ## Coverage
 
-This is not a reimplementation of all `imap_*` functions — **69 of 75 (92%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing six are ACL management (`imap_getacl`, `imap_setacl`), scanning mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`), and sending mail (`imap_mail`). Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — **70 of 75 (93%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing five are ACL management (`imap_getacl`, `imap_setacl`) and scanning mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`). Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
 
 Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the last column; an empty cell means the function is expected to match exactly.
 
@@ -101,7 +101,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_listscan` | ❌ | |
 | `imap_listsubscribed` (alias of `imap_lsub`) | ✅ | |
 | `imap_lsub` | ✅ |  |
-| `imap_mail` | ❌ | |
+| `imap_mail` | ✅ | delivery always goes through the `sendmail_path` pipe (false when that ini is empty) — the real extension's Windows build spoke SMTP via the `SMTP`/`smtp_port` ini settings instead |
 | `imap_mailboxmsginfo` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
 | `imap_mail_compose` | ✅ | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax); `8BIT` bodies are re-encoded with `quoted_printable_encode()`, whose soft-line-break positions can differ from c-client's `rfc822_8bit` |
 | `imap_mail_copy` | ✅ |  |

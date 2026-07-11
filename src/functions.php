@@ -519,6 +519,13 @@ if (!function_exists('imap_mail_compose')) {
     }
 }
 
+if (!function_exists('imap_mail')) {
+    function imap_mail(string $to, string $subject, string $message, ?string $additional_headers = null, ?string $cc = null, ?string $bcc = null, ?string $return_path = null): bool
+    {
+        return \ImapPolyfill\Mail\OutgoingMail::send($to, $subject, $message, $additional_headers, $cc, $bcc, $return_path);
+    }
+}
+
 if (!function_exists('imap_get_quota')) {
     /**
      * @return array<string, int|array<string, int>>|false
