@@ -43,7 +43,8 @@ final class Session
             return false;
         }
 
-        $backend = $spec->hasFlag('pop3')
+        $isPop3 = $spec->hasFlag('pop3');
+        $backend = $isPop3
             ? self::connectPop3($spec, $mailbox, $user, $password, $retries)
             : self::connectImap($spec, $user, $password, $retries);
 
@@ -55,11 +56,10 @@ final class Session
         // OP_READONLY (mail_valid_net_parse sets the stream read-only bit).
         $readOnly = (bool) ($flags & OP_READONLY) || $spec->hasFlag('readonly');
         $secure = $spec->hasFlag('secure') || (bool) ($flags & OP_SECURE);
-        $service = $spec->hasFlag('pop3') ? 'pop3' : 'imap';
         $connection = new \IMAP\Connection(
             $backend,
             $spec->folder,
-            $spec->normalizedPrefixBase($service, $secure),
+            $spec->normalizedPrefixBase($isPop3 ? 'pop3' : 'imap', $secure),
             $user,
             $readOnly,
         );

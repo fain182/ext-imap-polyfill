@@ -70,19 +70,19 @@ final class ComposedMessage
      */
     private static function render(array $envelope, array $bodies): string|false
     {
-        $remail = self::stringField($envelope, 'remail', 'remail');
+        $remail = self::stringField($envelope, 'remail');
         // Parsed and injection-checked like ext-imap, but rfc822_output_header
         // never writes a Return-Path line, so the value goes nowhere.
         self::addressField($envelope, 'return_path');
-        $date = self::stringField($envelope, 'date', 'date');
+        $date = self::stringField($envelope, 'date');
         $from = self::addressField($envelope, 'from');
         $replyTo = self::addressField($envelope, 'reply_to');
-        $inReplyTo = self::stringField($envelope, 'in_reply_to', 'in_reply_to');
-        $subject = self::stringField($envelope, 'subject', 'subject');
+        $inReplyTo = self::stringField($envelope, 'in_reply_to');
+        $subject = self::stringField($envelope, 'subject');
         $to = self::addressField($envelope, 'to');
         $cc = self::addressField($envelope, 'cc');
         $bcc = self::addressField($envelope, 'bcc');
-        $messageId = self::stringField($envelope, 'message_id', 'message_id');
+        $messageId = self::stringField($envelope, 'message_id');
         $customHeaders = self::customHeaders($envelope);
 
         $topBody = null;
@@ -162,14 +162,14 @@ final class ComposedMessage
     /**
      * @param array<array-key, mixed> $envelope
      */
-    private static function stringField(array $envelope, string $key, string $field): ?string
+    private static function stringField(array $envelope, string $key): ?string
     {
         if (!array_key_exists($key, $envelope)) {
             return null;
         }
 
         $value = self::stringValue($envelope[$key]);
-        self::checkInjection($value, adrlist: false, field: $field);
+        self::checkInjection($value, adrlist: false, field: $key);
 
         return $value;
     }

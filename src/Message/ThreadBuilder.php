@@ -84,7 +84,7 @@ final class ThreadBuilder
             $container->baseSubject = BaseSubject::of($message['subject']);
             $container->isReply = BaseSubject::isReplyOrForward($message['subject']);
 
-            $parentId = null;
+            $refParent = null;
             foreach ($message['refs'] as $refId) {
                 $refId = self::normalizeId($refId);
                 if ($refId === null) {
@@ -93,17 +93,16 @@ final class ThreadBuilder
 
                 $refContainer = self::containerFor($refId, $byId, $all);
 
-                if ($parentId !== null) {
-                    self::link(self::containerFor($parentId, $byId, $all), $refContainer);
+                if ($refParent !== null) {
+                    self::link($refParent, $refContainer);
                 }
 
-                $parentId = $refId;
+                $refParent = $refContainer;
             }
 
             // Step 1B: the message's own References decide its parent — a
             // link set earlier by another message's reference chain is
             // broken, even when this message has no references at all.
-            $refParent = $parentId === null ? null : self::containerFor($parentId, $byId, $all);
             if ($container->parent !== null && $container->parent !== $refParent) {
                 self::unlink($container);
             }

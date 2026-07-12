@@ -12,6 +12,9 @@ namespace ImapPolyfill\Connection;
  */
 final class Protocol
 {
+    /** @var string[]|null */
+    private ?array $capabilities = null;
+
     public function __construct(private readonly \Webklex\PHPIMAP\Client $client)
     {
     }
@@ -142,7 +145,11 @@ final class Protocol
 
     public function hasCapability(string $capability): bool
     {
-        return in_array($capability, $this->connection()->getCapabilities()->validatedData(), true);
+        // Cached like c-client's stream->cap: CAPABILITY goes out once per
+        // connection, not once per gated command.
+        $this->capabilities ??= $this->connection()->getCapabilities()->validatedData();
+
+        return in_array($capability, $this->capabilities, true);
     }
 
     /**
