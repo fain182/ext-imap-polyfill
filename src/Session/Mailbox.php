@@ -566,6 +566,7 @@ final class Mailbox
                 (int) $message['RFC822.SIZE'],
                 $msgno,
                 $this->connection->host(),
+                $this->connection->userFlags(),
             );
         }
 

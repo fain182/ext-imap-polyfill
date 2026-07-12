@@ -39,6 +39,19 @@ final class Connection
     /** Mirrors c-client's stream->recent; see $cachedNumMsg. */
     private int $cachedNumRecent = 0;
 
+    /**
+     * Mirrors c-client's stream->user_flags: the custom keywords this
+     * session knows about, in registration order, fed by the SELECT FLAGS
+     * responses. imap_headers' "{flag}" segment renders in this order and
+     * omits keywords the session never saw listed — observed real-ext-imap
+     * behavior: against a server that leaves keywords out of FLAGS (e.g.
+     * GreenMail), the segment stays empty even for keywords this same
+     * session just stored.
+     *
+     * @var string[]
+     */
+    private array $userFlags = [];
+
     public function __construct(
         ConnectionBackend $backend,
         string $folder,
@@ -137,7 +150,35 @@ final class Connection
      */
     public function selectOrExamineFolder(string $folder, bool $readOnly): array
     {
-        return $this->backend->selectOrExamineFolder($folder, $readOnly);
+        $data = $this->backend->selectOrExamineFolder($folder, $readOnly);
+
+        foreach ($data['flags'] ?? [] as $flagList) {
+            if (is_array($flagList)) {
+                $this->registerUserFlags($flagList);
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param string[] $flags system flags are ignored, keywords registered
+     */
+    public function registerUserFlags(array $flags): void
+    {
+        foreach ($flags as $flag) {
+            if (!str_starts_with($flag, '\\') && !in_array($flag, $this->userFlags, true)) {
+                $this->userFlags[] = $flag;
+            }
+        }
+    }
+
+    /**
+     * @return string[]
+     */
+    public function userFlags(): array
+    {
+        return $this->userFlags;
     }
 
     /**

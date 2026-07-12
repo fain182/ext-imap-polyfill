@@ -50,6 +50,33 @@ final class ImapHeadersTest extends GreenmailTestCase
         return sprintf('%2d-%s-%s', (int) gmdate('j'), gmdate('M'), gmdate('Y'));
     }
 
+    public function test_headers_omits_keywords_the_server_leaves_out_of_the_flags_response(): void
+    {
+        // GreenMail never lists custom keywords in the SELECT FLAGS
+        // response, and real ext-imap renders the "{flag}" segment only for
+        // keywords in its session flag table — so keywords are invisible
+        // here whether another session stored them (OtherSession) or this
+        // very session did (KeyA/KeyB). Positive rendering is covered in
+        // tests/Unit/HeadersLineTest, since no scenario against GreenMail
+        // can produce it.
+        $folderName = self::randomFolderName(__FUNCTION__);
+        $client = $this->makeFolder($folderName);
+        $client->getFolder($folderName)->appendMessage(
+            "From: Alice Smith <alice@example.com>\r\nTo: bob@example.com\r\nSubject: First message\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nBody 1"
+        );
+        $client->openFolder($folderName);
+        $client->getConnection()->requestAndResponse('STORE', ['1', '+FLAGS.SILENT', '(OtherSession)']);
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        imap_setflag_full($connection, '1', 'KeyA KeyB');
+
+        $headers = imap_headers($connection);
+
+        $this->assertSame(' U       1)'.self::todayField().' Alice Smith          First message (6 chars)', $headers[0]);
+
+        imap_close($connection);
+    }
+
     public function test_headers_empty_mailbox_returns_empty_array(): void
     {
         $folderName = self::randomFolderName(__FUNCTION__);

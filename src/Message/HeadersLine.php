@@ -17,6 +17,7 @@ final class HeadersLine
 
     /**
      * @param string[] $flags
+     * @param string[] $registeredUserFlags
      */
     public static function build(
         string $rawHeader,
@@ -25,6 +26,7 @@ final class HeadersLine
         int $size,
         int $msgno,
         string $defaultHost,
+        array $registeredUserFlags = [],
     ): string {
         $fields = RawHeaderFields::parse($rawHeader);
         $subject = $fields['subject'] ?? '';
@@ -33,8 +35,25 @@ final class HeadersLine
             .sprintf('%4d)', $msgno)
             .self::dateField($internalDate)
             .' '.str_pad(substr(self::fromField($fields, $defaultHost), 0, self::FROM_WIDTH), self::FROM_WIDTH)
-            .' '.substr($subject, 0, self::SUBJECT_WIDTH)
+            .' '.self::userFlagsField($flags, $registeredUserFlags)
+            .substr($subject, 0, self::SUBJECT_WIDTH)
             .sprintf(' (%d chars)', $size);
+    }
+
+    /**
+     * The "{Keyword1 Keyword2} " segment between from and subject. Like
+     * c-client's user_flags bitmask rendering: only keywords the session
+     * has registered appear, in registration order — a keyword the server
+     * reports but the session never registered is dropped.
+     *
+     * @param string[] $flags
+     * @param string[] $registeredUserFlags
+     */
+    private static function userFlagsField(array $flags, array $registeredUserFlags): string
+    {
+        $custom = array_values(array_intersect($registeredUserFlags, $flags));
+
+        return $custom === [] ? '' : '{'.implode(' ', $custom).'} ';
     }
 
     /**
