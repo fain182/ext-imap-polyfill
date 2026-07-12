@@ -75,12 +75,21 @@ final class Mailbox
         return $headers[$messageNum] ?? reset($headers);
     }
 
-    public function headerInfo(int $messageNum): \stdClass|false
+    public function headerInfo(int $messageNum, int $fromLength = 0, int $subjectLength = 0): \stdClass|false
     {
         $this->connection->ensureOpen();
 
         if ($messageNum < 1) {
             throw new \ValueError('imap_headerinfo(): Argument #2 ($message_num) must be greater than 0');
+        }
+
+        // 1024 is c-client's MAILTMPLEN, the buffer php_imap.c formats into.
+        if ($fromLength < 0 || $fromLength > 1024) {
+            throw new \ValueError('imap_headerinfo(): Argument #3 ($from_length) must be between 0 and 1024');
+        }
+
+        if ($subjectLength < 0 || $subjectLength > 1024) {
+            throw new \ValueError('imap_headerinfo(): Argument #4 ($subject_length) must be between 0 and 1024');
         }
 
         try {
@@ -106,6 +115,8 @@ final class Mailbox
             $message['RFC822.SIZE'],
             $messageNum,
             $this->connection->host(),
+            $fromLength,
+            $subjectLength,
         );
     }
 

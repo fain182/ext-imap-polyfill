@@ -149,7 +149,7 @@ if (!function_exists('imap_fetchheader')) {
 if (!function_exists('imap_headerinfo')) {
     function imap_headerinfo(\IMAP\Connection $imap, int $message_num, int $from_length = 0, int $subject_length = 0): \stdClass|false
     {
-        return (new \ImapPolyfill\Session\Mailbox($imap))->headerInfo($message_num);
+        return (new \ImapPolyfill\Session\Mailbox($imap))->headerInfo($message_num, $from_length, $subject_length);
     }
 }
 

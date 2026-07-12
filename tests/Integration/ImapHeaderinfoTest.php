@@ -97,6 +97,83 @@ class ImapHeaderinfoTest extends GreenmailTestCase
         $this->assertSame('joe@example.com', $result->senderaddress);
     }
 
+    public function test_fetchfrom_is_the_personal_name_padded_to_the_requested_width(): void
+    {
+        $folderName = 'HeaderinfoBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage(
+            "Subject: A longer subject line\r\nFrom: Joe Doe <joe@example.com>\r\n\r\nBody"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $result = imap_headerinfo($connection, 1, 25, 10);
+
+        $this->assertSame('Joe Doe                  ', $result->fetchfrom);
+        $this->assertSame('A longer s', $result->fetchsubject);
+    }
+
+    public function test_fetchfrom_without_a_personal_name_uses_mailbox_at_host_and_truncates(): void
+    {
+        $folderName = 'HeaderinfoBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage(
+            "Subject: S\r\nFrom: jane@example.com\r\n\r\nBody"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $result = imap_headerinfo($connection, 1, 20, 0);
+
+        $this->assertSame('jane@example.com    ', $result->fetchfrom);
+        $this->assertFalse(property_exists($result, 'fetchsubject'));
+
+        // Truncated, not padded, when the address exceeds the width.
+        $this->assertSame('jane@', imap_headerinfo($connection, 1, 5, 0)->fetchfrom);
+    }
+
+    public function test_fetchfrom_and_fetchsubject_are_absent_when_lengths_are_omitted(): void
+    {
+        $folderName = 'HeaderinfoBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage(
+            "Subject: S\r\nFrom: jane@example.com\r\n\r\nBody"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $result = imap_headerinfo($connection, 1);
+
+        $this->assertFalse(property_exists($result, 'fetchfrom'));
+        $this->assertFalse(property_exists($result, 'fetchsubject'));
+    }
+
+    public function test_throws_value_error_for_an_out_of_range_from_length(): void
+    {
+        // The message number must be valid: ext-imap checks it (warning +
+        // false when out of range) before it validates the lengths.
+        $folderName = 'HeaderinfoValBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: S\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_headerinfo(): Argument #3 ($from_length) must be between 0 and 1024');
+        imap_headerinfo($connection, 1, -1);
+    }
+
+    public function test_throws_value_error_for_an_out_of_range_subject_length(): void
+    {
+        $folderName = 'HeaderinfoValBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: S\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_headerinfo(): Argument #4 ($subject_length) must be between 0 and 1024');
+        imap_headerinfo($connection, 1, 0, 1025);
+    }
+
     public function test_throws_value_error_for_a_non_positive_message_number(): void
     {
         $folderName = 'HeaderinfoValBox'.uniqid();

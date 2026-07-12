@@ -26,6 +26,8 @@ final class HeaderInfo
         string $size,
         int $msgno,
         string $defaultHost,
+        int $fromLength = 0,
+        int $subjectLength = 0,
     ): \stdClass {
         $result = self::buildFromHeaderOnly($rawHeader, $defaultHost);
 
@@ -43,7 +45,36 @@ final class HeaderInfo
         $result->Size = $size;
         $result->udate = strtotime($internalDate);
 
+        // Like ext-imap: only present when a length was requested and the
+        // envelope has the source field.
+        if ($fromLength !== 0 && isset($result->from)) {
+            $result->fetchfrom = self::fixedWidthFrom($result->from, $fromLength);
+        }
+        if ($subjectLength !== 0 && isset($result->subject)) {
+            $result->fetchsubject = substr($result->subject, 0, $subjectLength);
+        }
+
         return $result;
+    }
+
+    /**
+     * c-client's mail_fetchfrom(): exactly $length characters, space-padded
+     * — the first address's personal name if it has one, else
+     * "mailbox@host" with each side capped at 256 characters.
+     *
+     * @param \stdClass[] $from
+     */
+    private static function fixedWidthFrom(array $from, int $length): string
+    {
+        $address = $from[0] ?? null;
+        if ($address === null) {
+            return str_repeat(' ', $length);
+        }
+
+        $text = $address->personal
+            ?? sprintf('%s@%s', substr($address->mailbox, 0, 256), substr($address->host, 0, 256));
+
+        return str_pad(substr($text, 0, $length), $length);
     }
 
     /**

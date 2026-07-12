@@ -92,7 +92,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_get_quota` | ✅ | |
 | `imap_get_quotaroot` | ✅ | |
 | `imap_getsubscribed` | ✅ |  |
-| `imap_headerinfo` | ✅ | `fetchfrom`/`fetchsubject` (nonzero `$from_length`/`$subject_length`) not implemented |
+| `imap_headerinfo` | ✅ | |
 | `imap_headers` | ✅ | custom user-defined flags (the `{flag}` segment) are never populated, since this polyfill doesn't track them |
 | `imap_is_open` | ✅ | |
 | `imap_last_error` | ✅ | |
