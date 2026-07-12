@@ -31,7 +31,7 @@
 | `imap_list` | 25 | ✅ |
 | `imap_mailboxmsginfo` | 23 | ✅ |
 | `imap_uid` | 22 | ✅ |
-| `imap_mail` | 21 | ❌ |
+| `imap_mail` | 21 | ✅ |
 | `imap_rfc822_parse_headers` | 17 | ✅ |
 | `imap_getmailboxes` | 17 | ✅ |
 | `imap_msgno` | 16 | ✅ |
@@ -40,7 +40,7 @@
 | `imap_clearflag_full` | 14 | ✅ |
 | `imap_bodystruct` | 11 | ✅ |
 | `imap_timeout` | 10 | ✅ |
-| `imap_mail_compose` | 10 | ❌ |
+| `imap_mail_compose` | 10 | ✅ |
 | `imap_listmailbox` | 10 | ✅ |
 | `imap_status` | 8 | ✅ |
 | `imap_reopen` | 8 | ✅ |
@@ -50,7 +50,7 @@
 | `imap_createmailbox` | 6 | ✅ |
 | `imap_rfc822_parse_adrlist` | 4 | ✅ |
 | `imap_alerts` | 4 | ✅ |
-| `imap_get_quotaroot` | 3 | ❌ |
+| `imap_get_quotaroot` | 3 | ✅ |
 | `imap_utf7_encode` | 2 | ✅ |
 | `imap_ping` | 2 | ✅ |
 | `imap_fetchtext` | 2 | ✅ |
@@ -62,7 +62,7 @@
 | `imap_unsubscribe` | 0 | ✅ |
 | `imap_undelete` | 0 | ✅ |
 | `imap_subscribe` | 0 | ✅ |
-| `imap_set_quota` | 0 | ❌ |
+| `imap_set_quota` | 0 | ✅ |
 | `imap_setacl` | 0 | ❌ |
 | `imap_scanmailbox` | 0 | ❌ |
 | `imap_scan` | 0 | ❌ |
@@ -74,6 +74,6 @@
 | `imap_listscan` | 0 | ❌ |
 | `imap_is_open` | 0 | ✅ |
 | `imap_getsubscribed` | 0 | ✅ |
-| `imap_get_quota` | 0 | ❌ |
+| `imap_get_quota` | 0 | ✅ |
 | `imap_getacl` | 0 | ❌ |
 | `imap_create` | 0 | ✅ |
