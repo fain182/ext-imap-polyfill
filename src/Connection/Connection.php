@@ -55,12 +55,28 @@ final class Connection
     public function __construct(
         ConnectionBackend $backend,
         string $folder,
-        public readonly string $mailbox,
+        private readonly string $mailboxPrefix,
+        private readonly string $user,
         bool $readOnly = false,
     ) {
         $this->backend = $backend;
         $this->folder = $folder;
         $this->readOnly = $readOnly;
+    }
+
+    /**
+     * The c-client-normalized spec string reported by imap_check()/
+     * imap_mailboxmsginfo(): the connection prefix (see
+     * MailboxSpec::normalizedPrefixBase) plus the state-dependent pieces —
+     * read-only marker, user, and the *currently selected* folder, so it
+     * tracks imap_reopen() like stream->mailbox does.
+     */
+    public function mailboxString(): string
+    {
+        return $this->mailboxPrefix
+            .($this->readOnly ? '/readonly' : '')
+            .'/user="'.$this->user.'"}'
+            .$this->folder;
     }
 
     /**

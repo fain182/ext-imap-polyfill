@@ -54,7 +54,15 @@ final class Session
         // c-client treats a /readonly flag in the spec the same as passing
         // OP_READONLY (mail_valid_net_parse sets the stream read-only bit).
         $readOnly = (bool) ($flags & OP_READONLY) || $spec->hasFlag('readonly');
-        $connection = new \IMAP\Connection($backend, $spec->folder, $mailbox, $readOnly);
+        $secure = $spec->hasFlag('secure') || (bool) ($flags & OP_SECURE);
+        $service = $spec->hasFlag('pop3') ? 'pop3' : 'imap';
+        $connection = new \IMAP\Connection(
+            $backend,
+            $spec->folder,
+            $spec->normalizedPrefixBase($service, $secure),
+            $user,
+            $readOnly,
+        );
         $connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
 
         try {
@@ -214,7 +222,7 @@ final class Session
         $result = new \stdClass();
         $result->Date = date('r');
         $result->Driver = $this->connection->driverName();
-        $result->Mailbox = $this->connection->mailbox;
+        $result->Mailbox = $this->connection->mailboxString();
         $result->Nmsgs = $status['exists'] ?? 0;
         $result->Recent = $status['recent'] ?? 0;
 
@@ -268,7 +276,7 @@ final class Session
         $result->Size = $size;
         $result->Date = date('r');
         $result->Driver = $this->connection->driverName();
-        $result->Mailbox = $this->connection->mailbox;
+        $result->Mailbox = $this->connection->mailboxString();
         $result->Nmsgs = $exists;
         $result->Recent = $status['recent'] ?? 0;
 

@@ -27,6 +27,31 @@ final class MailboxSpec
     }
 
     /**
+     * The c-client-normalized "{host:port/service[/flags]" prefix that
+     * imap4r1.c/pop3.c rebuild for stream->mailbox (surfaced by
+     * imap_check()/imap_mailboxmsginfo()): always the port and the service
+     * name, then the connection flags in c-client's fixed order. Stops
+     * after "/secure" — the read-only marker and the /user="" suffix depend
+     * on connection state, so IMAP\Connection appends them. The host stays
+     * as given: c-client canonicalizes it via DNS, which this polyfill
+     * deliberately doesn't (see README).
+     */
+    public function normalizedPrefixBase(string $service, bool $secure): string
+    {
+        $result = '{'.$this->host.':'.$this->port.'/'.$service;
+        foreach (['tls', 'tls-sslv23', 'notls', 'ssl', 'novalidate-cert', 'loser'] as $flag) {
+            if ($this->hasFlag($flag)) {
+                $result .= '/'.$flag;
+            }
+        }
+        if ($secure) {
+            $result .= '/secure';
+        }
+
+        return $result;
+    }
+
+    /**
      * @throws \ValueError when the string is not a "{host...}folder" spec
      */
     public static function parse(string $mailbox): self

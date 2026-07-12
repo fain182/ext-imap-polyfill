@@ -71,7 +71,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_binary` | ✅ | |
 | `imap_body` | ✅ |  |
 | `imap_bodystruct` | ✅ | |
-| `imap_check` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
+| `imap_check` | ✅ | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
 | `imap_clearflag_full` | ✅ | |
 | `imap_close` | ✅ | |
 | `imap_create` | ✅ | |
@@ -102,7 +102,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_listsubscribed` (alias of `imap_lsub`) | ✅ | |
 | `imap_lsub` | ✅ |  |
 | `imap_mail` | ✅ | delivery always goes through the `sendmail_path` pipe (false when that ini is empty) — the real extension's Windows build spoke SMTP via the `SMTP`/`smtp_port` ini settings instead |
-| `imap_mailboxmsginfo` | ✅ | `Mailbox` property echoes the input spec rather than the c-client-normalized form |
+| `imap_mailboxmsginfo` | ✅ | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
 | `imap_mail_compose` | ✅ | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax) |
 | `imap_mail_copy` | ✅ |  |
 | `imap_mail_move` | ✅ | |
