@@ -37,7 +37,7 @@ Strict layering; each layer only talks to the next:
 
 ## Error-handling contract (do not "fix" it)
 
-Wrappers replicate ext-imap, not modern taste: catch `\Throwable`, push the message to `ErrorStack`, and return whatever the real function returns on failure — which varies deliberately (`false` for most fetches, `[]` for `imap_fetch_overview`, `true` always for `imap_setflag_full`/`imap_expunge`/`imap_delete`, `0` for `imap_msgno`). Invalid flag bitmasks throw `ValueError` with messages copied from `php_imap.c`'s `zend_argument_value_error` calls. Any call on a closed connection throws `ValueError` via `Connection::ensureOpen()` (`imap_is_open` is the one exception). Divergences from the real extension are documented in comments at the point of divergence and in the README notes column.
+Wrappers replicate ext-imap, not modern taste: catch `\Throwable`, push the message to `ErrorStack`, and return whatever the real function returns on failure — which varies deliberately (`false` for most fetches, `[]` for `imap_fetch_overview`, `true` always for `imap_setflag_full`/`imap_expunge`/`imap_delete`, `0` for `imap_msgno`). Invalid flag bitmasks throw `ValueError` with messages copied from `php_imap.c`'s `zend_argument_value_error` calls. Any call on a closed connection throws `ValueError` via `Connection::ensureOpen()` (`imap_is_open` is the one exception). Divergences from the real extension are documented in comments at the point of divergence and in the README's Coverage divergences table.
 
 ## Testing philosophy
 
@@ -50,4 +50,4 @@ Integration tests are **characterization tests of the real extension** and must 
 - Tests reading the global error state use the `ResetsErrorStack` trait; "pristine stack" assertions must skip under real ext-imap (no reset hook exists).
 - One test class per function: `tests/Integration/Imap<Function>Test.php`.
 
-When implementing a new `imap_*` function, don't work from the manual alone: check `PHP_FUNCTION(...)` in `php_imap.c` (validation, exact ValueError messages, return-value quirks) and c-client sources for wire behavior (e.g. `CP_MOVE` = COPY + `\Deleted`, no expunge — c-client predates the MOVE extension). Constant values come from c-client's `mail.h`. Then update the README coverage table (✅, note any deliberate divergence, bump the count).
+When implementing a new `imap_*` function, don't work from the manual alone: check `PHP_FUNCTION(...)` in `php_imap.c` (validation, exact ValueError messages, return-value quirks) and c-client sources for wire behavior (e.g. `CP_MOVE` = COPY + `\Deleted`, no expunge — c-client predates the MOVE extension). Constant values come from c-client's `mail.h`. Then update the README Coverage section: add the function to the collapsed `<details>` list of implemented functions, add a row to the divergences table only if behavior deliberately diverges, and bump the count (in the prose, in the `<summary>` line, and in the "missing" sentence).

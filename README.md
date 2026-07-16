@@ -60,89 +60,99 @@ Any other flag (`/imap`, `/norsh`, `/secure`, `/debug`, …) is accepted and ign
 
 This is not a reimplementation of all `imap_*` functions — **70 of 75 (93%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing five are ACL management (`imap_getacl`, `imap_setacl`) and scanning mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`). Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
 
-Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Known, deliberate divergences are called out in the last column; an empty cell means the function is expected to match exactly.
+Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Any function not listed in the table below is expected to match the real extension exactly; these are the known, deliberate divergences:
 
-| Function | Implemented | Divergences |
-|---|---|---|
-| `imap_8bit` | ✅ | |
-| `imap_alerts` | ✅ | never populated — this polyfill doesn't surface server `* OK [ALERT]` responses |
-| `imap_append` | ✅ | |
-| `imap_base64` | ✅ | |
-| `imap_binary` | ✅ | |
-| `imap_body` | ✅ |  |
-| `imap_bodystruct` | ✅ | |
-| `imap_check` | ✅ | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
-| `imap_clearflag_full` | ✅ | |
-| `imap_close` | ✅ | |
-| `imap_create` | ✅ | |
-| `imap_createmailbox` | ✅ | |
-| `imap_delete` | ✅ | |
-| `imap_deletemailbox` | ✅ | |
-| `imap_errors` | ✅ | |
-| `imap_expunge` | ✅ | |
-| `imap_fetchbody` | ✅ | |
-| `imap_fetchheader` | ✅ | |
-| `imap_fetchmime` | ✅ | |
-| `imap_fetch_overview` | ✅ | |
-| `imap_fetchstructure` | ✅ | |
-| `imap_fetchtext` (alias of `imap_body`) | ✅ | |
-| `imap_gc` | ✅ | |
-| `imap_getacl` | ❌ | |
-| `imap_getmailboxes` | ✅ | |
-| `imap_get_quota` | ✅ | |
-| `imap_get_quotaroot` | ✅ | |
-| `imap_getsubscribed` | ✅ |  |
-| `imap_headerinfo` | ✅ | |
-| `imap_headers` | ✅ | |
-| `imap_is_open` | ✅ | |
-| `imap_last_error` | ✅ | |
-| `imap_list` | ✅ | |
-| `imap_listmailbox` (alias of `imap_list`) | ✅ | |
-| `imap_listscan` | ❌ | |
-| `imap_listsubscribed` (alias of `imap_lsub`) | ✅ | |
-| `imap_lsub` | ✅ |  |
-| `imap_mail` | ✅ | delivery always goes through the `sendmail_path` pipe (false when that ini is empty) — the real extension's Windows build spoke SMTP via the `SMTP`/`smtp_port` ini settings instead |
-| `imap_mailboxmsginfo` | ✅ | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
-| `imap_mail_compose` | ✅ | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax) |
-| `imap_mail_copy` | ✅ |  |
-| `imap_mail_move` | ✅ | |
-| `imap_mime_header_decode` | ✅ | |
-| `imap_msgno` | ✅ | |
-| `imap_mutf7_to_utf8` | ✅ | |
-| `imap_num_msg` | ✅ | |
-| `imap_num_recent` | ✅ | |
-| `imap_open` | ✅ | of the `$flags` bitmask, only `OP_READONLY` and `CL_EXPUNGE` change behavior — the other `OP_*` flags are validated, then ignored; the `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored |
-| `imap_ping` | ✅ |  |
-| `imap_qprint` | ✅ | |
-| `imap_rename` | ✅ | |
-| `imap_renamemailbox` | ✅ | |
-| `imap_reopen` | ✅ | only switches folders on the same connection — can't reconnect to a different host, since credentials aren't retained after `imap_open` |
-| `imap_rfc822_parse_adrlist` | ✅ | |
-| `imap_rfc822_parse_headers` | ✅ | |
-| `imap_rfc822_write_address` | ✅ | |
-| `imap_savebody` | ✅ | |
-| `imap_scan` | ❌ | |
-| `imap_scanmailbox` | ❌ | |
-| `imap_search` | ✅ | |
-| `imap_setacl` | ❌ | |
-| `imap_setflag_full` | ✅ | |
-| `imap_set_quota` | ✅ | |
-| `imap_sort` | ✅ | always sorts client-side (a port of c-client's algorithms, including RFC 5256 base subjects for `SORTSUBJECT`); real ext-imap hands sorting to the server when it advertises the `SORT` capability, so results can differ on servers whose `SORT` deviates from RFC 5256 |
-| `imap_status` | ✅ |  |
-| `imap_subscribe` | ✅ | |
-| `imap_thread` | ✅ | always threads client-side (a port of c-client's REFERENCES fallback); real ext-imap hands threading to the server when it advertises `THREAD=REFERENCES`, so results can differ on servers whose THREAD deviates from RFC 5256 |
-| `imap_timeout` | ✅ | |
-| `imap_uid` | ✅ | |
-| `imap_undelete` | ✅ | |
-| `imap_unsubscribe` | ✅ | |
-| `imap_utf7_decode` | ✅ | |
-| `imap_utf7_encode` | ✅ | |
-| `imap_utf8` | ✅ | |
-| `imap_utf8_to_mutf7` | ✅ | |
+| Function | Divergence |
+|---|---|
+| `imap_alerts` | never populated — this polyfill doesn't surface server `* OK [ALERT]` responses |
+| `imap_check` | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
+| `imap_mail` | delivery always goes through the `sendmail_path` pipe (false when that ini is empty) — the real extension's Windows build spoke SMTP via the `SMTP`/`smtp_port` ini settings instead |
+| `imap_mailboxmsginfo` | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
+| `imap_mail_compose` | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax) |
+| `imap_open` | of the `$flags` bitmask, only `OP_READONLY` and `CL_EXPUNGE` change behavior — the other `OP_*` flags are validated, then ignored; the `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored |
+| `imap_reopen` | only switches folders on the same connection — can't reconnect to a different host, since credentials aren't retained after `imap_open` |
+| `imap_sort` | always sorts client-side (a port of c-client's algorithms, including RFC 5256 base subjects for `SORTSUBJECT`); real ext-imap hands sorting to the server when it advertises the `SORT` capability, so results can differ on servers whose `SORT` deviates from RFC 5256 |
+| `imap_thread` | always threads client-side (a port of c-client's REFERENCES fallback); real ext-imap hands threading to the server when it advertises `THREAD=REFERENCES`, so results can differ on servers whose THREAD deviates from RFC 5256 |
+
+<details>
+<summary>Full list of the 70 implemented functions</summary>
+
+`imap_8bit`,
+`imap_alerts`,
+`imap_append`,
+`imap_base64`,
+`imap_binary`,
+`imap_body`,
+`imap_bodystruct`,
+`imap_check`,
+`imap_clearflag_full`,
+`imap_close`,
+`imap_create`,
+`imap_createmailbox`,
+`imap_delete`,
+`imap_deletemailbox`,
+`imap_errors`,
+`imap_expunge`,
+`imap_fetchbody`,
+`imap_fetchheader`,
+`imap_fetchmime`,
+`imap_fetch_overview`,
+`imap_fetchstructure`,
+`imap_fetchtext` (alias of `imap_body`),
+`imap_gc`,
+`imap_getmailboxes`,
+`imap_get_quota`,
+`imap_get_quotaroot`,
+`imap_getsubscribed`,
+`imap_headerinfo`,
+`imap_headers`,
+`imap_is_open`,
+`imap_last_error`,
+`imap_list`,
+`imap_listmailbox` (alias of `imap_list`),
+`imap_listsubscribed` (alias of `imap_lsub`),
+`imap_lsub`,
+`imap_mail`,
+`imap_mailboxmsginfo`,
+`imap_mail_compose`,
+`imap_mail_copy`,
+`imap_mail_move`,
+`imap_mime_header_decode`,
+`imap_msgno`,
+`imap_mutf7_to_utf8`,
+`imap_num_msg`,
+`imap_num_recent`,
+`imap_open`,
+`imap_ping`,
+`imap_qprint`,
+`imap_rename`,
+`imap_renamemailbox`,
+`imap_reopen`,
+`imap_rfc822_parse_adrlist`,
+`imap_rfc822_parse_headers`,
+`imap_rfc822_write_address`,
+`imap_savebody`,
+`imap_search`,
+`imap_setflag_full`,
+`imap_set_quota`,
+`imap_sort`,
+`imap_status`,
+`imap_subscribe`,
+`imap_thread`,
+`imap_timeout`,
+`imap_uid`,
+`imap_undelete`,
+`imap_unsubscribe`,
+`imap_utf7_decode`,
+`imap_utf7_encode`,
+`imap_utf8`,
+`imap_utf8_to_mutf7`
+
+</details>
 
 ## Limitations
 
-Cross-cutting divergences from the real extension (per-function ones are in the coverage table's Divergences column):
+Cross-cutting divergences from the real extension (per-function ones are in the [Coverage](#coverage) divergences table):
 
 - **No NNTP**: `{host/nntp}` is parsed but ignored — the connection silently falls back to IMAP instead of talking NNTP.
 - **POP3** support mirrors real ext-imap's own treatment of POP3: a single mailbox always named `INBOX`, `SEARCH`/`STATUS`/`BODYSTRUCTURE` synthesized client-side, flags lasting only for the lifetime of the connection, and copy/move/append/mailbox-management failing outright. The one divergence: `imap_search()`'s criteria grammar over POP3 is a practical subset (`ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT` substring match, `SINCE`/`BEFORE`/`ON`), not the full RFC3501 grammar.
