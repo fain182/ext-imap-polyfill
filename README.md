@@ -54,7 +54,7 @@ Any other flag (`/imap`, `/norsh`, `/secure`, `/debug`, …) is accepted and ign
 
 ## Coverage
 
-This is not a reimplementation of all `imap_*` functions — **70 of 75 (93%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing five are ACL management (`imap_getacl`, `imap_setacl`) and scanning mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`). Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — **72 of 75 (96%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing three all scan mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`): SCAN is an RFC 2060-era command, dropped from IMAP4rev1, that in practice only c-client's own UW-IMAP server ever implemented, so there is nothing left to test them against. Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
 
 Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Any function not listed in the table below is expected to match the real extension exactly; these are the known, deliberate divergences:
 
@@ -66,10 +66,9 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_mail_compose` | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax) |
 | `imap_open` | of the `$flags` bitmask, only `OP_READONLY` and `CL_EXPUNGE` change behavior — the other `OP_*` flags are validated, then ignored; the `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored |
 | `imap_reopen` | only switches folders on the same connection — can't reconnect to a different host, since credentials aren't retained after `imap_open` |
-| `imap_thread` | always threads client-side (a port of c-client's REFERENCES fallback); real ext-imap hands threading to the server when it advertises `THREAD=REFERENCES`, so results can differ on servers whose THREAD deviates from RFC 5256 |
 
 <details>
-<summary>Full list of the 70 implemented functions</summary>
+<summary>Full list of the 72 implemented functions</summary>
 
 `imap_8bit`,
 `imap_alerts`,
@@ -94,6 +93,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 `imap_fetchstructure`,
 `imap_fetchtext` (alias of `imap_body`),
 `imap_gc`,
+`imap_getacl`,
 `imap_getmailboxes`,
 `imap_get_quota`,
 `imap_get_quotaroot`,
@@ -127,6 +127,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 `imap_rfc822_write_address`,
 `imap_savebody`,
 `imap_search`,
+`imap_setacl`,
 `imap_setflag_full`,
 `imap_set_quota`,
 `imap_sort`,
@@ -157,11 +158,11 @@ Cross-cutting divergences from the real extension (per-function ones are in the 
 ```bash
 make install          # composer install
 make test-unit        # pure-PHP tests, no server needed
-make test-integration  # spins up a disposable Greenmail IMAP+POP3 server, runs the full suite against it
+make test-integration  # spins up disposable Greenmail (IMAP+POP3) and Dovecot servers, runs the full suite against them
 make test              # both of the above
 ```
 
-Docker or Podman is required for `test-integration` (a `docker-compose.yml` is included for the equivalent setup with compose tooling).
+Docker or Podman is required for `test-integration` (a `docker-compose.yml` is included for the equivalent setup with compose tooling). Almost every test runs against Greenmail; a second Dovecot fixture covers the two commands Greenmail has no support for, THREAD and ACL. Tests needing it skip themselves when it isn't running.
 
 ### Verifying against real ext-imap
 

@@ -115,6 +115,46 @@ final class Protocol
     }
 
     /**
+     * Server-side threading, issued the way c-client's imap_thread_work()
+     * does: "UID THREAD" or "THREAD", the algorithm name as a bare atom, the
+     * caller's charset or US-ASCII, and the search program.
+     *
+     * Returns the nested id groups of the untagged THREAD response as plain
+     * arrays — "(1)(2 3 (4)(5))" comes back as [[1], [2, 3, [4], [5]]] —
+     * leaving the tree shaping to Message\ThreadBuilder. Null when the
+     * server rejects the command, c-client's cue to thread locally.
+     *
+     * @param string[] $searchTokens
+     *
+     * @return array<int, mixed>|null
+     */
+    public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array
+    {
+        try {
+            $responses = $this->connection->sendAndCollect(
+                $uidMode === UidMode::UID ? 'UID THREAD' : 'THREAD',
+                [$algorithm, self::astring($charset), ...$searchTokens],
+            );
+        } catch (ImapCommandException $e) {
+            if ((string) ($e->response()->tokenAt(1) ?? '') !== 'BAD') {
+                throw $e;
+            }
+
+            return null;
+        }
+
+        foreach ($responses as $response) {
+            if ((string) $response->type() !== 'THREAD') {
+                continue;
+            }
+
+            return array_map(self::value(...), $response->tokensAfter(2));
+        }
+
+        return [];
+    }
+
+    /**
      * @param int[] $ids
      *
      * @return array<int, string>
@@ -290,6 +330,42 @@ final class Protocol
         }
 
         return $status;
+    }
+
+    /**
+     * RFC 4314 GETACL. The mailbox goes out as an astring, verbatim: like
+     * COPY and unlike APPEND/STATUS, c-client hands it to the wire without
+     * parsing a "{host}" prefix off it.
+     *
+     * @return array<string, string> identifier => rights
+     */
+    public function getAcl(string $mailbox): array
+    {
+        $responses = $this->connection->sendAndCollect('GETACL', [self::astring($mailbox)]);
+
+        $acl = [];
+        foreach ($responses as $response) {
+            if ((string) $response->type() !== 'ACL') {
+                continue;
+            }
+
+            // "* ACL <mailbox> <identifier> <rights> [<identifier> <rights>...]"
+            $tokens = $response->tokensAfter(3);
+            for ($i = 0; $i + 2 <= count($tokens); $i += 2) {
+                $acl[(string) self::value($tokens[$i])] = (string) self::value($tokens[$i + 1]);
+            }
+        }
+
+        return $acl;
+    }
+
+    public function setAcl(string $mailbox, string $id, string $rights): void
+    {
+        $this->connection->sendAndCollect('SETACL', [
+            self::astring($mailbox),
+            self::astring($id),
+            self::astring($rights),
+        ]);
     }
 
     public function hasCapability(string $capability): bool

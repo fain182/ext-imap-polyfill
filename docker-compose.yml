@@ -11,6 +11,17 @@ services:
         -Dgreenmail.hostname=0.0.0.0
         -Dgreenmail.users=testuser:testpass@localhost
 
+  # Second fixture, for the THREAD and ACL commands Greenmail has no support
+  # for. Its unprivileged IMAP listener is on 31143, not 143.
+  dovecot:
+    image: docker.io/dovecot/dovecot:latest
+    ports:
+      - "13144:31143"
+    environment:
+      USER_PASSWORD: testpass
+    volumes:
+      - ./tests/fixtures/dovecot.conf:/etc/dovecot/conf.d/10-test.conf:ro
+
   # Runs tests/Integration against the real ext-imap extension (PHP 8.3) instead
   # of this polyfill, to check the test fixtures hold true against the genuine
   # extension too. `make parity` runs the equivalent without compose tooling.
@@ -20,10 +31,13 @@ services:
       dockerfile: Dockerfile.parity
     depends_on:
       - greenmail
+      - dovecot
     environment:
       IMAP_POLYFILL_TEST_HOST: greenmail
       IMAP_POLYFILL_TEST_PORT: 3143
       IMAP_POLYFILL_TEST_POP3_PORT: 3110
+      IMAP_POLYFILL_DOVECOT_HOST: dovecot
+      IMAP_POLYFILL_DOVECOT_PORT: 31143
     volumes:
       - .:/app
     command: sh -c "composer install --quiet && vendor/bin/phpunit --testsuite integration"

@@ -93,6 +93,11 @@ final class ImapBackend implements ConnectionBackend
         return $this->protocol->sort($program, $charset, $searchTokens, $uidMode);
     }
 
+    public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array
+    {
+        return $this->protocol->thread($algorithm, $charset, $searchTokens, $uidMode);
+    }
+
     public function headers(array $ids, string $type, int $uidMode): array
     {
         return $this->protocol->headers($ids, $type, $uidMode);
@@ -143,6 +148,19 @@ final class ImapBackend implements ConnectionBackend
         return $this->protocol->folderStatus($folder, $items);
     }
 
+    public function getAcl(string $mailbox): array
+    {
+        $this->ensureAclCapability();
+
+        return $this->protocol->getAcl($mailbox);
+    }
+
+    public function setAcl(string $mailbox, string $id, string $rights): void
+    {
+        $this->ensureAclCapability();
+        $this->protocol->setAcl($mailbox, $id, $rights);
+    }
+
     public function getQuota(string $quotaRoot): array
     {
         $this->ensureQuotaCapability();
@@ -161,6 +179,17 @@ final class ImapBackend implements ConnectionBackend
     {
         $this->ensureQuotaCapability();
         $this->protocol->setQuota($quotaRoot, $mailboxSize);
+    }
+
+    /**
+     * c-client's LEVELACL gate (imap_acl_work), the ACL twin of the quota
+     * one below, down to the message it logs.
+     */
+    private function ensureAclCapability(): void
+    {
+        if (!$this->hasCapability('ACL')) {
+            throw new \RuntimeException('ACL not available on this IMAP server');
+        }
     }
 
     /**

@@ -67,6 +67,17 @@ interface ConnectionBackend
     public function sort(string $program, string $charset, array $searchTokens, int $uidMode): ?array;
 
     /**
+     * Server-side threading. Returns the nested id groups of the THREAD
+     * response, or null when the server has no usable threader — c-client's
+     * cue to thread locally instead.
+     *
+     * @param string[] $searchTokens
+     *
+     * @return array<int, mixed>|null
+     */
+    public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array;
+
+    /**
      * @param int[] $ids
      *
      * @return array<int, string>
@@ -116,6 +127,13 @@ interface ConnectionBackend
      * @return array<string, int>
      */
     public function folderStatus(string $folder, array $items): array;
+
+    /**
+     * @return array<string, string> identifier => rights
+     */
+    public function getAcl(string $mailbox): array;
+
+    public function setAcl(string $mailbox, string $id, string $rights): void;
 
     /**
      * @return array<int, array{name: string, usage: int, limit: int}>

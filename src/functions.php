@@ -526,6 +526,31 @@ if (!function_exists('imap_mail')) {
     }
 }
 
+if (!function_exists('imap_getacl')) {
+    /**
+     * @return array<string, string>|false
+     */
+    function imap_getacl(\IMAP\Connection $imap, string $mailbox): array|false
+    {
+        $acl = (new \ImapPolyfill\Session\MailboxHierarchy($imap))->getAcl($mailbox);
+
+        if ($acl === false) {
+            // php_imap.c raises this one through php_error() rather than
+            // php_error_docref(), so it carries no "imap_getacl(): " prefix.
+            trigger_error('c-client imap_getacl failed', E_USER_WARNING);
+        }
+
+        return $acl;
+    }
+}
+
+if (!function_exists('imap_setacl')) {
+    function imap_setacl(\IMAP\Connection $imap, string $mailbox, string $id, string $rights): bool
+    {
+        return (new \ImapPolyfill\Session\MailboxHierarchy($imap))->setAcl($mailbox, $id, $rights);
+    }
+}
+
 if (!function_exists('imap_get_quota')) {
     /**
      * @return array<string, int|array<string, int>>|false

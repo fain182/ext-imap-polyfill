@@ -155,6 +155,14 @@ final class Pop3Backend implements ConnectionBackend
         return null;
     }
 
+    /**
+     * Likewise no THREAD; imap_thread() threads locally over POP3.
+     */
+    public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array
+    {
+        return null;
+    }
+
     public function headers(array $ids, string $type, int $uidMode): array
     {
         $result = [];
@@ -285,6 +293,16 @@ final class Pop3Backend implements ConnectionBackend
             'uidnext' => $this->exists + 1,
             'uidvalidity' => 1,
         ];
+    }
+
+    public function getAcl(string $mailbox): array
+    {
+        throw new \RuntimeException('ACL not available on this IMAP server');
+    }
+
+    public function setAcl(string $mailbox, string $id, string $rights): void
+    {
+        throw new \RuntimeException('ACL not available on this IMAP server');
     }
 
     public function getQuota(string $quotaRoot): array
