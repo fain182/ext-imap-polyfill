@@ -7,9 +7,9 @@
 
 A drop-in polyfill for the `imap_*` functions removed from PHP core in 8.4.
 
-PHP 8.4 moved `ext-imap` out of core and onto PECL ([RFC](https://wiki.php.net/rfc/unbundle_imap_pspell_oci8)). The C library it wraps (c-client) has been unmaintained since 2007 and is disappearing from Linux distributions, so installing the PECL package is getting harder every release. Codebases built on the `imap_*` functions are usually rewritten against an OOP library like [webklex/php-imap](https://github.com/Webklex/php-imap) instead — a real migration effort, not a version bump.
+PHP 8.4 moved `ext-imap` out of core and onto PECL ([RFC](https://wiki.php.net/rfc/unbundle_imap_pspell_oci8)). The C library it wraps (c-client) has been unmaintained since 2007 and is disappearing from Linux distributions, so installing the PECL package is getting harder every release. Codebases built on the `imap_*` functions are usually rewritten against an OOP library like [ImapEngine](https://github.com/DirectoryTree/ImapEngine) instead — a real migration effort, not a version bump.
 
-This package lets you skip that rewrite for the common cases: it defines the same global `imap_*` functions, backed by webklex/php-imap for IMAP and a small raw client for POP3, and only activates if `ext-imap` isn't already loaded. **IMAP and POP3** — unlike the real extension, it doesn't speak NNTP.
+This package lets you skip that rewrite for the common cases: it defines the same global `imap_*` functions, backed by [directorytree/imapengine](https://github.com/DirectoryTree/ImapEngine) for IMAP and a small raw client for POP3, and only activates if `ext-imap` isn't already loaded. **IMAP and POP3** — unlike the real extension, it doesn't speak NNTP.
 
 ## Install
 
@@ -19,11 +19,7 @@ composer require fain182/ext-imap-polyfill
 
 No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the polyfill is a no-op — safe to add before you upgrade, not just after.
 
-Requires PHP 8.1+. The webklex/php-imap dependency declares a handful of extension requirements (`ext-mbstring`, `ext-iconv`, `ext-openssl`, `ext-libxml`, `ext-json`, `ext-fileinfo`, `ext-zip`); all but `ext-zip` are enabled in virtually every PHP build. `ext-zip` is only used by webklex code paths this polyfill never calls, so if you can't (or don't want to) install it:
-
-```bash
-composer require fain182/ext-imap-polyfill --ignore-platform-req=ext-zip
-```
+Requires PHP 8.1+ and no PHP extension beyond what a default build ships.
 
 The package declares `provide: ext-imap`, so other dependencies that require `ext-imap` install cleanly alongside it.
 

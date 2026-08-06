@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A drop-in polyfill for PHP's `imap_*` functions (removed from core in 8.4), backed by webklex/php-imap. `bootstrap.php` is a no-op when the real `ext-imap` is loaded; otherwise it defines the same global constants and functions. Fidelity to the real extension — down to error-path return values, `ValueError` messages, and stdClass property names/casing — is the whole point of the project.
+A drop-in polyfill for PHP's `imap_*` functions (removed from core in 8.4), backed by directorytree/imapengine. `bootstrap.php` is a no-op when the real `ext-imap` is loaded; otherwise it defines the same global constants and functions. Fidelity to the real extension — down to error-path return values, `ValueError` messages, and stdClass property names/casing — is the whole point of the project.
 
 ## Commands
 
 ```bash
-make install           # composer install --ignore-platform-reqs (webklex hard-requires ext-zip for code paths this polyfill never calls)
+make install           # composer install
 make test-unit         # pure-PHP tests, no server
 make test-integration  # spins up disposable Greenmail (podman/docker), runs suite, tears down
 make test              # both
@@ -29,8 +29,8 @@ Strict layering; each layer only talks to the next:
   - `Session` — connection lifecycle: `open()` (static factory, the body of `imap_open`), close, reopen, ping, check, cached counters.
   - `Mailbox` — operations on messages in the currently selected folder (search, fetch*, flags, copy/move, append).
   - `MailboxHierarchy` — folder-level operations, nothing selected (LIST/LSUB, STATUS, create/delete/rename/subscribe).
-- **`src/Connection/Connection.php`** (`namespace IMAP`) — polyfill of the opaque native `IMAP\Connection` class. Sole owner of the webklex `Client`; exposes named wire operations. Knows nothing about imap_* contracts, ErrorStack, or return-value conventions. Also holds cached message counts (mirrors c-client's `stream->nmsgs`: `imap_num_msg` is a cached read that survives a dead connection).
-- **`src/Connection/Protocol.php`** — Gateway to webklex's raw `ImapProtocol` for operations the high-level client API lacks (UID↔msgno, raw FETCH/SEARCH/STORE, LSUB, STATUS); unwraps the `validatedData()` envelope.
+- **`src/Connection/Connection.php`** (`namespace IMAP`) — polyfill of the opaque native `IMAP\Connection` class. Sole owner of the backend; exposes named wire operations. Knows nothing about imap_* contracts, ErrorStack, or return-value conventions. Also holds cached message counts (mirrors c-client's `stream->nmsgs`: `imap_num_msg` is a cached read that survives a dead connection).
+- **`src/Connection/Protocol.php`** — Gateway to the raw IMAP wire: builds every command the polyfill needs and flattens ImapEngine's token trees into plain arrays (NIL as null, numbers as ints, lists as arrays). Commands ImapEngine has no method for — LSUB, msgno-space SEARCH/FETCH/STORE/COPY, SETQUOTA — go out through `Imap\ImapEngineConnection`, a subclass that exposes ImapEngine's otherwise protected send/collect cycle.
 - **Value objects**: `MailboxSpec` (parses `{host:port/flags}folder` for open/reopen; empty folder defaults to INBOX; throws `ValueError` on malformed input) vs `MailboxReference` (reference/folder arguments of list/append/status: `bareReference` + `displayPrefix`). Don't conflate them.
 - **`src/Message/*`** — builders producing the exact stdClass shapes of the real extension (property names, casing, conditional presence).
 - **`src/Support/ErrorStack.php`** — process-global static state, deliberately: the real extension has one global error stack (`imap_errors()` takes no connection). `imap_errors()` drains it *and* clears the last error, because in `php_imap.c` both functions read the same stack.
