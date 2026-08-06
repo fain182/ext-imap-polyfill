@@ -67,7 +67,6 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_mail_compose` | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax) |
 | `imap_open` | of the `$flags` bitmask, only `OP_READONLY` and `CL_EXPUNGE` change behavior — the other `OP_*` flags are validated, then ignored; the `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored |
 | `imap_reopen` | only switches folders on the same connection — can't reconnect to a different host, since credentials aren't retained after `imap_open` |
-| `imap_sort` | always sorts client-side (a port of c-client's algorithms, including RFC 5256 base subjects for `SORTSUBJECT`); real ext-imap hands sorting to the server when it advertises the `SORT` capability, so results can differ on servers whose `SORT` deviates from RFC 5256 |
 | `imap_thread` | always threads client-side (a port of c-client's REFERENCES fallback); real ext-imap hands threading to the server when it advertises `THREAD=REFERENCES`, so results can differ on servers whose THREAD deviates from RFC 5256 |
 
 <details>

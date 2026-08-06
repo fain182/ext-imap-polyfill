@@ -31,6 +31,23 @@ final class SortKey
         };
     }
 
+    /**
+     * The RFC 5256 sort-key name a SORT* criterion becomes on the wire, for
+     * servers that advertise the SORT capability.
+     */
+    public static function wireName(int $criteria): string
+    {
+        return match ($criteria) {
+            SORTARRIVAL => 'ARRIVAL',
+            SORTSIZE => 'SIZE',
+            SORTFROM => 'FROM',
+            SORTTO => 'TO',
+            SORTCC => 'CC',
+            SORTSUBJECT => 'SUBJECT',
+            default => 'DATE',
+        };
+    }
+
     private static function mailboxKey(?string $addressHeader, string $defaultHost): string
     {
         if ($addressHeader === null) {

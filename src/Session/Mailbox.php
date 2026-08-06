@@ -598,6 +598,24 @@ final class Mailbox
                 return [];
             }
 
+            // c-client hands the whole sort to the server whenever it
+            // advertises SORT, and only falls back to its own algorithms when
+            // the server has none or rejects the command (imap4r1.c
+            // imap_sort). An absent search program is the empty SEARCHPGM,
+            // which serializes to ALL.
+            if ($this->connection->protocol()->hasCapability('SORT')) {
+                $sorted = $this->connection->protocol()->sort(
+                    ($reverse ? 'REVERSE ' : '').SortKey::wireName($criteria),
+                    $charset ?? 'US-ASCII',
+                    $searchCriteria !== null ? (preg_split('/\s+/', trim($searchCriteria)) ?: []) : ['ALL'],
+                    ($flags & SE_UID) ? UidMode::UID : UidMode::MSGNO,
+                );
+
+                if ($sorted !== null) {
+                    return $sorted;
+                }
+            }
+
             if ($searchCriteria !== null) {
                 $tokens = preg_split('/\s+/', trim($searchCriteria)) ?: [];
                 $ids = $this->connection->protocol()->search($tokens, UidMode::MSGNO);

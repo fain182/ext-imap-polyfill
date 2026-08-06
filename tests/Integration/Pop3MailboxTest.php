@@ -58,6 +58,29 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * POP3 has no SORT command, so the ordering is computed locally — by RFC
+     * 5256 base subjects, which is what puts "Re: Zulu" ahead of "Zulus"
+     * where GreenMail's IMAP SORT would compare the raw subjects instead
+     * (ImapSortTest). Asserted on the two seeded messages only: GreenMail's
+     * POP3 INBOX is shared by every test in this class.
+     */
+    public function test_sort_orders_locally_when_the_protocol_has_no_sort(): void
+    {
+        $folder = $this->seedClient()->getFolder('INBOX');
+        $folder->appendMessage("Subject: Zulus\r\n\r\nBody");
+        $folder->appendMessage("Subject: Re: Zulu\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $count = imap_num_msg($connection);
+        $sorted = imap_sort($connection, SORTSUBJECT, false);
+
+        $positions = array_flip($sorted);
+        $this->assertLessThan($positions[$count - 1], $positions[$count]);
+
+        imap_close($connection);
+    }
+
     public function test_uid_stable_across_reconnect(): void
     {
         $client = $this->seedClient();

@@ -73,6 +73,28 @@ final class ImapSortTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * c-client hands sorting to any server advertising SORT, so the server's
+     * ordering wins even where it deviates from RFC 5256: GreenMail compares
+     * raw subjects, where a local sort would compare base subjects and put
+     * "Re: Alpha" alongside "Alpha".
+     */
+    public function test_sortsubject_follows_the_servers_ordering(): void
+    {
+        $folderName = 'ImapSortSubject'.random_int(10000, 99999);
+        $folder = $this->makeFolder($folderName)->getFolder($folderName);
+        $folder->appendMessage("Subject: Re: Alpha\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\n1");
+        $folder->appendMessage("Subject: Beta\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\n2");
+        $folder->appendMessage("Subject: Alpha\r\nDate: Tue, 07 Jul 2026 12:00:00 +0000\r\n\r\n3");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        $this->assertSame([3, 2, 1], imap_sort($connection, SORTSUBJECT, false));
+        $this->assertSame([1, 2, 3], imap_sort($connection, SORTSUBJECT, true));
+
+        imap_close($connection);
+    }
+
     public function test_sort_invalid_criteria_throws(): void
     {
         $connection = imap_open(self::mailboxSpec($this->seed()), self::USER, self::PASSWORD);

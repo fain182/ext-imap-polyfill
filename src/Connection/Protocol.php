@@ -8,6 +8,7 @@ use DirectoryTree\ImapEngine\Connection\Responses\Data\ResponseCodeData;
 use DirectoryTree\ImapEngine\Connection\Tokens\Nil;
 use DirectoryTree\ImapEngine\Connection\Tokens\Number;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
+use DirectoryTree\ImapEngine\Exceptions\ImapCommandException;
 use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\Imap\ImapEngineConnection;
 
@@ -67,6 +68,44 @@ final class Protocol
 
         foreach ($this->connection->sendAndCollect($command, $tokens) as $response) {
             if ((string) $response->type() !== 'SEARCH') {
+                continue;
+            }
+
+            return array_map('intval', array_map('strval', $response->tokensAfter(2)));
+        }
+
+        return [];
+    }
+
+    /**
+     * Server-side sort, the way c-client's imap_sort() issues it: "UID SORT"
+     * or "SORT", the caller's charset or US-ASCII, and the search program the
+     * results are drawn from ("ALL" when imap_sort() got no criteria).
+     *
+     * Returns null when the server rejects the command outright (BAD), which
+     * is c-client's cue to sort locally instead.
+     *
+     * @param string[] $searchTokens
+     *
+     * @return int[]|null
+     */
+    public function sort(string $program, string $charset, array $searchTokens, int $uidMode): ?array
+    {
+        try {
+            $responses = $this->connection->sendAndCollect(
+                $uidMode === UidMode::UID ? 'UID SORT' : 'SORT',
+                ["({$program})", self::astring($charset), ...$searchTokens],
+            );
+        } catch (ImapCommandException $e) {
+            if ((string) ($e->response()->tokenAt(1) ?? '') !== 'BAD') {
+                throw $e;
+            }
+
+            return null;
+        }
+
+        foreach ($responses as $response) {
+            if ((string) $response->type() !== 'SORT') {
                 continue;
             }
 
@@ -405,6 +444,17 @@ final class Protocol
         }
 
         return $resources;
+    }
+
+    /**
+     * An astring the way c-client's imap_send_astring() writes one: bare when
+     * every character is an ATOM-CHAR, quoted otherwise. Sending "US-ASCII"
+     * quoted where c-client sends it bare is enough for a strict server (e.g.
+     * GreenMail) to reject the whole command.
+     */
+    private static function astring(string $value): string
+    {
+        return preg_match('/^[^\x00-\x20\x7F(){%*"\\\\\]]+$/', $value) === 1 ? $value : Str::literal($value);
     }
 
     /**

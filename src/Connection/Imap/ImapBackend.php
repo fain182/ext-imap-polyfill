@@ -83,6 +83,16 @@ final class ImapBackend implements ConnectionBackend
         return $this->protocol->search($tokens, $uidMode);
     }
 
+    public function hasCapability(string $capability): bool
+    {
+        return $this->protocol->hasCapability($capability);
+    }
+
+    public function sort(string $program, string $charset, array $searchTokens, int $uidMode): ?array
+    {
+        return $this->protocol->sort($program, $charset, $searchTokens, $uidMode);
+    }
+
     public function headers(array $ids, string $type, int $uidMode): array
     {
         return $this->protocol->headers($ids, $type, $uidMode);
@@ -159,7 +169,7 @@ final class ImapBackend implements ConnectionBackend
      */
     private function ensureQuotaCapability(): void
     {
-        if (!$this->protocol->hasCapability('QUOTA')) {
+        if (!$this->hasCapability('QUOTA')) {
             throw new \RuntimeException('Quota not available on this IMAP server');
         }
     }

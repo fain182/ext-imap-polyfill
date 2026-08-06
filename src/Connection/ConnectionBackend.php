@@ -52,6 +52,20 @@ interface ConnectionBackend
      */
     public function search(array $tokens, int $uidMode): array;
 
+    public function hasCapability(string $capability): bool;
+
+    /**
+     * Server-side sort. Returns null when the server has no usable SORT (it
+     * rejected the command, or the protocol has none at all), which is
+     * c-client's cue to sort locally instead.
+     *
+     * @param string $program the sort program inside the parentheses, e.g. "REVERSE DATE"
+     * @param string[] $searchTokens the search program the results are drawn from
+     *
+     * @return int[]|null
+     */
+    public function sort(string $program, string $charset, array $searchTokens, int $uidMode): ?array;
+
     /**
      * @param int[] $ids
      *
