@@ -74,23 +74,30 @@ final class ImapSortTest extends GreenmailTestCase
     }
 
     /**
-     * c-client hands sorting to any server advertising SORT, so the server's
-     * ordering wins even where it deviates from RFC 5256: GreenMail compares
-     * raw subjects, where a local sort would compare base subjects and put
-     * "Re: Alpha" alongside "Alpha".
+     * c-client hands sorting to any server advertising SORT, so the answer
+     * has to be the server's own — whether or not it agrees with the local
+     * algorithms. Compared against a raw SORT rather than a fixed ordering:
+     * an earlier version of this test hardcoded GreenMail 2.1.9's
+     * raw-subject ordering and broke when upstream fixed base subjects.
+     *
+     * That the sort really goes over the wire is pinned by
+     * tests/Unit/ProtocolSortTest, since a server implementing RFC 5256
+     * correctly produces the same order the local sort would.
      */
     public function test_sortsubject_follows_the_servers_ordering(): void
     {
         $folderName = 'ImapSortSubject'.random_int(10000, 99999);
-        $folder = $this->makeFolder($folderName)->getFolder($folderName);
+        $client = $this->makeFolder($folderName);
+        $folder = $client->getFolder($folderName);
         $folder->appendMessage("Subject: Re: Alpha\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\n1");
         $folder->appendMessage("Subject: Beta\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\n2");
         $folder->appendMessage("Subject: Alpha\r\nDate: Tue, 07 Jul 2026 12:00:00 +0000\r\n\r\n3");
+        $client->openFolder($folderName);
 
         $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
 
-        $this->assertSame([3, 2, 1], imap_sort($connection, SORTSUBJECT, false));
-        $this->assertSame([1, 2, 3], imap_sort($connection, SORTSUBJECT, true));
+        $this->assertSame($client->sorted('SUBJECT'), imap_sort($connection, SORTSUBJECT, false));
+        $this->assertSame($client->sorted('REVERSE SUBJECT'), imap_sort($connection, SORTSUBJECT, true));
 
         imap_close($connection);
     }

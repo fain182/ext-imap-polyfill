@@ -56,6 +56,41 @@ final class SeedClient
     }
 
     /**
+     * The server's own answer to a SORT over the selected folder, for tests
+     * that need to compare against it rather than hardcode an ordering.
+     *
+     * @return int[]
+     */
+    public function sorted(string $program): array
+    {
+        foreach ($this->connection->command('SORT', ["({$program})", 'US-ASCII', 'ALL']) as $response) {
+            if ((string) $response->type() === 'SORT') {
+                return array_map('intval', array_map('strval', $response->tokensAfter(2)));
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * The flags the server holds for a message in the selected folder.
+     *
+     * @return string[]
+     */
+    public function flagsOf(int $msgno): array
+    {
+        foreach ($this->connection->command('FETCH', [(string) $msgno, Str::list(['FLAGS'])]) as $response) {
+            $data = $response->tokenAt(3);
+
+            if ($data instanceof ListData && $data->tokenAt(1) instanceof ListData) {
+                return array_map('strval', $data->tokenAt(1)->tokens());
+            }
+        }
+
+        return [];
+    }
+
+    /**
      * msgno => uid for the currently selected folder.
      *
      * @return array<int, int>
