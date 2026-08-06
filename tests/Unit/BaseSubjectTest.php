@@ -8,8 +8,9 @@ use PHPUnit\Framework\TestCase;
 /**
  * Characterizes the mail_strip_subject() port against RFC 5256 §2.1.
  * Unit-level on purpose: imap_sort(SORTSUBJECT) can't pin these cases in
- * the parity suite, because real ext-imap hands sorting to the server
- * when it advertises SORT, and GreenMail's SORT compares raw subjects.
+ * the parity suite, because both this polyfill and real ext-imap hand
+ * sorting to any server advertising SORT — the port only runs where the
+ * protocol has none, as over POP3.
  */
 class BaseSubjectTest extends TestCase
 {

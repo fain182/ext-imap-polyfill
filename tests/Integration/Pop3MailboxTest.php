@@ -59,11 +59,12 @@ final class Pop3MailboxTest extends GreenmailTestCase
     }
 
     /**
-     * POP3 has no SORT command, so the ordering is computed locally — by RFC
-     * 5256 base subjects, which is what puts "Re: Zulu" ahead of "Zulus"
-     * where GreenMail's IMAP SORT would compare the raw subjects instead
-     * (ImapSortTest). Asserted on the two seeded messages only: GreenMail's
-     * POP3 INBOX is shared by every test in this class.
+     * POP3 has no SORT command, so the ordering is computed locally, by RFC
+     * 5256 base subjects: "Re: Zulu" sorts on "zulu" and lands ahead of
+     * "Zulus". This is the only place the local sort still runs against a
+     * live server — over IMAP it is the server's job (ImapSortTest).
+     * Asserted on the two seeded messages only: GreenMail's POP3 INBOX is
+     * shared by every test in this class.
      */
     public function test_sort_orders_locally_when_the_protocol_has_no_sort(): void
     {

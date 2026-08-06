@@ -19,4 +19,17 @@ class ImapGetQuotaTest extends GreenmailTestCase
         $this->assertSame($quota['STORAGE']['usage'], $quota['usage']);
         $this->assertSame(768, $quota['limit']);
     }
+
+    /**
+     * A quota root the server doesn't know is a NO, and imap_get_quota()
+     * answers false. Only testable since GreenMail 2.1.10 (upstream #1024):
+     * before that, once any quota existed, every root reported it.
+     */
+    public function test_returns_false_for_an_unknown_quota_root(): void
+    {
+        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        imap_set_quota($connection, 'INBOX', 768);
+
+        $this->assertFalse(@imap_get_quota($connection, 'NoSuchRoot'.random_int(10000, 99999)));
+    }
 }
