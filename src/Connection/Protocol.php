@@ -333,6 +333,42 @@ final class Protocol
         return $status;
     }
 
+    /**
+     * RFC 4314 GETACL. The mailbox goes out as an astring, verbatim: like
+     * COPY and unlike APPEND/STATUS, c-client hands it to the wire without
+     * parsing a "{host}" prefix off it.
+     *
+     * @return array<string, string> identifier => rights
+     */
+    public function getAcl(string $mailbox): array
+    {
+        $responses = $this->connection->sendAndCollect('GETACL', [self::astring($mailbox)]);
+
+        $acl = [];
+        foreach ($responses as $response) {
+            if ((string) $response->type() !== 'ACL') {
+                continue;
+            }
+
+            // "* ACL <mailbox> <identifier> <rights> [<identifier> <rights>...]"
+            $tokens = $response->tokensAfter(3);
+            for ($i = 0; $i + 2 <= count($tokens); $i += 2) {
+                $acl[(string) self::value($tokens[$i])] = (string) self::value($tokens[$i + 1]);
+            }
+        }
+
+        return $acl;
+    }
+
+    public function setAcl(string $mailbox, string $id, string $rights): void
+    {
+        $this->connection->sendAndCollect('SETACL', [
+            self::astring($mailbox),
+            self::astring($id),
+            self::astring($rights),
+        ]);
+    }
+
     public function hasCapability(string $capability): bool
     {
         // Cached like c-client's stream->cap: CAPABILITY goes out once per

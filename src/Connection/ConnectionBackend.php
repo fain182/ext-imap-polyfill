@@ -129,6 +129,13 @@ interface ConnectionBackend
     public function folderStatus(string $folder, array $items): array;
 
     /**
+     * @return array<string, string> identifier => rights
+     */
+    public function getAcl(string $mailbox): array;
+
+    public function setAcl(string $mailbox, string $id, string $rights): void;
+
+    /**
      * @return array<int, array{name: string, usage: int, limit: int}>
      */
     public function getQuota(string $quotaRoot): array;

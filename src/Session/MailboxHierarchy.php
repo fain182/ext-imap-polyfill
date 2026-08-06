@@ -162,6 +162,37 @@ final class MailboxHierarchy
     }
 
     /**
+     * @return array<string, string>|false identifier => rights
+     */
+    public function getAcl(string $mailbox): array|false
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            return $this->connection->protocol()->getAcl($mailbox);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+    }
+
+    public function setAcl(string $mailbox, string $id, string $rights): bool
+    {
+        $this->connection->ensureOpen();
+
+        try {
+            $this->connection->protocol()->setAcl($mailbox, $id, $rights);
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * The quota root is sent verbatim (c-client passes it as a plain
      * ASTRING), so unlike status()/append() there is no {host} prefix
      * parsing here.

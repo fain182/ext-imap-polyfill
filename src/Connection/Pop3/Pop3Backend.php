@@ -295,6 +295,16 @@ final class Pop3Backend implements ConnectionBackend
         ];
     }
 
+    public function getAcl(string $mailbox): array
+    {
+        throw new \RuntimeException('ACL not available on this IMAP server');
+    }
+
+    public function setAcl(string $mailbox, string $id, string $rights): void
+    {
+        throw new \RuntimeException('ACL not available on this IMAP server');
+    }
+
     public function getQuota(string $quotaRoot): array
     {
         throw new \RuntimeException('Quota not available on this IMAP server');

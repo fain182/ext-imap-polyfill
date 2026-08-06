@@ -54,7 +54,7 @@ Any other flag (`/imap`, `/norsh`, `/secure`, `/debug`, …) is accepted and ign
 
 ## Coverage
 
-This is not a reimplementation of all `imap_*` functions — **70 of 75 (93%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing five are ACL management (`imap_getacl`, `imap_setacl`) and scanning mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`). Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
+This is not a reimplementation of all `imap_*` functions — **72 of 75 (96%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing three all scan mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`): SCAN is an RFC 2060-era command, dropped from IMAP4rev1, that in practice only c-client's own UW-IMAP server ever implemented, so there is nothing left to test them against. Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
 
 Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Any function not listed in the table below is expected to match the real extension exactly; these are the known, deliberate divergences:
 
@@ -68,7 +68,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_reopen` | only switches folders on the same connection — can't reconnect to a different host, since credentials aren't retained after `imap_open` |
 
 <details>
-<summary>Full list of the 70 implemented functions</summary>
+<summary>Full list of the 72 implemented functions</summary>
 
 `imap_8bit`,
 `imap_alerts`,
@@ -93,6 +93,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 `imap_fetchstructure`,
 `imap_fetchtext` (alias of `imap_body`),
 `imap_gc`,
+`imap_getacl`,
 `imap_getmailboxes`,
 `imap_get_quota`,
 `imap_get_quotaroot`,
@@ -126,6 +127,7 @@ Every implemented function's object/array shape (property names, casing, flag se
 `imap_rfc822_write_address`,
 `imap_savebody`,
 `imap_search`,
+`imap_setacl`,
 `imap_setflag_full`,
 `imap_set_quota`,
 `imap_sort`,
