@@ -26,4 +26,4 @@ services:
       IMAP_POLYFILL_TEST_POP3_PORT: 3110
     volumes:
       - .:/app
-    command: sh -c "composer install --ignore-platform-reqs --quiet && vendor/bin/phpunit --testsuite integration"
+    command: sh -c "composer install --quiet && vendor/bin/phpunit --testsuite integration"

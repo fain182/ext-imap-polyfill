@@ -9,7 +9,7 @@ class ImapMailCopyTest extends GreenmailTestCase
         $sourceName = 'CopySrcBox'.uniqid();
         $targetName = 'CopyDstBox'.uniqid();
         $seedClient = $this->makeFolder($sourceName);
-        $seedClient->createFolder($targetName, expunge: false);
+        $seedClient->createFolder($targetName);
         $seedClient->getFolder($sourceName)->appendMessage("Subject: Travelling\r\n\r\nBody");
 
         $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);
@@ -30,7 +30,7 @@ class ImapMailCopyTest extends GreenmailTestCase
         $sourceName = 'CopySrcBox'.uniqid();
         $targetName = 'CopyDstBox'.uniqid();
         $seedClient = $this->makeFolder($sourceName);
-        $seedClient->createFolder($targetName, expunge: false);
+        $seedClient->createFolder($targetName);
         $seedClient->getFolder($sourceName)->appendMessage("Subject: Travelling\r\n\r\nBody");
 
         $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);
@@ -46,7 +46,7 @@ class ImapMailCopyTest extends GreenmailTestCase
         $sourceName = 'CopySrcBox'.uniqid();
         $targetName = 'CopyDstBox'.uniqid();
         $seedClient = $this->makeFolder($sourceName);
-        $seedClient->createFolder($targetName, expunge: false);
+        $seedClient->createFolder($targetName);
         $seedClient->getFolder($sourceName)->appendMessage("Subject: Travelling\r\n\r\nBody");
 
         $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);

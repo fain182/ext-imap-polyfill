@@ -75,7 +75,7 @@ interface ConnectionBackend
      */
     public function getUid(): array;
 
-    public function getMessageNumber(string $uid): int|string;
+    public function getMessageNumber(string $uid): int;
 
     /**
      * @param string[] $args

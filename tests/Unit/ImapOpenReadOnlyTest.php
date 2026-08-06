@@ -19,8 +19,10 @@ class ImapOpenReadOnlyTest extends TestCase
             $this->markTestSkipped('IMAP\Connection is opaque on real ext-imap; no readOnly property to check.');
         }
 
-        $client = (new \Webklex\PHPIMAP\ClientManager())->make(['host' => 'example.com', 'port' => 143]);
-        $backend = new \ImapPolyfill\Connection\Imap\ImapBackend($client);
+        $backend = new \ImapPolyfill\Connection\Imap\ImapBackend(
+            new \ImapPolyfill\Connection\Imap\ImapEngineConnection(new \DirectoryTree\ImapEngine\Connection\Streams\ImapStream()),
+            'example.com',
+        );
         $connection = new \IMAP\Connection($backend, 'INBOX', '{example.com:143/imap', 'user', readOnly: true);
 
         $this->assertTrue($connection->isReadOnly());
@@ -32,8 +34,10 @@ class ImapOpenReadOnlyTest extends TestCase
             $this->markTestSkipped('IMAP\Connection is opaque on real ext-imap; no readOnly property to check.');
         }
 
-        $client = (new \Webklex\PHPIMAP\ClientManager())->make(['host' => 'example.com', 'port' => 143]);
-        $backend = new \ImapPolyfill\Connection\Imap\ImapBackend($client);
+        $backend = new \ImapPolyfill\Connection\Imap\ImapBackend(
+            new \ImapPolyfill\Connection\Imap\ImapEngineConnection(new \DirectoryTree\ImapEngine\Connection\Streams\ImapStream()),
+            'example.com',
+        );
         $connection = new \IMAP\Connection($backend, 'INBOX', '{example.com:143/imap', 'user');
 
         $this->assertFalse($connection->isReadOnly());

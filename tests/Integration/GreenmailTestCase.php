@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\Support\SeedClient;
+
 use PHPUnit\Framework\TestCase;
 
 abstract class GreenmailTestCase extends TestCase
@@ -35,23 +37,14 @@ abstract class GreenmailTestCase extends TestCase
     }
 
     /**
-     * Creates a fresh, empty folder directly through webklex and returns a
+     * Creates a fresh, empty folder directly on the server and returns a
      * connected client, for seeding test fixtures without depending on the
      * polyfill functions under test.
      */
-    protected function makeFolder(string $name): \Webklex\PHPIMAP\Client
+    protected function makeFolder(string $name): SeedClient
     {
-        $client = (new \Webklex\PHPIMAP\ClientManager())->make([
-            'host' => self::host(),
-            'port' => self::port(),
-            'encryption' => false,
-            'validate_cert' => false,
-            'username' => self::USER,
-            'password' => self::PASSWORD,
-            'protocol' => 'imap',
-        ]);
-        $client->connect();
-        $client->createFolder($name, expunge: false);
+        $client = new SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);
+        $client->createFolder($name);
 
         return $client;
     }
@@ -70,12 +63,12 @@ abstract class GreenmailTestCase extends TestCase
         $folder = $seedClient->getFolder($folderName);
         $folder->appendMessage("Subject: Throwaway\r\n\r\nDiscard me");
         $seedClient->openFolder($folderName);
-        $seedClient->getConnection()->requestAndResponse('STORE', ['1', '+FLAGS.SILENT', '(\\Deleted)']);
+        $seedClient->command('STORE', ['1', '+FLAGS.SILENT', '(\\Deleted)']);
         $seedClient->expunge();
         $folder->appendMessage($survivorMessage);
         $seedClient->openFolder($folderName, true);
 
-        $uids = $seedClient->getConnection()->getUid()->validatedData();
+        $uids = $seedClient->uids();
 
         return [$folderName, (int) $uids[1]];
     }
@@ -90,7 +83,7 @@ abstract class GreenmailTestCase extends TestCase
     {
         $seedClient = $this->makeFolder($folderName);
         $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
-        $seedClient->deleteFolder($folderName, expunge: false);
+        $seedClient->deleteFolder($folderName);
 
         return $connection;
     }

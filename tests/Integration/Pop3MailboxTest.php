@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\Support\SeedClient;
+
 /**
  * POP3 message reading, flags/delete, search, and structure. Greenmail's
  * POP3 service only ever exposes a single shared INBOX (see
@@ -10,18 +12,9 @@ namespace ImapPolyfill\Tests\Integration;
  */
 final class Pop3MailboxTest extends GreenmailTestCase
 {
-    private function seedClient(): \Webklex\PHPIMAP\Client
+    private function seedClient(): SeedClient
     {
-        $client = (new \Webklex\PHPIMAP\ClientManager())->make([
-            'host' => self::host(),
-            'port' => self::port(),
-            'encryption' => false,
-            'validate_cert' => false,
-            'username' => self::USER,
-            'password' => self::PASSWORD,
-            'protocol' => 'imap',
-        ]);
-        $client->connect();
+        $client = new SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);
 
         return $client;
     }

@@ -9,7 +9,7 @@ class ImapMailMoveTest extends GreenmailTestCase
         $sourceName = 'MoveSrcBox'.uniqid();
         $targetName = 'MoveDstBox'.uniqid();
         $seedClient = $this->makeFolder($sourceName);
-        $seedClient->createFolder($targetName, expunge: false);
+        $seedClient->createFolder($targetName);
         $seedClient->getFolder($sourceName)->appendMessage("Subject: Moving\r\n\r\nBody");
 
         $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);

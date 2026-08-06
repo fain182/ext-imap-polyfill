@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Session;
 
+use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Mailbox\MailboxSpec;
 use ImapPolyfill\Support\ErrorStack;
 
@@ -18,7 +19,7 @@ final class Session
     }
 
     /**
-     * The body of imap_open(): builds a webklex client from the mailbox spec,
+     * The body of imap_open(): builds a connection from the mailbox spec,
      * connects (retrying up to $retries extra times), and selects the spec's
      * folder. Returns false instead of throwing on any failure — bad spec,
      * unreachable host, missing folder — pushing the cause onto the
@@ -79,31 +80,28 @@ final class Session
 
     private static function connectImap(MailboxSpec $spec, string $user, string $password, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
     {
-        $encryption = false;
+        $encryption = '';
         if ($spec->hasFlag('ssl')) {
             $encryption = 'ssl';
         } elseif ($spec->hasFlag('tls')) {
             $encryption = 'tls';
         }
 
-        $client = (new \Webklex\PHPIMAP\ClientManager())->make([
-            'host' => $spec->host,
-            'port' => $spec->port,
-            'encryption' => $encryption,
-            'validate_cert' => !$spec->hasFlag('novalidate-cert'),
-            'username' => $user,
-            'password' => $password,
-            'protocol' => 'imap',
-        ]);
-
         $attempts = 1 + max(0, $retries);
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
-            try {
-                $client->connect();
+            $connection = new \ImapPolyfill\Connection\Imap\ImapEngineConnection(
+                new \DirectoryTree\ImapEngine\Connection\Streams\ImapStream()
+            );
 
-                return new \ImapPolyfill\Connection\Imap\ImapBackend($client);
-            } catch (\Webklex\PHPIMAP\Exceptions\ConnectionFailedException $e) {
-                // webklex's own message is a bare "connection failed";
+            try {
+                $connection->connect($spec->host, $spec->port, [
+                    'encryption' => $encryption,
+                    'validate_cert' => !$spec->hasFlag('novalidate-cert'),
+                ]);
+                $connection->login($user, $password);
+
+                return new \ImapPolyfill\Connection\Imap\ImapBackend($connection, $spec->host);
+            } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionFailedException $e) {
                 // c-client reports "Can't connect to host,port: reason", and
                 // naming the attempted port is the only way the default-port
                 // choice stays observable (and parity-testable) from outside.
@@ -245,7 +243,7 @@ final class Session
                     ['FLAGS', 'RFC822.SIZE'],
                     range(1, $exists),
                     null,
-                    \Webklex\PHPIMAP\IMAP::ST_MSGN,
+                    UidMode::MSGNO,
                 );
 
                 foreach ($data as $message) {

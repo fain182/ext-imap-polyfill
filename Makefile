@@ -12,10 +12,8 @@ PARITY_IMAGE := ext-imap-polyfill-parity
 
 .PHONY: install test test-unit test-integration phpstan greenmail-up greenmail-down parity parity-build
 
-## --ignore-platform-reqs: webklex/php-imap declares ext-zip as a hard
-## dependency for attachment-archiving helpers this polyfill never calls.
 install:
-	composer install --ignore-platform-reqs
+	composer install
 
 phpstan: install
 	vendor/bin/phpstan analyse --memory-limit=1G
@@ -72,7 +70,7 @@ parity: parity-build greenmail-up
 		-e IMAP_POLYFILL_TEST_POP3_PORT=3110 \
 		-v $(CURDIR):/app:Z \
 		$(PARITY_IMAGE) \
-		sh -c 'composer install --ignore-platform-reqs --quiet && php -m | grep -q imap && vendor/bin/phpunit --testsuite integration'; \
+		sh -c 'composer install --quiet && php -m | grep -q imap && vendor/bin/phpunit --testsuite integration'; \
 	status=$$?; \
 	$(MAKE) greenmail-down; \
 	exit $$status
