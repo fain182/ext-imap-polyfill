@@ -7,8 +7,10 @@ use DirectoryTree\ImapEngine\Connection\ImapConnection;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\Data;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\ResponseCodeData;
 use DirectoryTree\ImapEngine\Connection\Responses\Response;
+use DirectoryTree\ImapEngine\Connection\Responses\TaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Responses\UntaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
+use ImapPolyfill\Connection\CommandFailedException;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -34,6 +36,26 @@ final class ImapEngineConnection extends ImapConnection
         $this->assertTaggedResponse($tag);
 
         return $this->result->responses()->untagged();
+    }
+
+    /**
+     * c-client logs the tagged response's own text and nothing else — no
+     * tag, no status, no echo of the command — and that text is what
+     * imap_errors()/imap_last_error() report. ImapEngine quotes the whole
+     * exchange in its exception message instead, so every rejected command
+     * is re-raised here.
+     *
+     * The caller's own exception factory is deliberately discarded: the
+     * only one ImapEngine passes is login()'s, which exists to redact the
+     * command it echoes, and the server's response text never carries the
+     * password to begin with.
+     */
+    protected function assertTaggedResponse(string $tag, ?callable $exception = null): TaggedResponse
+    {
+        return parent::assertTaggedResponse($tag, static fn (TaggedResponse $response) => new CommandFailedException(
+            (string) ($response->tokenAt(1) ?? ''),
+            implode(' ', array_map('strval', $response->tokensAfter(2))),
+        ));
     }
 
     /**
