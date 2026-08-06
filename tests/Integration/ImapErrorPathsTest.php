@@ -154,6 +154,28 @@ class ImapErrorPathsTest extends GreenmailTestCase
         $this->assertFalse($result);
     }
 
+    /**
+     * What a rejected command records is the server's own response text —
+     * c-client hands mm_log() everything after the tag and status, and
+     * nothing of its own. Asserted on the shape rather than the wording,
+     * which belongs to the server: the point is that no client-side
+     * wrapper, tag, or echo of the command leaks into imap_last_error().
+     */
+    public function test_a_rejected_command_records_the_servers_own_text(): void
+    {
+        $folderName = 'ErrTextBox'.uniqid();
+        $this->makeFolder($folderName)->getFolder($folderName)->appendMessage("Subject: Hi\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+
+        imap_mail_copy($connection, '1', 'NoSuchFolder'.uniqid());
+        $error = imap_last_error();
+
+        $this->assertIsString($error);
+        $this->assertStringContainsString('COPY failed', $error);
+        $this->assertStringNotContainsString('IMAP command', $error);
+        $this->assertDoesNotMatchRegularExpression('/\bTAG\d/', $error);
+    }
+
     public function test_imap_uid_returns_false_when_the_folder_disappears(): void
     {
         $connection = $this->openConnectionToFolderThatThenDisappears('UidConnErrBox'.uniqid());
