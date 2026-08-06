@@ -8,7 +8,7 @@ use ImapPolyfill\Connection\ConnectionBackend;
  * Polyfill for the opaque IMAP\Connection class ext-imap registers natively.
  * Holds connection-level state (selected folder, read-only flag, cached
  * counters) and delegates every wire operation to a ConnectionBackend —
- * either Connection\Imap\ImapBackend (webklex/IMAP) or Connection\Pop3\Pop3Backend
+ * either Connection\Imap\ImapBackend (IMAP) or Connection\Pop3\Pop3Backend
  * (POP3), chosen by Session::open() from the mailbox spec. Knows nothing
  * about imap_* contracts, ErrorStack, or return-value conventions.
  */

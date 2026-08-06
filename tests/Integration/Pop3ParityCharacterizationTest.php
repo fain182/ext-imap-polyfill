@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\Support\SeedClient;
+
 /**
  * Exploratory characterization test: observes how the *real* ext-imap
  * extension behaves when a mailbox spec uses the /pop3 service, so we can
@@ -24,16 +26,7 @@ final class Pop3ParityCharacterizationTest extends GreenmailTestCase
     public function test_characterize_pop3_behavior(): void
     {
         // POP3 has no APPEND command; seed INBOX over IMAP first.
-        $seedClient = (new \Webklex\PHPIMAP\ClientManager())->make([
-            'host' => self::host(),
-            'port' => self::port(),
-            'encryption' => false,
-            'validate_cert' => false,
-            'username' => self::USER,
-            'password' => self::PASSWORD,
-            'protocol' => 'imap',
-        ]);
-        $seedClient->connect();
+        $seedClient = new SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);
         $seedClient->getFolder('INBOX')->appendMessage("Subject: Pop3 Parity\r\n\r\nHello from parity test");
 
         $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
@@ -65,16 +58,7 @@ final class Pop3ParityCharacterizationTest extends GreenmailTestCase
 
     public function test_characterize_pop3_edge_cases(): void
     {
-        $seedClient = (new \Webklex\PHPIMAP\ClientManager())->make([
-            'host' => self::host(),
-            'port' => self::port(),
-            'encryption' => false,
-            'validate_cert' => false,
-            'username' => self::USER,
-            'password' => self::PASSWORD,
-            'protocol' => 'imap',
-        ]);
-        $seedClient->connect();
+        $seedClient = new SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);
         $folder = $seedClient->getFolder('INBOX');
         $folder->appendMessage("From: alice@example.com\r\nTo: bob@example.com\r\nSubject: First\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nFirst body");
         $folder->appendMessage("From: carol@example.com\r\nTo: bob@example.com\r\nSubject: Second\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nSecond body");

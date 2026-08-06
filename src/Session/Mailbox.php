@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Session;
 
+use ImapPolyfill\Connection\MessageNotFoundException;
+use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Mailbox\MailboxReference;
 use ImapPolyfill\Message\BodyStructure;
 use ImapPolyfill\Message\HeaderInfo;
@@ -28,8 +30,8 @@ final class Mailbox
     public function search(string $criteria, int $flags, string $charset): array|false
     {
         $uidMode = ($flags & SE_UID)
-            ? \Webklex\PHPIMAP\IMAP::ST_UID
-            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+            ? UidMode::UID
+            : UidMode::MSGNO;
 
         $this->connection->ensureOpen();
 
@@ -60,8 +62,8 @@ final class Mailbox
         }
 
         $uidMode = ($flags & FT_UID)
-            ? \Webklex\PHPIMAP\IMAP::ST_UID
-            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+            ? UidMode::UID
+            : UidMode::MSGNO;
 
         try {
             $this->connection->selectOrExamine();
@@ -98,7 +100,7 @@ final class Mailbox
                 ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
                 [$messageNum],
                 null,
-                \Webklex\PHPIMAP\IMAP::ST_MSGN,
+                UidMode::MSGNO,
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -126,8 +128,8 @@ final class Mailbox
     public function fetchOverview(string $sequence, int $flags): array|false
     {
         $uidMode = ($flags & FT_UID)
-            ? \Webklex\PHPIMAP\IMAP::ST_UID
-            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+            ? UidMode::UID
+            : UidMode::MSGNO;
 
         $this->connection->ensureOpen();
 
@@ -157,8 +159,8 @@ final class Mailbox
             }
 
             $message = $data[$id];
-            $uid = $uidMode === \Webklex\PHPIMAP\IMAP::ST_UID ? $id : (int) $message['UID'];
-            $msgno = $uidMode === \Webklex\PHPIMAP\IMAP::ST_UID
+            $uid = $uidMode === UidMode::UID ? $id : (int) $message['UID'];
+            $msgno = $uidMode === UidMode::UID
                 ? $protocol->getMessageNumber((string) $id)
                 : $id;
 
@@ -205,8 +207,8 @@ final class Mailbox
         }
 
         $uidMode = ($flags & FT_UID)
-            ? \Webklex\PHPIMAP\IMAP::ST_UID
-            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+            ? UidMode::UID
+            : UidMode::MSGNO;
         // ext-imap's section "0" is a legacy alias for the top-level header,
         // not a literal MIME part index.
         $wireSection = $section === '0' ? 'HEADER' : $section;
@@ -237,8 +239,8 @@ final class Mailbox
         }
 
         $uidMode = ($flags & FT_UID)
-            ? \Webklex\PHPIMAP\IMAP::ST_UID
-            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+            ? UidMode::UID
+            : UidMode::MSGNO;
         $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$section}.MIME]" : "BODY[{$section}.MIME]";
 
         try {
@@ -335,8 +337,8 @@ final class Mailbox
         }
 
         $uidMode = ($flags & FT_UID)
-            ? \Webklex\PHPIMAP\IMAP::ST_UID
-            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+            ? UidMode::UID
+            : UidMode::MSGNO;
         $item = ($flags & FT_PEEK) ? 'BODY.PEEK[TEXT]' : 'BODY[TEXT]';
 
         try {
@@ -376,8 +378,8 @@ final class Mailbox
     private function copyTo(string $sequence, string $folder, int $options): bool
     {
         $uidMode = ($options & CP_UID)
-            ? \Webklex\PHPIMAP\IMAP::ST_UID
-            : \Webklex\PHPIMAP\IMAP::ST_MSGN;
+            ? UidMode::UID
+            : UidMode::MSGNO;
 
         try {
             $this->connection->selectOrExamine();
@@ -441,7 +443,7 @@ final class Mailbox
             $this->connection->selectOrExamine();
 
             return (int) $this->connection->protocol()->getMessageNumber((string) $messageUid);
-        } catch (\Webklex\PHPIMAP\Exceptions\MessageNotFoundException) {
+        } catch (MessageNotFoundException) {
             return 0;
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -544,7 +546,7 @@ final class Mailbox
                 ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
                 $ids,
                 null,
-                \Webklex\PHPIMAP\IMAP::ST_MSGN,
+                UidMode::MSGNO,
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -596,9 +598,27 @@ final class Mailbox
                 return [];
             }
 
+            // c-client hands the whole sort to the server whenever it
+            // advertises SORT, and only falls back to its own algorithms when
+            // the server has none or rejects the command (imap4r1.c
+            // imap_sort). An absent search program is the empty SEARCHPGM,
+            // which serializes to ALL.
+            if ($this->connection->protocol()->hasCapability('SORT')) {
+                $sorted = $this->connection->protocol()->sort(
+                    ($reverse ? 'REVERSE ' : '').SortKey::wireName($criteria),
+                    $charset ?? 'US-ASCII',
+                    $searchCriteria !== null ? (preg_split('/\s+/', trim($searchCriteria)) ?: []) : ['ALL'],
+                    ($flags & SE_UID) ? UidMode::UID : UidMode::MSGNO,
+                );
+
+                if ($sorted !== null) {
+                    return $sorted;
+                }
+            }
+
             if ($searchCriteria !== null) {
                 $tokens = preg_split('/\s+/', trim($searchCriteria)) ?: [];
-                $ids = $this->connection->protocol()->search($tokens, \Webklex\PHPIMAP\IMAP::ST_MSGN);
+                $ids = $this->connection->protocol()->search($tokens, UidMode::MSGNO);
 
                 if ($ids === []) {
                     return [];
@@ -611,7 +631,7 @@ final class Mailbox
                 ['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
                 $ids,
                 null,
-                \Webklex\PHPIMAP\IMAP::ST_MSGN,
+                UidMode::MSGNO,
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -668,7 +688,7 @@ final class Mailbox
                 ['UID', 'INTERNALDATE', 'RFC822.HEADER'],
                 $ids,
                 null,
-                \Webklex\PHPIMAP\IMAP::ST_MSGN,
+                UidMode::MSGNO,
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());

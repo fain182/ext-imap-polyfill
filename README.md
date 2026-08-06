@@ -7,9 +7,9 @@
 
 A drop-in polyfill for the `imap_*` functions removed from PHP core in 8.4.
 
-PHP 8.4 moved `ext-imap` out of core and onto PECL ([RFC](https://wiki.php.net/rfc/unbundle_imap_pspell_oci8)). The C library it wraps (c-client) has been unmaintained since 2007 and is disappearing from Linux distributions, so installing the PECL package is getting harder every release. Codebases built on the `imap_*` functions are usually rewritten against an OOP library like [webklex/php-imap](https://github.com/Webklex/php-imap) instead — a real migration effort, not a version bump.
+PHP 8.4 moved `ext-imap` out of core and onto PECL ([RFC](https://wiki.php.net/rfc/unbundle_imap_pspell_oci8)). The C library it wraps (c-client) has been unmaintained since 2007 and is disappearing from Linux distributions, so installing the PECL package is getting harder every release. Codebases built on the `imap_*` functions are usually rewritten against an OOP library like [ImapEngine](https://github.com/DirectoryTree/ImapEngine) instead — a real migration effort, not a version bump.
 
-This package lets you skip that rewrite for the common cases: it defines the same global `imap_*` functions, backed by webklex/php-imap for IMAP and a small raw client for POP3, and only activates if `ext-imap` isn't already loaded. **IMAP and POP3** — unlike the real extension, it doesn't speak NNTP.
+This package lets you skip that rewrite for the common cases: it defines the same global `imap_*` functions, backed by [directorytree/imapengine](https://github.com/DirectoryTree/ImapEngine) for IMAP and a small raw client for POP3, and only activates if `ext-imap` isn't already loaded. **IMAP and POP3** — unlike the real extension, it doesn't speak NNTP.
 
 ## Install
 
@@ -19,11 +19,7 @@ composer require fain182/ext-imap-polyfill
 
 No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the polyfill is a no-op — safe to add before you upgrade, not just after.
 
-Requires PHP 8.1+. The webklex/php-imap dependency declares a handful of extension requirements (`ext-mbstring`, `ext-iconv`, `ext-openssl`, `ext-libxml`, `ext-json`, `ext-fileinfo`, `ext-zip`); all but `ext-zip` are enabled in virtually every PHP build. `ext-zip` is only used by webklex code paths this polyfill never calls, so if you can't (or don't want to) install it:
-
-```bash
-composer require fain182/ext-imap-polyfill --ignore-platform-req=ext-zip
-```
+Requires PHP 8.1+. The dependency tree declares two extensions, `ext-json` (always available on PHP 8) and `ext-iconv`. If you installed an earlier release with `--ignore-platform-req=ext-zip`, you can drop the flag: nothing requires `ext-zip` anymore.
 
 The package declares `provide: ext-imap`, so other dependencies that require `ext-imap` install cleanly alongside it.
 
@@ -64,14 +60,12 @@ Every implemented function's object/array shape (property names, casing, flag se
 
 | Function | Divergence |
 |---|---|
-| `imap_alerts` | never populated — this polyfill doesn't surface server `* OK [ALERT]` responses |
 | `imap_check` | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
 | `imap_mail` | delivery always goes through the `sendmail_path` pipe (false when that ini is empty) — the real extension's Windows build spoke SMTP via the `SMTP`/`smtp_port` ini settings instead |
 | `imap_mailboxmsginfo` | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
 | `imap_mail_compose` | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax) |
 | `imap_open` | of the `$flags` bitmask, only `OP_READONLY` and `CL_EXPUNGE` change behavior — the other `OP_*` flags are validated, then ignored; the `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored |
 | `imap_reopen` | only switches folders on the same connection — can't reconnect to a different host, since credentials aren't retained after `imap_open` |
-| `imap_sort` | always sorts client-side (a port of c-client's algorithms, including RFC 5256 base subjects for `SORTSUBJECT`); real ext-imap hands sorting to the server when it advertises the `SORT` capability, so results can differ on servers whose `SORT` deviates from RFC 5256 |
 | `imap_thread` | always threads client-side (a port of c-client's REFERENCES fallback); real ext-imap hands threading to the server when it advertises `THREAD=REFERENCES`, so results can differ on servers whose THREAD deviates from RFC 5256 |
 
 <details>

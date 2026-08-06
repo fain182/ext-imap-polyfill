@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\Support\SeedClient;
+
 /**
  * POP3 message reading, flags/delete, search, and structure. Greenmail's
  * POP3 service only ever exposes a single shared INBOX (see
@@ -10,18 +12,9 @@ namespace ImapPolyfill\Tests\Integration;
  */
 final class Pop3MailboxTest extends GreenmailTestCase
 {
-    private function seedClient(): \Webklex\PHPIMAP\Client
+    private function seedClient(): SeedClient
     {
-        $client = (new \Webklex\PHPIMAP\ClientManager())->make([
-            'host' => self::host(),
-            'port' => self::port(),
-            'encryption' => false,
-            'validate_cert' => false,
-            'username' => self::USER,
-            'password' => self::PASSWORD,
-            'protocol' => 'imap',
-        ]);
-        $client->connect();
+        $client = new SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);
 
         return $client;
     }
@@ -61,6 +54,29 @@ final class Pop3MailboxTest extends GreenmailTestCase
         $this->assertCount(1, $overview);
         $this->assertSame('Overview Me', $overview[0]->subject);
         $this->assertSame($count, $overview[0]->msgno);
+
+        imap_close($connection);
+    }
+
+    /**
+     * POP3 has no SORT command, so the ordering is computed locally — by RFC
+     * 5256 base subjects, which is what puts "Re: Zulu" ahead of "Zulus"
+     * where GreenMail's IMAP SORT would compare the raw subjects instead
+     * (ImapSortTest). Asserted on the two seeded messages only: GreenMail's
+     * POP3 INBOX is shared by every test in this class.
+     */
+    public function test_sort_orders_locally_when_the_protocol_has_no_sort(): void
+    {
+        $folder = $this->seedClient()->getFolder('INBOX');
+        $folder->appendMessage("Subject: Zulus\r\n\r\nBody");
+        $folder->appendMessage("Subject: Re: Zulu\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $count = imap_num_msg($connection);
+        $sorted = imap_sort($connection, SORTSUBJECT, false);
+
+        $positions = array_flip($sorted);
+        $this->assertLessThan($positions[$count - 1], $positions[$count]);
 
         imap_close($connection);
     }

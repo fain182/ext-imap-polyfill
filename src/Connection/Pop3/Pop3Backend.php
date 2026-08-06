@@ -3,8 +3,9 @@
 namespace ImapPolyfill\Connection\Pop3;
 
 use ImapPolyfill\Connection\ConnectionBackend;
+use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Message\MessageSequence;
-use Webklex\PHPIMAP\Exceptions\MessageNotFoundException;
+use ImapPolyfill\Connection\MessageNotFoundException;
 
 /**
  * ConnectionBackend implementation speaking raw POP3. Mirrors the real
@@ -17,7 +18,7 @@ use Webklex\PHPIMAP\Exceptions\MessageNotFoundException;
  */
 final class Pop3Backend implements ConnectionBackend
 {
-    private const UID_MODE = \Webklex\PHPIMAP\IMAP::ST_UID;
+    private const UID_MODE = UidMode::UID;
 
     /** Fake INTERNALDATE: POP3 has none, and real ext-imap reports the epoch. */
     private const FAKE_INTERNAL_DATE = ' 1-Jan-1970 00:00:00 +0000';
@@ -137,6 +138,23 @@ final class Pop3Backend implements ConnectionBackend
         return $ids;
     }
 
+    /**
+     * POP3 advertises nothing an imap_* function gates on, so every
+     * capability-gated code path takes its non-IMAP branch.
+     */
+    public function hasCapability(string $capability): bool
+    {
+        return false;
+    }
+
+    /**
+     * POP3 has no SORT command; null hands imap_sort() back to its local sort.
+     */
+    public function sort(string $program, string $charset, array $searchTokens, int $uidMode): ?array
+    {
+        return null;
+    }
+
     public function headers(array $ids, string $type, int $uidMode): array
     {
         $result = [];
@@ -160,7 +178,7 @@ final class Pop3Backend implements ConnectionBackend
                 $entry[$item] = $this->fetchItem($item, $msgno, $message);
             }
 
-            // Mirrors webklex's own fetch() response shape: a single
+            // Mirrors the IMAP backend's fetch() response shape: a single
             // requested item collapses to its scalar value per id instead
             // of a one-key array (see Mailbox::body()/fetchBody()/fetchMime()
             // vs. headerInfo()/fetchOverview(), which read it back that way).
