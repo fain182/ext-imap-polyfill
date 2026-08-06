@@ -60,7 +60,6 @@ Every implemented function's object/array shape (property names, casing, flag se
 
 | Function | Divergence |
 |---|---|
-| `imap_alerts` | alert text is reassembled from the parsed response, so runs of whitespace inside it collapse to a single space |
 | `imap_check` | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
 | `imap_mail` | delivery always goes through the `sendmail_path` pipe (false when that ini is empty) — the real extension's Windows build spoke SMTP via the `SMTP`/`smtp_port` ini settings instead |
 | `imap_mailboxmsginfo` | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |

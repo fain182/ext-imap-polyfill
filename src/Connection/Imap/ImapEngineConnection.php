@@ -78,6 +78,14 @@ final class ImapEngineConnection extends ImapConnection
         // "[ALERT] " comparison, trailing space included.
         $text = $response->tokensAfter(3);
 
-        return $text === [] ? null : '[ALERT] '.implode(' ', array_map('strval', $text));
+        if ($text === []) {
+            return null;
+        }
+
+        // Reassembled from the parsed tokens, since the raw line is gone by
+        // now: parentheses and quoting survive the round trip, but a run of
+        // whitespace inside the text collapses to a single space, where
+        // c-client hands the line to mm_notify() untouched.
+        return '[ALERT] '.implode(' ', array_map('strval', $text));
     }
 }
