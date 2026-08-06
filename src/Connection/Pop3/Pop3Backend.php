@@ -155,6 +155,14 @@ final class Pop3Backend implements ConnectionBackend
         return null;
     }
 
+    /**
+     * Likewise no THREAD; imap_thread() threads locally over POP3.
+     */
+    public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array
+    {
+        return null;
+    }
+
     public function headers(array $ids, string $type, int $uidMode): array
     {
         $result = [];

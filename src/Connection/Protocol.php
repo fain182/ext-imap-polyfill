@@ -116,6 +116,46 @@ final class Protocol
     }
 
     /**
+     * Server-side threading, issued the way c-client's imap_thread_work()
+     * does: "UID THREAD" or "THREAD", the algorithm name as a bare atom, the
+     * caller's charset or US-ASCII, and the search program.
+     *
+     * Returns the nested id groups of the untagged THREAD response as plain
+     * arrays — "(1)(2 3 (4)(5))" comes back as [[1], [2, 3, [4], [5]]] —
+     * leaving the tree shaping to Message\ThreadBuilder. Null when the
+     * server rejects the command, c-client's cue to thread locally.
+     *
+     * @param string[] $searchTokens
+     *
+     * @return array<int, mixed>|null
+     */
+    public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array
+    {
+        try {
+            $responses = $this->connection->sendAndCollect(
+                $uidMode === UidMode::UID ? 'UID THREAD' : 'THREAD',
+                [$algorithm, self::astring($charset), ...$searchTokens],
+            );
+        } catch (ImapCommandException $e) {
+            if ((string) ($e->response()->tokenAt(1) ?? '') !== 'BAD') {
+                throw $e;
+            }
+
+            return null;
+        }
+
+        foreach ($responses as $response) {
+            if ((string) $response->type() !== 'THREAD') {
+                continue;
+            }
+
+            return array_map(self::value(...), $response->tokensAfter(2));
+        }
+
+        return [];
+    }
+
+    /**
      * @param int[] $ids
      *
      * @return array<int, string>

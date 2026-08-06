@@ -93,6 +93,11 @@ final class ImapBackend implements ConnectionBackend
         return $this->protocol->sort($program, $charset, $searchTokens, $uidMode);
     }
 
+    public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array
+    {
+        return $this->protocol->thread($algorithm, $charset, $searchTokens, $uidMode);
+    }
+
     public function headers(array $ids, string $type, int $uidMode): array
     {
         return $this->protocol->headers($ids, $type, $uidMode);

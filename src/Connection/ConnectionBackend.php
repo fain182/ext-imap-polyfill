@@ -67,6 +67,17 @@ interface ConnectionBackend
     public function sort(string $program, string $charset, array $searchTokens, int $uidMode): ?array;
 
     /**
+     * Server-side threading. Returns the nested id groups of the THREAD
+     * response, or null when the server has no usable threader — c-client's
+     * cue to thread locally instead.
+     *
+     * @param string[] $searchTokens
+     *
+     * @return array<int, mixed>|null
+     */
+    public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array;
+
+    /**
      * @param int[] $ids
      *
      * @return array<int, string>

@@ -7,10 +7,13 @@ GREENMAIL_IMAGE := docker.io/greenmail/standalone:2.1.12
 GREENMAIL_NAME := ext-imap-polyfill-greenmail
 GREENMAIL_PORT := 13143
 GREENMAIL_POP3_PORT := 13110
+DOVECOT_IMAGE := docker.io/dovecot/dovecot:latest
+DOVECOT_NAME := ext-imap-polyfill-dovecot
+DOVECOT_PORT := 13144
 NETWORK_NAME := ext-imap-polyfill-net
 PARITY_IMAGE := ext-imap-polyfill-parity
 
-.PHONY: install test test-unit test-integration phpstan greenmail-up greenmail-down parity parity-build
+.PHONY: install test test-unit test-integration phpstan greenmail-up greenmail-down dovecot-up dovecot-down parity parity-build
 
 install:
 	composer install
@@ -47,9 +50,31 @@ greenmail-down:
 	$(CONTAINER_RUNTIME) rm -f $(GREENMAIL_NAME) >/dev/null 2>&1 || true
 	$(CONTAINER_RUNTIME) network rm $(NETWORK_NAME) >/dev/null 2>&1 || true
 
-test-integration: install greenmail-up
+## Second fixture, for the two things Greenmail has no support for at all:
+## THREAD and ACL (tests/Integration/DovecotTestCase). Its unprivileged IMAP
+## listener is on 31143, not 143. Tests skip themselves when it isn't up, so
+## this is only needed for the Dovecot-specific classes.
+dovecot-up:
+	$(CONTAINER_RUNTIME) network create $(NETWORK_NAME) >/dev/null 2>&1 || true
+	$(CONTAINER_RUNTIME) rm -f $(DOVECOT_NAME) >/dev/null 2>&1 || true
+	$(CONTAINER_RUNTIME) run -d --name $(DOVECOT_NAME) \
+		--network $(NETWORK_NAME) --network-alias dovecot \
+		-p $(DOVECOT_PORT):31143 \
+		-e USER_PASSWORD=testpass \
+		-v $(CURDIR)/tests/fixtures/dovecot.conf:/etc/dovecot/conf.d/10-test.conf:ro,Z \
+		$(DOVECOT_IMAGE)
+	@echo "Waiting for Dovecot to greet IMAP clients on port $(DOVECOT_PORT)..."
+	@until exec 5<>/dev/tcp/127.0.0.1/$(DOVECOT_PORT) && read -r -t 2 greeting <&5 && [[ "$$greeting" == '* OK'* ]]; do \
+		exec 5<&- 2>/dev/null; sleep 1; \
+	done
+
+dovecot-down:
+	$(CONTAINER_RUNTIME) rm -f $(DOVECOT_NAME) >/dev/null 2>&1 || true
+
+test-integration: install greenmail-up dovecot-up
 	vendor/bin/phpunit --testsuite integration; \
 	status=$$?; \
+	$(MAKE) dovecot-down; \
 	$(MAKE) greenmail-down; \
 	exit $$status
 
@@ -62,15 +87,18 @@ parity-build:
 ## (the last version where it shipped in core), against the same Greenmail
 ## fixture, to check that tests/Integration's assumptions also hold true
 ## against the genuine extension and not just against this polyfill.
-parity: parity-build greenmail-up
+parity: parity-build greenmail-up dovecot-up
 	$(CONTAINER_RUNTIME) run --rm \
 		--network $(NETWORK_NAME) \
 		-e IMAP_POLYFILL_TEST_HOST=greenmail \
 		-e IMAP_POLYFILL_TEST_PORT=3143 \
 		-e IMAP_POLYFILL_TEST_POP3_PORT=3110 \
+		-e IMAP_POLYFILL_DOVECOT_HOST=dovecot \
+		-e IMAP_POLYFILL_DOVECOT_PORT=31143 \
 		-v $(CURDIR):/app:Z \
 		$(PARITY_IMAGE) \
 		sh -c 'composer install --quiet && php -m | grep -q imap && vendor/bin/phpunit --testsuite integration'; \
 	status=$$?; \
+	$(MAKE) dovecot-down; \
 	$(MAKE) greenmail-down; \
 	exit $$status

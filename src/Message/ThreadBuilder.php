@@ -348,6 +348,80 @@ final class ThreadBuilder
     }
 
     /**
+     * Rebuilds the container tree from the nested id groups of a server-side
+     * THREAD response, so the result flattens through exactly the same code
+     * as the local threader's.
+     *
+     * @param array<int, mixed> $groups
+     *
+     * @return ThreadContainer[]
+     */
+    public static function containersFromServer(array $groups, bool $byUid): array
+    {
+        $roots = [];
+        foreach ($groups as $group) {
+            $root = self::containerGroup(is_array($group) ? $group : [$group], $byUid);
+
+            if ($root !== null) {
+                $roots[] = $root;
+            }
+        }
+
+        return $roots;
+    }
+
+    /**
+     * RFC 5256 §4: inside a thread, consecutive ids are a parent/child chain,
+     * and a nested list is a set of branches hanging off the id before it.
+     *
+     * @param array<int, mixed> $group
+     */
+    private static function containerGroup(array $group, bool $byUid): ?ThreadContainer
+    {
+        $root = null;
+        $current = null;
+
+        foreach ($group as $element) {
+            if (is_array($element)) {
+                $child = self::containerGroup($element, $byUid);
+
+                if ($child === null) {
+                    continue;
+                }
+
+                if ($current === null) {
+                    // A thread opening on a nested list has no message of its
+                    // own at the root; c-client stands a dummy node in for it.
+                    $root = $current = new ThreadContainer();
+                }
+
+                $child->parent = $current;
+                $current->children[] = $child;
+
+                continue;
+            }
+
+            $node = new ThreadContainer();
+            if ($byUid) {
+                $node->uid = (int) $element;
+            } else {
+                $node->msgno = (int) $element;
+            }
+
+            if ($current === null) {
+                $root = $node;
+            } else {
+                $node->parent = $current;
+                $current->children[] = $node;
+            }
+
+            $current = $node;
+        }
+
+        return $root;
+    }
+
+    /**
      * Converts a root-level forest into c-client's THREADNODE linked
      * representation — counter-intuitively, ->next is the *child* pointer
      * and ->branch is the *sibling* pointer (confirmed against c-client's

@@ -66,7 +66,6 @@ Every implemented function's object/array shape (property names, casing, flag se
 | `imap_mail_compose` | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax) |
 | `imap_open` | of the `$flags` bitmask, only `OP_READONLY` and `CL_EXPUNGE` change behavior — the other `OP_*` flags are validated, then ignored; the `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored |
 | `imap_reopen` | only switches folders on the same connection — can't reconnect to a different host, since credentials aren't retained after `imap_open` |
-| `imap_thread` | always threads client-side (a port of c-client's REFERENCES fallback); real ext-imap hands threading to the server when it advertises `THREAD=REFERENCES`, so results can differ on servers whose THREAD deviates from RFC 5256 |
 
 <details>
 <summary>Full list of the 70 implemented functions</summary>
@@ -157,11 +156,11 @@ Cross-cutting divergences from the real extension (per-function ones are in the 
 ```bash
 make install          # composer install
 make test-unit        # pure-PHP tests, no server needed
-make test-integration  # spins up a disposable Greenmail IMAP+POP3 server, runs the full suite against it
+make test-integration  # spins up disposable Greenmail (IMAP+POP3) and Dovecot servers, runs the full suite against them
 make test              # both of the above
 ```
 
-Docker or Podman is required for `test-integration` (a `docker-compose.yml` is included for the equivalent setup with compose tooling).
+Docker or Podman is required for `test-integration` (a `docker-compose.yml` is included for the equivalent setup with compose tooling). Almost every test runs against Greenmail; a second Dovecot fixture covers the two commands Greenmail has no support for, THREAD and ACL. Tests needing it skip themselves when it isn't running.
 
 ### Verifying against real ext-imap
 

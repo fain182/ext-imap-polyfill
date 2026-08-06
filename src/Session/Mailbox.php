@@ -683,6 +683,26 @@ final class Mailbox
                 return false;
             }
 
+            // c-client threads on the server whenever it advertises the
+            // algorithm asked for, and only falls back to its own REFERENCES
+            // implementation otherwise (imap4r1.c imap_thread). php_imap.c
+            // always asks for REFERENCES over the whole mailbox ("ALL").
+            if ($this->connection->protocol()->hasCapability('THREAD=REFERENCES')) {
+                $byUid = (bool) ($flags & SE_UID);
+                $groups = $this->connection->protocol()->thread(
+                    'REFERENCES',
+                    'US-ASCII',
+                    ['ALL'],
+                    $byUid ? UidMode::UID : UidMode::MSGNO,
+                );
+
+                if ($groups !== null) {
+                    $tree = ThreadBuilder::flatten(ThreadBuilder::containersFromServer($groups, $byUid), $byUid);
+
+                    return $tree === [] ? false : $tree;
+                }
+            }
+
             $ids = range(1, $exists);
             $data = $this->connection->protocol()->fetch(
                 ['UID', 'INTERNALDATE', 'RFC822.HEADER'],
