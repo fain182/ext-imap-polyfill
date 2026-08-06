@@ -19,7 +19,7 @@ composer require fain182/ext-imap-polyfill
 
 No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the polyfill is a no-op — safe to add before you upgrade, not just after.
 
-Requires PHP 8.1+ and no PHP extension beyond what a default build ships.
+Requires PHP 8.1+. The dependency tree declares two extensions, `ext-json` (always available on PHP 8) and `ext-iconv`. If you installed an earlier release with `--ignore-platform-req=ext-zip`, you can drop the flag: nothing requires `ext-zip` anymore.
 
 The package declares `provide: ext-imap`, so other dependencies that require `ext-imap` install cleanly alongside it.
 
