@@ -135,8 +135,8 @@ final class Protocol
                 $uidMode === UidMode::UID ? 'UID THREAD' : 'THREAD',
                 [$algorithm, self::astring($charset), ...$searchTokens],
             );
-        } catch (ImapCommandException $e) {
-            if ((string) ($e->response()->tokenAt(1) ?? '') !== 'BAD') {
+        } catch (CommandFailedException $e) {
+            if ($e->status() !== 'BAD') {
                 throw $e;
             }
 
