@@ -28,11 +28,27 @@ class AddressListTest extends TestCase
         );
     }
 
-    public function test_parse_skips_malformed_entries(): void
+    /**
+     * Taken from the real extension: a malformed entry is reported in-band,
+     * not dropped. An earlier version of this test asserted the opposite,
+     * which was this polyfill's own invention.
+     */
+    public function test_parse_reports_a_malformed_entry_in_band(): void
     {
-        // A bare "<" has no mailbox characters at all, so it can't match the
-        // address grammar and is dropped rather than producing a bogus entry.
-        $this->assertSame([], AddressList::parse('<', 'example.com')->toLegacyArray());
+        $parsed = AddressList::parse('<', 'example.com')->toLegacyArray();
+
+        $this->assertCount(1, $parsed);
+        $this->assertSame('INVALID_ADDRESS', $parsed[0]->mailbox);
+        $this->assertSame('.SYNTAX-ERROR.', $parsed[0]->host);
+    }
+
+    public function test_parse_keeps_the_addresses_read_before_a_malformed_one(): void
+    {
+        $parsed = AddressList::parse('a@b, <', 'example.com')->toLegacyArray();
+
+        $this->assertCount(2, $parsed);
+        $this->assertSame('a', $parsed[0]->mailbox);
+        $this->assertSame('INVALID_ADDRESS', $parsed[1]->mailbox);
     }
 
     public function test_parse_returns_empty_array_for_empty_string(): void
