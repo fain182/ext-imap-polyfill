@@ -215,6 +215,13 @@ final class Session
     {
         $this->connection->ensureOpen();
 
+        // php_imap.c pings the stream before asking it anything, and
+        // answers false when that fails. Noticing a dead stream is the
+        // ping's answer rather than an error, so nothing is recorded.
+        if (!$this->ping()) {
+            return false;
+        }
+
         try {
             // A live query, unlike the cached counters imap_num_msg() reads:
             // CHECK makes the server report the folder's current state.

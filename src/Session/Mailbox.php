@@ -37,8 +37,14 @@ final class Mailbox
 
         $tokens = preg_split('/\s+/', trim($criteria)) ?: [];
 
+        // Nothing to look through: c-client answers from the count it
+        // holds rather than asking, so no SEARCH goes out and a folder
+        // that has gone away is not an error, just empty.
+        if ($this->selectionCovering(1, UidMode::MSGNO) === false) {
+            return false;
+        }
+
         try {
-            $this->connection->selectOrExamine();
             $ids = $this->connection->protocol()->search($tokens, $uidMode, $charset);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -53,6 +59,35 @@ final class Mailbox
         return array_map('intval', $ids);
     }
 
+    /**
+     * Selects the folder and answers its status, or false when
+     * $messageNum is past the end of it.
+     *
+     * c-client checks the number against the count it already holds and
+     * answers from that: past the end is simply absent, so no FETCH goes
+     * out and nothing is logged. A UID is not a position in the folder, so
+     * it is not checked this way. A selection that fails outright is
+     * another matter, and is reported as any failure is.
+     *
+     * @return array<string, mixed>|false
+     */
+    private function selectionCovering(int $messageNum, int $uidMode): array|false
+    {
+        try {
+            $status = $this->connection->selectOrExamine();
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        if ($uidMode !== UidMode::UID && $messageNum > (int) ($status['exists'] ?? 0)) {
+            return false;
+        }
+
+        return $status;
+    }
+
     public function fetchHeader(int $messageNum, int $flags): string|false
     {
         $this->connection->ensureOpen();
@@ -65,8 +100,11 @@ final class Mailbox
             ? UidMode::UID
             : UidMode::MSGNO;
 
+        if ($this->selectionCovering($messageNum, $uidMode) === false) {
+            return false;
+        }
+
         try {
-            $this->connection->selectOrExamine();
             $headers = $this->connection->protocol()->headers([$messageNum], 'RFC822', $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -154,9 +192,21 @@ final class Mailbox
 
         try {
             $status = $this->connection->selectOrExamine();
-            $ids = MessageSequence::parse($sequence)->expand($status['exists'] ?? 0);
+            $exists = (int) ($status['exists'] ?? 0);
+            $ids = MessageSequence::parse($sequence)->expand($exists);
 
             if ($ids === []) {
+                return [];
+            }
+
+            // c-client's mail_sequence() checks the numbers against the
+            // count it holds and refuses the lot if any is past the end,
+            // writing this itself — the one message on this path that is
+            // not the server's own words. A UID is not a position, so a
+            // UID sequence is not checked this way.
+            if ($uidMode !== UidMode::UID && max($ids) > $exists) {
+                ErrorStack::push('Sequence out of range');
+
                 return [];
             }
 
@@ -205,8 +255,13 @@ final class Mailbox
             throw new \ValueError('imap_fetchstructure(): Argument #2 ($message_num) must be greater than 0');
         }
 
+        $uidMode = ($flags & FT_UID) ? UidMode::UID : UidMode::MSGNO;
+
+        if ($this->selectionCovering($messageNum, $uidMode) === false) {
+            return false;
+        }
+
         try {
-            $this->connection->selectOrExamine();
             $parsed = $this->connection->fetchBodyStructure($messageNum, (bool) ($flags & FT_UID));
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -233,8 +288,11 @@ final class Mailbox
         $wireSection = $section === '0' ? 'HEADER' : $section;
         $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$wireSection}]" : "BODY[{$wireSection}]";
 
+        if ($this->selectionCovering($messageNum, $uidMode) === false) {
+            return false;
+        }
+
         try {
-            $this->connection->selectOrExamine();
             $data = $this->connection->protocol()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -262,8 +320,11 @@ final class Mailbox
             : UidMode::MSGNO;
         $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$section}.MIME]" : "BODY[{$section}.MIME]";
 
+        if ($this->selectionCovering($messageNum, $uidMode) === false) {
+            return false;
+        }
+
         try {
-            $this->connection->selectOrExamine();
             $data = $this->connection->protocol()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -360,8 +421,11 @@ final class Mailbox
             : UidMode::MSGNO;
         $item = ($flags & FT_PEEK) ? 'BODY.PEEK[TEXT]' : 'BODY[TEXT]';
 
+        if ($this->selectionCovering($messageNum, $uidMode) === false) {
+            return false;
+        }
+
         try {
-            $this->connection->selectOrExamine();
             $data = $this->connection->protocol()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -458,9 +522,11 @@ final class Mailbox
             throw new \ValueError('imap_msgno(): Argument #2 ($message_uid) must be greater than 0');
         }
 
-        try {
-            $this->connection->selectOrExamine();
+        if ($this->selectionCovering(1, UidMode::MSGNO) === false) {
+            return 0;
+        }
 
+        try {
             return (int) $this->connection->protocol()->getMessageNumber((string) $messageUid);
         } catch (MessageNotFoundException) {
             return 0;
@@ -613,10 +679,6 @@ final class Mailbox
             $status = $this->connection->selectOrExamine();
             $exists = $status['exists'] ?? 0;
 
-            if ($exists === 0) {
-                return [];
-            }
-
             // c-client hands the whole sort to the server whenever it
             // advertises SORT, and only falls back to its own algorithms when
             // the server has none or rejects the command (imap4r1.c
@@ -633,6 +695,13 @@ final class Mailbox
                 if ($sorted !== null) {
                     return $sorted;
                 }
+            }
+
+            // Only the local algorithms need the count: an empty folder
+            // has no range to walk. The server was still asked first, so a
+            // connection that has gone is reported rather than passed over.
+            if ($exists === 0) {
+                return [];
             }
 
             if ($searchCriteria !== null) {
@@ -655,7 +724,9 @@ final class Mailbox
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
-            return false;
+            // php_imap.c fills an array from whatever mail_sort() gave it,
+            // so a failed sort is an empty result rather than false.
+            return [];
         }
 
         $host = $this->connection->host();
