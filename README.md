@@ -43,30 +43,16 @@ imap_close($imap);
 
 **72 of 75** `imap_*` functions are implemented. The missing three are the SCAN family (`imap_scan`, `imap_scanmailbox`, `imap_listscan`) — a command dropped from IMAP4rev1 that in practice only UW-IMAP ever spoke, so there is nothing left to characterize it against. Calling them hits PHP's "undefined function" error, same as before this package existed.
 
-Shapes and behaviour are checked against the real extension ([how](#verifying-against-real-ext-imap)). Anything not listed here matches it:
+POP3 works too, with the same reduced feature set it has under the real extension. Shapes and behaviour are checked against that extension ([how](#verifying-against-real-ext-imap)); anything not listed here matches it:
 
 | Function | Divergence |
 |---|---|
 | `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host stays as written in the spec; c-client resolves it to its canonical DNS name |
 | `imap_mail` | always delivers through the `sendmail_path` pipe, and returns false when that ini is empty |
 | `imap_mail_compose` | address lists use the simplified parser of `imap_rfc822_parse_adrlist`: no group or route syntax |
-| `imap_open` | only `OP_READONLY` and `CL_EXPUNGE` act; other `OP_*` flags and the `$options` argument are validated, then ignored |
+| `imap_open` | only `OP_READONLY` and `CL_EXPUNGE` act, and of the connection-string flags only `/ssl`, `/tls`, `/novalidate-cert`, `/pop3` and `/readonly`; the rest — other `OP_*` flags, the `$options` argument, `/debug`, `/secure`, `/norsh` — are parsed, then ignored |
 | `imap_reopen` | switches folders on the same connection only: credentials aren't retained, so it can't reconnect elsewhere |
 | `imap_search` | over POP3 only, the criteria grammar is a practical subset: `ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, substring `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT`, `SINCE`/`BEFORE`/`ON` |
-
-### Connection string flags
-
-In the `{host[:port][/flag...]}folder` mailbox spec, the flags that change behavior are:
-
-- `/ssl` — implicit TLS
-- `/tls` — STARTTLS
-- `/novalidate-cert` — skip TLS certificate validation
-- `/pop3` — connect over POP3 instead of IMAP, with the same reduced feature set as under the real extension: one mailbox named `INBOX`, `SEARCH`/`STATUS`/`BODYSTRUCTURE` synthesized client-side, flags lasting only for the connection, copy/move/append/mailbox-management refused
-- `/readonly` — open the mailbox read-only, same as passing `OP_READONLY`
-
-When no port is given, the default follows the service and encryption, like c-client: IMAP 143 (993 with `/ssl`), POP3 110 (995 with `/ssl`).
-
-Any other flag (`/imap`, `/norsh`, `/secure`, `/debug`, …) is accepted and ignored, so existing connection strings parse fine.
 
 ### Cross-cutting divergences
 
