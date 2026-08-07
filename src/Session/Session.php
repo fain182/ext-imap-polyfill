@@ -74,6 +74,10 @@ final class Session
         );
         $connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
 
+        if ($flags & OP_HALFOPEN) {
+            $connection->markHalfOpen();
+        }
+
         try {
             $status = $connection->selectOrExamine();
             $connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);

@@ -39,6 +39,8 @@ final class Connection
     /** Mirrors c-client's stream->recent; see $cachedNumMsg. */
     private int $cachedNumRecent = 0;
 
+    private bool $halfOpen = false;
+
     /**
      * Mirrors c-client's stream->user_flags: the custom keywords this
      * session knows about, in registration order, fed by the SELECT FLAGS
@@ -104,6 +106,7 @@ final class Connection
         $this->user = $user;
         $this->folder = $folder;
         $this->readOnly = $readOnly;
+        $this->halfOpen = false;
         $this->userFlags = [];
     }
 
@@ -119,7 +122,19 @@ final class Connection
         return $this->mailboxPrefix
             .($this->readOnly ? '/readonly' : '')
             .'/user="'.$this->user.'"}'
-            .$this->folder;
+            .($this->halfOpen ? '<no_mailbox>' : $this->folder);
+    }
+
+    /**
+     * OP_HALFOPEN: connected and authenticated, with nothing selected and
+     * no folder to select later — c-client leaves stream->mailbox empty and
+     * php_imap prints the literal "<no_mailbox>" in its place. The spec's
+     * folder is remembered all the same, so an imap_reopen() naming it
+     * lands where it would have.
+     */
+    public function markHalfOpen(): void
+    {
+        $this->halfOpen = true;
     }
 
     /**
@@ -183,10 +198,16 @@ final class Connection
     {
         $this->folder = $folder;
         $this->readOnly = $readOnly;
+        $this->halfOpen = false;
     }
 
     public function check(): void
     {
+        // Nothing is selected for the server to report on.
+        if ($this->halfOpen) {
+            return;
+        }
+
         $this->backend->check();
     }
 
@@ -206,6 +227,19 @@ final class Connection
      */
     public function selectOrExamine(): array
     {
+        // A half-open connection has no selection to make or restore, and
+        // an empty folder is what every caller of this reads as "nothing
+        // there" — the 0 messages imap_num_msg() reports on one.
+        //
+        // Divergence: an operation that then goes to the wire anyway, as
+        // imap_search() does, gets the server's "command not valid in this
+        // state" onto the error stack. c-client answers those from
+        // stream->halfopen without asking, so its stack stays empty. The
+        // return values match either way.
+        if ($this->halfOpen) {
+            return ['exists' => 0, 'recent' => 0];
+        }
+
         return $this->selectOrExamineFolder($this->folder, $this->readOnly);
     }
 
