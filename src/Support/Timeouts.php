@@ -18,6 +18,18 @@ final class Timeouts
         return self::$values[$type] ?? false;
     }
 
+    /**
+     * The same value, as something a socket can be handed: a timeout of zero
+     * or less would mean "never give up" to stream_set_timeout(), which is
+     * the opposite of what asking for a timeout means.
+     */
+    public static function seconds(int $type): int
+    {
+        $value = self::get($type);
+
+        return is_int($value) && $value > 0 ? $value : (int) ini_get('default_socket_timeout');
+    }
+
     public static function set(int $type, int $timeout): bool
     {
         self::init();

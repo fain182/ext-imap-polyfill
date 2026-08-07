@@ -13,8 +13,14 @@ final class Pop3Protocol
     /** @var resource */
     private $stream;
 
-    public function connect(string $host, int $port, string $encryption, bool $validateCert, float $timeout = 30.0): void
-    {
+    public function connect(
+        string $host,
+        int $port,
+        string $encryption,
+        bool $validateCert,
+        float $timeout = 30.0,
+        ?float $readTimeout = null,
+    ): void {
         // /ssl is TLS from the first byte; /tls starts in the clear and
         // upgrades with STLS below. Both must end up encrypted: c-client
         // refuses to continue when the upgrade fails, and connecting in
@@ -44,7 +50,7 @@ final class Pop3Protocol
         }
 
         $this->stream = $stream;
-        stream_set_timeout($this->stream, (int) $timeout);
+        stream_set_timeout($this->stream, (int) ($readTimeout ?? $timeout));
 
         $this->readSingleLine();
 

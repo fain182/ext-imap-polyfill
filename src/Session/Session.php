@@ -5,6 +5,7 @@ namespace ImapPolyfill\Session;
 use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Mailbox\MailboxSpec;
 use ImapPolyfill\Support\ErrorStack;
+use ImapPolyfill\Support\Timeouts;
 
 /**
  * Lifecycle of an \IMAP\Connection: opening it, closing it, reopening it
@@ -90,13 +91,14 @@ final class Session
         $attempts = 1 + max(0, $retries);
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
             $connection = new \ImapPolyfill\Connection\Imap\ImapEngineConnection(
-                new \DirectoryTree\ImapEngine\Connection\Streams\ImapStream()
+                new \ImapPolyfill\Connection\Imap\TimedStream()
             );
 
             try {
                 $connection->connect($spec->host, $spec->port, [
                     'encryption' => $spec->encryption(),
                     'validate_cert' => !$spec->hasFlag('novalidate-cert'),
+                    'timeout' => Timeouts::seconds(IMAP_OPENTIMEOUT),
                 ]);
                 $connection->login($user, $password);
 
@@ -122,7 +124,14 @@ final class Session
             $protocol = new \ImapPolyfill\Connection\Pop3\Pop3Protocol();
 
             try {
-                $protocol->connect($spec->host, $spec->port, $spec->encryption(), !$spec->hasFlag('novalidate-cert'));
+                $protocol->connect(
+                    $spec->host,
+                    $spec->port,
+                    $spec->encryption(),
+                    !$spec->hasFlag('novalidate-cert'),
+                    (float) Timeouts::seconds(IMAP_OPENTIMEOUT),
+                    (float) Timeouts::seconds(IMAP_READTIMEOUT),
+                );
                 $protocol->login($user, $password);
 
                 return new \ImapPolyfill\Connection\Pop3\Pop3Backend($protocol, $spec->host, $mailbox);
