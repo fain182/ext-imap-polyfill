@@ -22,6 +22,11 @@ final class Protocol
     /** @var string[]|null */
     private ?array $capabilities = null;
 
+    /** @var array<int, int>|null msgno => uid for the folder $uidTableFor describes */
+    private ?array $uidTable = null;
+
+    private string $uidTableFor = '';
+
     public function __construct(private readonly ImapEngineConnection $connection)
     {
     }
@@ -50,7 +55,22 @@ final class Protocol
             $keyword = (string) ($response->tokenAt(2) ?? '');
             if ($keyword === 'EXISTS' || $keyword === 'RECENT') {
                 $result[strtolower($keyword)] = (int) $type;
+                continue;
             }
+
+            // "* OK [UIDVALIDITY 1234]", kept only to invalidate the uid table.
+            $code = $response->tokenAt(2);
+            if ($code instanceof ResponseCodeData && (string) ($code->tokenAt(0) ?? '') === 'UIDVALIDITY') {
+                $result['uidvalidity'] = (int) (string) ($code->tokenAt(1) ?? 0);
+            }
+        }
+
+        // Every wrapper re-selects before its operation, so this is where the
+        // uid table can tell whether it is still describing the same messages.
+        $fingerprint = sprintf('%s/%d/%d', $folder, $result['uidvalidity'] ?? 0, $result['exists'] ?? 0);
+        if ($fingerprint !== $this->uidTableFor) {
+            $this->uidTable = null;
+            $this->uidTableFor = $fingerprint;
         }
 
         return $result;
@@ -181,16 +201,23 @@ final class Protocol
 
     /**
      * msgno => uid for the whole selected folder, the way c-client keeps its
-     * per-mailbox uid table.
+     * per-mailbox uid table — cached like one too, since imap_uid() is
+     * routinely called once per message and this fetch covers the whole
+     * mailbox. selectOrExamine() drops the cache as soon as the folder,
+     * its UIDVALIDITY or its message count changes.
      *
      * @return array<int, int>
      */
     public function getUid(): array
     {
+        if ($this->uidTable !== null) {
+            return $this->uidTable;
+        }
+
         /** @var array<int, int> $uids */
         $uids = $this->fetchSet('1:*', ['UID'], UidMode::MSGNO);
 
-        return $uids;
+        return $this->uidTable = $uids;
     }
 
     /**
