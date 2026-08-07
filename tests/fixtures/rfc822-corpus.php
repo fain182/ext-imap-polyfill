@@ -170,6 +170,114 @@ return [
                 ],
             ],
         ],
+        "comment between two words" => [
+            "input" => "Joe (x) Doe <a@b.com>",
+            "expected" => [
+                0 => [
+                    "mailbox" => "a",
+                    "host" => "b.com",
+                    "personal" => "Joe (x) Doe",
+                ],
+            ],
+        ],
+        "comment gluing two words" => [
+            "input" => "Joe(x)Doe <a@b.com>",
+            "expected" => [
+                0 => [
+                    "mailbox" => "a",
+                    "host" => "b.com",
+                    "personal" => "Joe(x)Doe",
+                ],
+            ],
+        ],
+        "leading comment then quoted name" => [
+            "input" => "(x) \x22Joe Doe\x22 <a@b.com>",
+            "expected" => [
+                0 => [
+                    "mailbox" => "a",
+                    "host" => "b.com",
+                    "personal" => "Joe Doe",
+                ],
+            ],
+        ],
+        "comment inside a quoted name" => [
+            "input" => "\x22Joe (x) Doe\x22 <a@b.com>",
+            "expected" => [
+                0 => [
+                    "mailbox" => "a",
+                    "host" => "b.com",
+                    "personal" => "Joe (x) Doe",
+                ],
+            ],
+        ],
+        "comment holding a quote" => [
+            "input" => "Joe (\x22x) <a@b.com>",
+            "expected" => [
+                0 => [
+                    "mailbox" => "a",
+                    "host" => "b.com",
+                    "personal" => "Joe",
+                ],
+            ],
+        ],
+        "comment in the local part" => [
+            "input" => "<(x)joe@example.com>",
+            "expected" => [
+                0 => [
+                    "mailbox" => "joe",
+                    "host" => "example.com",
+                ],
+            ],
+        ],
+        "comment after an angle address" => [
+            "input" => "<a@b.com> (Joe)",
+            "expected" => [
+                0 => [
+                    "mailbox" => "a",
+                    "host" => "b.com",
+                ],
+            ],
+        ],
+        "comment after a named address" => [
+            "input" => "Joe <a@b.com> (Other)",
+            "expected" => [
+                0 => [
+                    "mailbox" => "a",
+                    "host" => "b.com",
+                    "personal" => "Joe",
+                ],
+            ],
+        ],
+        "comment after the address, nested" => [
+            "input" => "joe@example.com (Joe (the boss) Doe)",
+            "expected" => [
+                0 => [
+                    "mailbox" => "joe",
+                    "host" => "example.com",
+                    "personal" => "Joe (the boss) Doe",
+                ],
+            ],
+        ],
+        "two quoted words" => [
+            "input" => "\x22a\x22 \x22b\x22 <x@y.com>",
+            "expected" => [
+                0 => [
+                    "mailbox" => "x",
+                    "host" => "y.com",
+                    "personal" => "a b",
+                ],
+            ],
+        ],
+        "quoted word then atom" => [
+            "input" => "\x22a\x22 b <x@y.com>",
+            "expected" => [
+                0 => [
+                    "mailbox" => "x",
+                    "host" => "y.com",
+                    "personal" => "a b",
+                ],
+            ],
+        ],
         "quoted name" => [
             "input" => "\x22Simple Name\x22 <a@b.com>",
             "expected" => [

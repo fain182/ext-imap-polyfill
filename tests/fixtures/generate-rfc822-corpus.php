@@ -43,6 +43,20 @@ $addressLists = [
     'unterminated comment' => 'Joe (never closed <joe@example.com>',
     'escaped paren inside a comment' => 'Joe (not \) yet) <joe@example.com>',
     'empty comment' => 'Joe () <joe@example.com>',
+    // A comment between two words of the name survives, where one before
+    // or after the name does not: c-client copies the source span running
+    // from the first real token to the last, comments and all.
+    'comment between two words' => 'Joe (x) Doe <a@b.com>',
+    'comment gluing two words' => 'Joe(x)Doe <a@b.com>',
+    'leading comment then quoted name' => '(x) "Joe Doe" <a@b.com>',
+    'comment inside a quoted name' => '"Joe (x) Doe" <a@b.com>',
+    'comment holding a quote' => 'Joe ("x) <a@b.com>',
+    'comment in the local part' => '<(x)joe@example.com>',
+    'comment after an angle address' => '<a@b.com> (Joe)',
+    'comment after a named address' => 'Joe <a@b.com> (Other)',
+    'comment after the address, nested' => 'joe@example.com (Joe (the boss) Doe)',
+    'two quoted words' => '"a" "b" <x@y.com>',
+    'quoted word then atom' => '"a" b <x@y.com>',
 
     // Quoted strings.
     'quoted name' => '"Simple Name" <a@b.com>',

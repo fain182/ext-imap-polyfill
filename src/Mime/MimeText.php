@@ -51,7 +51,11 @@ final class MimeText
         // c-client accepts any single character as the encoding and only
         // acts on B and Q; anything else leaves the data untouched but still
         // produces a segment carrying the charset.
-        $pattern = '/=\?(?P<charset>[^?\s]+)\?(?P<encoding>[^?])\?(?P<data>[^?]*)\?=/';
+        //
+        // The charset may hold a space here, where decode() — imap_utf8()'s
+        // side — will not touch such a word at all. The two functions really
+        // do differ on this in the real extension.
+        $pattern = '/=\?(?P<charset>[^?]+)\?(?P<encoding>[^?])\?(?P<data>[^?]*)\?=/';
 
         $segments = [];
         $cursor = 0;

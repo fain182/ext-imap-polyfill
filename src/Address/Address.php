@@ -18,78 +18,147 @@ final class Address
     ) {
     }
 
-    public static function parse(string $part, string $defaultHostname): ?self
+    /**
+     * One address, scanned the way c-client's rfc822_parse_mailbox() scans
+     * it: a phrase, and then either the angle brackets that make the phrase
+     * a personal name, or an "@" that makes it the local part, or nothing
+     * at all — in which case the phrase was the whole mailbox.
+     */
+    public static function parse(string $part, string $defaultHostname, bool &$trailingData = false): ?self
     {
-        if ($part === '') {
-            return null;
-        }
+        $cursor = new Rfc822Cursor($part);
+        $cursor->skipWhitespaceAndComments();
+        $personal = null;
 
-        $quoted = null;
+        // A comment after the address stands in as the name only where the
+        // address was written bare; c-client reaches that path from the
+        // addr-spec branch, never from the one that read angle brackets.
+        $angleAddress = $cursor->peek() === '<';
 
-        if (str_starts_with($part, '"')) {
-            $split = self::splitQuotedName($part);
+        if ($angleAddress) {
+            $cursor->skip();
+            $address = self::parseAddrSpec($cursor, $defaultHostname);
+        } else {
+            $start = $cursor->position();
+            $phraseEnd = self::readPhrase($cursor);
 
-            // A quote that never closes makes the whole list malformed,
-            // rather than the name running to the end of the input.
-            if ($split === null) {
+            if ($phraseEnd === null) {
                 return null;
             }
 
-            [$quoted, $part] = $split;
+            // The phrase is the source text from its first word to its
+            // last, so a comment *between* two words is part of it, while
+            // one before or after was skipped as whitespace and is gone.
+            $phrase = Rfc822Cursor::unquote($cursor->slice($start, $phraseEnd));
+
+            if ($cursor->peek() === '<') {
+                $cursor->skip();
+                $angleAddress = true;
+                $personal = $phrase;
+                $address = self::parseAddrSpec($cursor, $defaultHostname);
+            } elseif ($cursor->peek() === '@') {
+                $cursor->skip();
+                $host = self::readDotAtom($cursor);
+                $address = [$phrase, $host !== '' ? $host : $defaultHostname];
+            } else {
+                $address = [$phrase, $defaultHostname];
+            }
         }
 
-        // The name is ended by whitespace or by the bracket that opens the
-        // address — nothing has to stand between the two.
-        if (!preg_match(
-            '/^(?:"?(?P<name>[^"<]*)"?(?:\s+|(?=<)))?<?(?P<mailbox>[^\s@<>]+)(?:@(?P<host>[^\s@<>]+))?>?$/',
-            $part,
-            $matches
-        )) {
+        if ($address === null) {
             return null;
         }
 
-        $personal = trim($matches['name']);
+        if ($cursor->peek() === '>') {
+            $cursor->skip();
+        }
 
-        return new self(
-            $matches['mailbox'],
-            ($matches['host'] ?? '') !== '' ? $matches['host'] : $defaultHostname,
-            // An empty name is no name at all — unless it was written as
-            // one, where c-client keeps the empty string it copied out.
-            $quoted ?? ($personal !== '' ? $personal : null),
-        );
+        $cursor->skipWhitespaceAndComments();
+
+        // "joe@example.com (Joe Doe)" — RFC 822's other way of writing a name.
+        if (!$angleAddress) {
+            $personal ??= $cursor->lastComment();
+        }
+
+        $trailingData = !$cursor->atEnd();
+
+        return new self($address[0], $address[1], $personal);
     }
 
     /**
-     * Splits a part opening with a quoted personal name into that name and
-     * whatever follows it. A quoted string is the one place an address may
-     * carry the characters that otherwise delimit the list — a quote of its
-     * own included, escaped — and c-client drops the backslashes as it
-     * copies the name out. Null when the quote never closes.
-     *
-     * @return array{0: string, 1: string}|null [personal, remainder]
+     * Words, and the dots and comments between them, up to whatever ends
+     * the phrase. Answers where the last word ended — which is where the
+     * phrase ends, never at the trailing whitespace or comment the scan had
+     * to look through to find that out.
      */
-    private static function splitQuotedName(string $part): ?array
+    private static function readPhrase(Rfc822Cursor $cursor): ?int
     {
-        $name = '';
-        $length = strlen($part);
+        $end = $cursor->readWord();
 
-        for ($index = 1; $index < $length; ++$index) {
-            $char = $part[$index];
+        if ($end === null) {
+            return null;
+        }
 
-            if ($char === '\\' && $index + 1 < $length) {
-                $name .= $part[++$index];
+        while (true) {
+            $cursor->skipWhitespaceAndComments();
+            $char = $cursor->peek();
+
+            if ($char === '.') {
+                $cursor->skip();
+                $end = $cursor->position();
 
                 continue;
             }
 
-            if ($char === '"') {
-                return [$name, trim(substr($part, $index + 1))];
+            if ($char === null || $char === '<' || $char === '@' || $char === '>') {
+                return $end;
             }
 
-            $name .= $char;
+            $next = $cursor->readWord();
+
+            if ($next === null) {
+                return $end;
+            }
+
+            $end = $next;
+        }
+    }
+
+    /**
+     * The local@host inside a pair of angle brackets.
+     *
+     * @return array{0: string, 1: string}|null [mailbox, host]
+     */
+    private static function parseAddrSpec(Rfc822Cursor $cursor, string $defaultHostname): ?array
+    {
+        $cursor->skipWhitespaceAndComments();
+        $start = $cursor->position();
+        $localEnd = self::readPhrase($cursor);
+
+        if ($localEnd === null) {
+            return null;
         }
 
-        return null;
+        $mailbox = Rfc822Cursor::unquote($cursor->slice($start, $localEnd));
+
+        if ($cursor->peek() !== '@') {
+            return [$mailbox, $defaultHostname];
+        }
+
+        $cursor->skip();
+        $host = self::readDotAtom($cursor);
+
+        return [$mailbox, $host !== '' ? $host : $defaultHostname];
+    }
+
+    /** A domain: atoms joined by dots, with comments allowed between them. */
+    private static function readDotAtom(Rfc822Cursor $cursor): string
+    {
+        $cursor->skipWhitespaceAndComments();
+        $start = $cursor->position();
+        $end = self::readPhrase($cursor);
+
+        return $end === null ? '' : Rfc822Cursor::unquote($cursor->slice($start, $end));
     }
 
     /** The entry c-client emits where a group begins: its name, and nothing else. */
