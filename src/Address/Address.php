@@ -38,8 +38,10 @@ final class Address
             [$quoted, $part] = $split;
         }
 
+        // The name is ended by whitespace or by the bracket that opens the
+        // address — nothing has to stand between the two.
         if (!preg_match(
-            '/^(?:"?(?P<name>[^"<]*)"?\s+)?<?(?P<mailbox>[^\s@<>]+)(?:@(?P<host>[^\s@<>]+))?>?$/',
+            '/^(?:"?(?P<name>[^"<]*)"?(?:\s+|(?=<)))?<?(?P<mailbox>[^\s@<>]+)(?:@(?P<host>[^\s@<>]+))?>?$/',
             $part,
             $matches
         )) {

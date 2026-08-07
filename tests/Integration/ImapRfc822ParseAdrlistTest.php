@@ -90,4 +90,22 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
             $this->assertSame($fields, get_object_vars($parsed[$index]), "entry {$index}");
         }
     }
+
+    /**
+     * Nothing has to separate an unquoted personal name from the address
+     * it belongs to: the angle bracket ends it by itself. Mail in the wild
+     * is written this way — an encoded word butted straight against the
+     * address — and reading it as one unparseable token loses the address
+     * as well as the name.
+     */
+    public function test_a_personal_name_needs_no_space_before_the_angle_bracket(): void
+    {
+        $parsed = @imap_rfc822_parse_adrlist('=?X-IAS-German?B?bXlHb3Y=?=<info@bla.bla>', 'default.host');
+
+        $this->assertCount(1, $parsed);
+        $this->assertSame(
+            ['mailbox' => 'info', 'host' => 'bla.bla', 'personal' => '=?X-IAS-German?B?bXlHb3Y=?='],
+            get_object_vars($parsed[0]),
+        );
+    }
 }
