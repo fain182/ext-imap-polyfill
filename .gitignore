@@ -3,3 +3,4 @@
 /.phpunit.cache
 /.claude/
 /.phpactor.json
+/.env

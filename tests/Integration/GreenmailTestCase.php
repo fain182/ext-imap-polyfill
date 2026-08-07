@@ -44,6 +44,16 @@ abstract class GreenmailTestCase extends TestCase
         return (int) (getenv('IMAP_POLYFILL_TEST_PORT') ?: 13143);
     }
 
+    /**
+     * Its own setting because the two services are one host only on a
+     * fixture: a real provider puts POP3 on pop3.example.com and IMAP on
+     * imap.example.com.
+     */
+    protected static function pop3Host(): string
+    {
+        return getenv('IMAP_POLYFILL_TEST_POP3_HOST') ?: self::host();
+    }
+
     protected static function pop3Port(): int
     {
         return (int) (getenv('IMAP_POLYFILL_TEST_POP3_PORT') ?: 13110);
@@ -76,7 +86,7 @@ abstract class GreenmailTestCase extends TestCase
 
     protected static function pop3MailboxSpec(string $folder = 'INBOX', string $extraFlags = ''): string
     {
-        return sprintf('{%s:%d%s%s}%s', self::host(), self::pop3Port(), self::pop3Flags(), $extraFlags, $folder);
+        return sprintf('{%s:%d%s%s}%s', self::pop3Host(), self::pop3Port(), self::pop3Flags(), $extraFlags, $folder);
     }
 
     /**
