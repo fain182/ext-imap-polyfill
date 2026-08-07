@@ -17,9 +17,7 @@ final class UnsupportedFeature extends \RuntimeException
     public static function nntp(string $mailbox): self
     {
         return new self(sprintf(
-            'ext-imap-polyfill does not speak NNTP, so "%s" cannot be opened. '
-            .'The real ext-imap connects over NNTP here; this package would '
-            .'silently use IMAP instead, which is why it refuses.',
+            'ext-imap-polyfill does not speak NNTP, so "%s" cannot be opened.',
             $mailbox,
         ));
     }
@@ -27,10 +25,9 @@ final class UnsupportedFeature extends \RuntimeException
     public static function scan(string $function): self
     {
         return new self(sprintf(
-            '%s() is not implemented by ext-imap-polyfill. It sends the IMAP '
-            .'SCAN command, dropped from IMAP4rev1 and in practice only ever '
-            .'implemented by c-client\'s own UW-IMAP server, so there is no '
-            .'server left to run it against.',
+            '%s() is not implemented by ext-imap-polyfill: the IMAP SCAN '
+            .'command it sends was dropped from IMAP4rev1, and current '
+            .'servers do not answer it.',
             $function,
         ));
     }
