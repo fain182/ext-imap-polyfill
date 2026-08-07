@@ -8,9 +8,7 @@
 
 **A drop-in polyfill for the `imap_*` functions removed from PHP core in 8.4.** Install it and your existing code keeps working — same function names, same arguments, same objects coming back.
 
-PHP 8.4 moved `ext-imap` out of core and onto PECL ([RFC](https://wiki.php.net/rfc/unbundle_imap_pspell_oci8)). The C library behind it, c-client, has been unmaintained since 2007 and is disappearing from distributions, so the PECL package gets harder to install every release — and the alternative, rewriting against an OOP library, is a migration rather than a version bump.
-
-This package defines the same global `imap_*` functions, backed by [directorytree/imapengine](https://github.com/DirectoryTree/ImapEngine) for IMAP and a small raw client for POP3. No C extension, no c-client.
+PHP 8.4 moved `ext-imap` onto PECL ([RFC](https://wiki.php.net/rfc/unbundle_imap_pspell_oci8)), where it still needs c-client — unmaintained since 2007 and disappearing from distributions. This package defines the same functions in pure PHP instead, on top of [directorytree/imapengine](https://github.com/DirectoryTree/ImapEngine).
 
 ## Install
 
