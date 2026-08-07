@@ -78,9 +78,9 @@ final class ImapBackend implements ConnectionBackend
         return $this->protocol->bodyStructure($messageNum, $byUid);
     }
 
-    public function search(array $tokens, int $uidMode): array
+    public function search(array $tokens, int $uidMode, string $charset = ''): array
     {
-        return $this->protocol->search($tokens, $uidMode);
+        return $this->protocol->search($tokens, $uidMode, $charset);
     }
 
     public function hasCapability(string $capability): bool

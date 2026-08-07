@@ -132,7 +132,7 @@ final class Pop3Backend implements ConnectionBackend
         return Pop3MimeStructure::parse($this->rawMessage($msgno));
     }
 
-    public function search(array $tokens, int $uidMode): array
+    public function search(array $tokens, int $uidMode, string $charset = ''): array
     {
         $ids = [];
         foreach ($this->uidByMsgno as $msgno => $uid) {

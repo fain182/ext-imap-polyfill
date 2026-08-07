@@ -112,9 +112,16 @@ final class Protocol
      *
      * @return int[]
      */
-    public function search(array $tokens, int $uidMode): array
+    public function search(array $tokens, int $uidMode, string $charset = ''): array
     {
         $command = $uidMode === UidMode::UID ? 'UID SEARCH' : 'SEARCH';
+
+        // CHARSET comes before the criteria, as in c-client's imap_search():
+        // without it the server has no way to read a term whose bytes fall
+        // outside ASCII, and answers BAD rather than searching.
+        if ($charset !== '') {
+            $tokens = ['CHARSET', self::astring($charset), ...$tokens];
+        }
 
         foreach ($this->connection->sendAndCollect($command, $tokens) as $response) {
             if ((string) $response->type() !== 'SEARCH') {

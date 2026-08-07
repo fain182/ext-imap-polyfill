@@ -47,10 +47,12 @@ interface ConnectionBackend
 
     /**
      * @param string[] $tokens
+     * @param string   $charset  how the server should read the criteria's
+     *                           bytes; empty when the caller named none
      *
      * @return int[]
      */
-    public function search(array $tokens, int $uidMode): array;
+    public function search(array $tokens, int $uidMode, string $charset = ''): array;
 
     public function hasCapability(string $capability): bool;
 
