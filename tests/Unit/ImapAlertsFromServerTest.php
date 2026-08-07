@@ -7,10 +7,18 @@ use ImapPolyfill\Tests\ResetsErrorStack;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Alerts are unsolicited, and no test server can be made to emit one on
- * demand — Greenmail never sends `[ALERT]` — so these drive a connection
- * over a faked stream instead of the integration fixture. Skipped under the
- * real extension, which reads its own alert stack, not this one.
+ * Alerts are unsolicited: no command asks for one, the server sends it when
+ * it has something to tell the user (quota, expiring password, admin
+ * notice). Neither fixture can be made to produce one — Greenmail never
+ * sends `[ALERT]` at all, and Dovecot with the quota plugin and a 1k limit
+ * answers an over-quota APPEND with a *tagged* `NO [OVERQUOTA]`, which
+ * c-client would ignore even if it carried the alert code, since only
+ * untagged responses reach the stack.
+ *
+ * So these drive a connection over a faked stream instead. That pins the
+ * capture and the filtering; it does not prove a real server reaches us in
+ * this shape. Skipped under the real extension, which reads its own alert
+ * stack, not this one.
  */
 class ImapAlertsFromServerTest extends TestCase
 {
