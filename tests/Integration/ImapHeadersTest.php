@@ -2,8 +2,15 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\Group;
+
 final class ImapHeadersTest extends GreenmailTestCase
 {
+    /**
+     * The line's flag column comes from \Recent, which the two servers
+     * report differently for a freshly appended message.
+     */
+    #[Group('greenmail-only')]
     public function test_headers_format_matches_real_ext_imap(): void
     {
         $folderName = self::randomFolderName(__FUNCTION__);
@@ -25,6 +32,10 @@ final class ImapHeadersTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * Same \Recent difference in the flag column.
+     */
+    #[Group('greenmail-only')]
     public function test_headers_truncates_subject_and_pads_from(): void
     {
         $folderName = self::randomFolderName(__FUNCTION__);
@@ -49,6 +60,11 @@ final class ImapHeadersTest extends GreenmailTestCase
         return sprintf('%2d-%s-%s', (int) gmdate('j'), gmdate('M'), gmdate('Y'));
     }
 
+    /**
+     * Turns on Greenmail's habit of keeping custom keywords out of the
+     * FLAGS response; Dovecot lists them.
+     */
+    #[Group('greenmail-only')]
     public function test_headers_omits_keywords_the_server_leaves_out_of_the_flags_response(): void
     {
         // c-client fills its session flag table from the untagged FLAGS

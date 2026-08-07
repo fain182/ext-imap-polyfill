@@ -134,6 +134,8 @@ make phpstan           # static analysis at level 6
 
 Docker or Podman is required for `test-integration` (a `docker-compose.yml` is included for the equivalent setup with compose tooling). Almost every test runs against Greenmail; a second Dovecot fixture covers the two commands Greenmail has no support for, THREAD and ACL. Tests needing it skip themselves when it isn't running.
 
+`make cross-check` runs the same suite against Dovecot instead of Greenmail, skipping the handful of tests that can only hold against one of them. It is an audit rather than part of `make test`: a failure means a test — or this polyfill — has grown attached to one server's behaviour.
+
 ### Verifying against real ext-imap
 
 `make parity` runs the exact same integration suite a second time, in a PHP 8.3 container with the genuine `ext-imap` extension installed from source, against the same two fixtures. This is the real check that this polyfill's shapes and behavior actually match the extension it's replacing, not just internally-consistent test assertions.

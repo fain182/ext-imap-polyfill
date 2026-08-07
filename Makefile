@@ -16,7 +16,7 @@ DOVECOT_POP3_PORT := 13111
 NETWORK_NAME := ext-imap-polyfill-net
 PARITY_IMAGE := ext-imap-polyfill-parity
 
-.PHONY: install test test-unit test-integration phpstan greenmail-up greenmail-down dovecot-up dovecot-down parity parity-build
+.PHONY: install test test-unit test-integration cross-check phpstan greenmail-up greenmail-down dovecot-up dovecot-down parity parity-build
 
 install:
 	composer install
@@ -85,6 +85,20 @@ test-integration: install greenmail-up dovecot-up
 	exit $$status
 
 test: test-unit test-integration
+
+## Runs the Greenmail-targeted suite against Dovecot instead, skipping the
+## tests tagged greenmail-only (each carries the reason it cannot move).
+## A failure here means a test has grown attached to one server's behaviour,
+## or this polyfill leans on it — which is how the POP3 uid bug surfaced.
+## Not part of `make test`: it is an audit to run before a release.
+cross-check: install dovecot-up
+	IMAP_POLYFILL_TEST_HOST=127.0.0.1 \
+	IMAP_POLYFILL_TEST_PORT=$(DOVECOT_PORT) \
+	IMAP_POLYFILL_TEST_POP3_PORT=$(DOVECOT_POP3_PORT) \
+	vendor/bin/phpunit --testsuite integration --exclude-group greenmail-only; \
+	status=$$?; \
+	$(MAKE) dovecot-down; \
+	exit $$status
 
 parity-build:
 	$(CONTAINER_RUNTIME) build -f Dockerfile.parity -t $(PARITY_IMAGE) .

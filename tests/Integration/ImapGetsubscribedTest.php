@@ -2,8 +2,15 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\Group;
+
 class ImapGetsubscribedTest extends GreenmailTestCase
 {
+    /**
+     * Asserts an exact folder set, which Dovecot's preexisting mailboxes
+     * change.
+     */
+    #[Group('greenmail-only')]
     public function test_returns_mailbox_objects_for_subscribed_folders_only(): void
     {
         $uniq = uniqid();

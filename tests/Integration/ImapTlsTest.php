@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\Group;
+
 /**
  * The encrypted connection paths. `{host:993/imap/ssl}` is what most real
  * connection strings look like, and before this class nothing ever opened
@@ -10,6 +12,12 @@ namespace ImapPolyfill\Tests\Integration;
  */
 final class ImapTlsTest extends GreenmailTestCase
 {
+    /**
+     * The imaps port belongs to the Greenmail fixture; the Dovecot one
+     * runs with ssl = no, since c-client upgrades to STARTTLS whenever a
+     * server offers it.
+     */
+    #[Group('greenmail-only')]
     public function test_ssl_opens_a_usable_imap_connection(): void
     {
         $folderName = 'TlsBox'.random_int(10000, 99999);
@@ -28,6 +36,10 @@ final class ImapTlsTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * Same: the pop3s port is Greenmail's.
+     */
+    #[Group('greenmail-only')]
     public function test_ssl_over_pop3_opens_a_usable_connection(): void
     {
         $client = new \ImapPolyfill\Tests\Support\SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);

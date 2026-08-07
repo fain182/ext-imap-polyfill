@@ -2,8 +2,15 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\Group;
+
 class ImapHeaderinfoTest extends GreenmailTestCase
 {
+    /**
+     * Asserts the Recent/Unseen flags, which are session-scoped and
+     * differ between the two servers for the same message.
+     */
+    #[Group('greenmail-only')]
     public function test_returns_parsed_header_fields_and_flags(): void
     {
         $folderName = 'HeaderinfoBox' . uniqid();

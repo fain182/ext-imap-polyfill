@@ -2,8 +2,15 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\Group;
+
 class ImapGetQuotarootTest extends GreenmailTestCase
 {
+    /**
+     * Same: the quota has to be set first, which Dovecot does not allow
+     * over IMAP.
+     */
+    #[Group('greenmail-only')]
     public function test_reports_each_resource_plus_legacy_top_level_storage_keys(): void
     {
         $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);

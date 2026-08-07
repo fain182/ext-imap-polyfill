@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\Group;
+
 use ImapPolyfill\Tests\ResetsErrorStack;
 
 /**
@@ -104,6 +106,11 @@ class ImapErrorPathsTest extends GreenmailTestCase
         $this->assertFalse(imap_getmailboxes($connection, self::mailboxSpec(''), 'NoSuchFolderXYZ*'));
     }
 
+    /**
+     * Needs a server that refuses a wildcard which isn't the last
+     * character; Dovecot accepts the pattern and simply matches nothing.
+     */
+    #[Group('greenmail-only')]
     public function test_imap_list_returns_false_on_a_protocol_error(): void
     {
         $folderName = 'ListProtoErrBox'.uniqid();
@@ -170,8 +177,11 @@ class ImapErrorPathsTest extends GreenmailTestCase
         imap_mail_copy($connection, '1', 'NoSuchFolder'.uniqid());
         $error = imap_last_error();
 
+        // Only the shape is asserted: the wording belongs to the server and
+        // differs between them ("COPY failed. No such folder" against
+        // Greenmail, "[TRYCREATE] Mailbox doesn't exist" against Dovecot).
         $this->assertIsString($error);
-        $this->assertStringContainsString('COPY failed', $error);
+        $this->assertNotSame('', $error);
         $this->assertStringNotContainsString('IMAP command', $error);
         $this->assertDoesNotMatchRegularExpression('/\bTAG\d/', $error);
     }

@@ -2,8 +2,15 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\Group;
+
 class ImapFetchbodyTest extends GreenmailTestCase
 {
+    /**
+     * Servers differ on the trailing newline of BODY[TEXT], and this
+     * asserts the bytes exactly.
+     */
+    #[Group('greenmail-only')]
     public function test_returns_the_raw_content_of_a_single_part_message(): void
     {
         $folderName = 'FetchBodyBox' . uniqid();
@@ -42,6 +49,11 @@ class ImapFetchbodyTest extends GreenmailTestCase
         $this->assertSame('AAAA', imap_fetchbody($connection, 1, '2'));
     }
 
+    /**
+     * Servers differ on the trailing newline of BODY[HEADER], and this
+     * asserts the bytes exactly.
+     */
+    #[Group('greenmail-only')]
     public function test_section_zero_returns_the_header(): void
     {
         $folderName = 'FetchBodyBox' . uniqid();

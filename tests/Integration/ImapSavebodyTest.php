@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\Group;
+
 class ImapSavebodyTest extends GreenmailTestCase
 {
     private const MULTIPART_MESSAGE = "Subject: Multi\r\n"
@@ -76,6 +78,11 @@ class ImapSavebodyTest extends GreenmailTestCase
         }
     }
 
+    /**
+     * Same trailing-newline difference as ImapFetchbodyTest, written to
+     * a file here.
+     */
+    #[Group('greenmail-only')]
     public function test_section_zero_saves_only_the_header(): void
     {
         $folderName = 'SaveBodyBox'.uniqid();

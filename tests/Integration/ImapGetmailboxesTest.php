@@ -2,8 +2,15 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\Group;
+
 class ImapGetmailboxesTest extends GreenmailTestCase
 {
+    /**
+     * Asserts the hierarchy delimiter and an exact folder set; Dovecot
+     * uses '/' and ships Drafts, Junk, Sent and Trash.
+     */
+    #[Group('greenmail-only')]
     public function test_returns_mailbox_objects_with_name_attributes_and_delimiter(): void
     {
         $folderName = 'GetMboxBox' . uniqid();
