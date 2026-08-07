@@ -27,9 +27,7 @@ The package declares `provide: ext-imap`, so other dependencies that require `ex
 
 **72 of 75** `imap_*` functions are implemented, and what they return is checked against the real extension rather than against this package's own idea of it — the suite runs a second time with the genuine `ext-imap` loaded ([how](CONTRIBUTING.md)). Anything not named below matches it. POP3 works too, with the same reduced feature set it has there.
 
-One limit is likely to come up: **`imap_reopen()` only switches folders**, on the connection it already has. It can't reopen against a different host, because credentials aren't kept after `imap_open()`.
-
-The other two gaps probably won't, and both refuse loudly rather than pretending. `imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` throw: SCAN was dropped from IMAP4rev1 and in practice only c-client's own UW-IMAP server ever implemented it, so no server you can reach would answer them anyway. Opening a `{host/nntp}` mailbox throws too, instead of quietly connecting over IMAP as it used to.
+Two things are missing, and both refuse loudly rather than pretending. `imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` throw: SCAN was dropped from IMAP4rev1 and in practice only c-client's own UW-IMAP server ever implemented it, so no server you can reach would answer them anyway. Opening a `{host/nntp}` mailbox throws too — the real extension speaks NNTP and this doesn't.
 
 `imap_open()` acts on `OP_READONLY` and `CL_EXPUNGE` and on the `/ssl`, `/tls`, `/novalidate-cert`, `/pop3` and `/readonly` flags; the remaining `OP_*` flags, the `$options` argument and flags like `/debug` and `/secure` are parsed and then ignored.
 

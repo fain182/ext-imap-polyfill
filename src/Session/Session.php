@@ -69,6 +69,7 @@ final class Session
             $spec->normalizedPrefixBase($isPop3 ? 'pop3' : 'imap', $secure),
             $user,
             $readOnly,
+            $password,
         );
         $connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
 
@@ -84,7 +85,7 @@ final class Session
         return $connection;
     }
 
-    private static function connectImap(MailboxSpec $spec, string $user, string $password, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
+    public static function connectImap(MailboxSpec $spec, string $user, string $password, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
     {
         $attempts = 1 + max(0, $retries);
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
@@ -114,7 +115,7 @@ final class Session
         return false;
     }
 
-    private static function connectPop3(MailboxSpec $spec, string $mailbox, string $user, string $password, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
+    public static function connectPop3(MailboxSpec $spec, string $mailbox, string $user, string $password, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
     {
         $attempts = 1 + max(0, $retries);
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
@@ -335,6 +336,46 @@ final class Session
 
         // Like imap_open(): a /readonly flag in the spec counts as OP_READONLY.
         $readOnly = (bool) ($flags & OP_READONLY) || $spec->hasFlag('readonly');
+        $isPop3 = $spec->hasFlag('pop3');
+
+        if ($spec->hasFlag('nntp')) {
+            throw \ImapPolyfill\Support\UnsupportedFeature::nntp($mailbox);
+        }
+
+        // Naming another server reopens against it, the way c-client's
+        // mail_open() does on an existing stream; the credentials come from
+        // the ones imap_open() kept, as php_imap.c answers mm_login() with.
+        $secure = $spec->hasFlag('secure');
+        $prefix = $spec->normalizedPrefixBase($isPop3 ? 'pop3' : 'imap', $secure);
+
+        if ($prefix !== $this->connection->mailboxPrefix()) {
+            $user = $this->connection->user();
+            $backend = $isPop3
+                ? self::connectPop3($spec, $mailbox, $user, $this->connection->password(), $retries)
+                : self::connectImap($spec, $user, $this->connection->password(), $retries);
+
+            if ($backend === false) {
+                return false;
+            }
+
+            $this->connection->reconnect($backend, $prefix, $user, $spec->folder, $readOnly);
+
+            try {
+                $status = $this->connection->selectOrExamine();
+            } catch (\Throwable $e) {
+                ErrorStack::push($e->getMessage());
+
+                return false;
+            }
+
+            $this->connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
+
+            if ($flags !== 0) {
+                $this->connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
+            }
+
+            return true;
+        }
 
         try {
             $status = $this->connection->selectOrExamineFolder($spec->folder, $readOnly);

@@ -14,7 +14,7 @@ use ImapPolyfill\Connection\ConnectionBackend;
  */
 final class Connection
 {
-    private readonly ConnectionBackend $backend;
+    private ConnectionBackend $backend;
 
     private bool $closed = false;
 
@@ -55,13 +55,56 @@ final class Connection
     public function __construct(
         ConnectionBackend $backend,
         string $folder,
-        private readonly string $mailboxPrefix,
-        private readonly string $user,
+        private string $mailboxPrefix,
+        private string $user,
         bool $readOnly = false,
+        /**
+         * Kept so imap_reopen() can reach a different server, which is what
+         * the real extension does: c-client asks php_imap for credentials
+         * again through mm_login(), and php_imap answers from the ones
+         * imap_open() stored for the request.
+         */
+        private string $password = '',
     ) {
         $this->backend = $backend;
         $this->folder = $folder;
         $this->readOnly = $readOnly;
+    }
+
+    public function user(): string
+    {
+        return $this->user;
+    }
+
+    public function password(): string
+    {
+        return $this->password;
+    }
+
+    public function mailboxPrefix(): string
+    {
+        return $this->mailboxPrefix;
+    }
+
+    /**
+     * Swaps in a connection to somewhere else, for an imap_reopen() whose
+     * spec names another server. The old one is closed first: c-client
+     * reuses the stream, so only one connection is ever live.
+     */
+    public function reconnect(ConnectionBackend $backend, string $mailboxPrefix, string $user, string $folder, bool $readOnly): void
+    {
+        try {
+            $this->backend->disconnect();
+        } catch (\Throwable) {
+            // The old connection is being discarded either way.
+        }
+
+        $this->backend = $backend;
+        $this->mailboxPrefix = $mailboxPrefix;
+        $this->user = $user;
+        $this->folder = $folder;
+        $this->readOnly = $readOnly;
+        $this->userFlags = [];
     }
 
     /**
