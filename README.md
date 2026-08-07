@@ -52,6 +52,7 @@ Shapes and behaviour are checked against the real extension ([how](#verifying-ag
 | `imap_mail_compose` | address lists use the simplified parser of `imap_rfc822_parse_adrlist`: no group or route syntax |
 | `imap_open` | only `OP_READONLY` and `CL_EXPUNGE` act; other `OP_*` flags and the `$options` argument are validated, then ignored |
 | `imap_reopen` | switches folders on the same connection only: credentials aren't retained, so it can't reconnect elsewhere |
+| `imap_search` | over POP3 only, the criteria grammar is a practical subset: `ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, substring `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT`, `SINCE`/`BEFORE`/`ON` |
 
 ### Connection string flags
 
@@ -70,7 +71,7 @@ Any other flag (`/imap`, `/norsh`, `/secure`, `/debug`, …) is accepted and ign
 ### Cross-cutting limits
 
 - **No NNTP**: `{host/nntp}` parses, then connects over IMAP anyway.
-- **POP3** behaves as it does under the real extension: one mailbox named `INBOX`, `SEARCH`/`STATUS`/`BODYSTRUCTURE` synthesized client-side, flags lasting only for the connection, copy/move/append/mailbox-management refused. The one divergence is `imap_search()`'s grammar — a practical subset (`ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, substring `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT`, `SINCE`/`BEFORE`/`ON`) rather than all of RFC 3501.
+- **POP3** can do less than IMAP, inherited from the real extension rather than added here: one mailbox named `INBOX`, `SEARCH`/`STATUS`/`BODYSTRUCTURE` synthesized client-side, flags lasting only for the connection, copy/move/append/mailbox-management refused.
 - **Warnings** are `E_USER_WARNING`, not `E_WARNING`: userland can't raise the level the C extension used.
 
 ### The 72 implemented functions
