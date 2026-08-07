@@ -16,24 +16,9 @@ PHP 8.4 moved `ext-imap` onto PECL ([RFC](https://wiki.php.net/rfc/unbundle_imap
 composer require fain182/ext-imap-polyfill
 ```
 
-That's the whole migration. The code you already have runs unchanged:
+That's the whole migration. No call sites to touch, no API to learn, nothing else to do.
 
-```php
-$imap = imap_open('{imap.example.com:993/imap/ssl}INBOX', 'user@example.com', 'password');
-
-foreach (imap_search($imap, 'UNSEEN') ?: [] as $msgno) {
-    $overview = imap_fetch_overview($imap, (string) $msgno)[0];
-
-    echo $overview->subject, "\n";
-    echo imap_qprint(imap_fetchbody($imap, $msgno, '1')), "\n";
-}
-
-imap_close($imap);
-```
-
-If `ext-imap` is present — you're still on PHP 8.3, or someone installed the PECL build — the polyfill is a no-op and the real extension keeps handling every call. It's safe to add *before* you upgrade, not just after.
-
-Requires PHP 8.1+; the dependency tree declares only `ext-json` and `ext-iconv`. The package declares `provide: ext-imap`, so other dependencies that require `ext-imap` install cleanly alongside it.
+If `ext-imap` is present — you're still on PHP 8.3, or someone installed the PECL build — the polyfill is a no-op and the real extension keeps handling every call. It's safe to add *before* you upgrade, not just after. It also declares `provide: ext-imap`, so dependencies that require the extension install cleanly alongside it.
 
 ## Why a polyfill instead of rewriting
 
