@@ -21,6 +21,22 @@ final class MailboxSpec
     ) {
     }
 
+    /**
+     * How the connection is encrypted, as the two backends spell it: c-client's
+     * /ssl is TLS from the first byte, /tls is a cleartext connection upgraded
+     * with STARTTLS (IMAP) or STLS (POP3), and neither flag means no TLS at all.
+     * Treating /tls as implicit TLS opens a TLS socket against a plaintext
+     * listener, which simply never connects.
+     */
+    public function encryption(): string
+    {
+        return match (true) {
+            $this->hasFlag('ssl') => 'ssl',
+            $this->hasFlag('tls') => 'starttls',
+            default => '',
+        };
+    }
+
     public function hasFlag(string $flag): bool
     {
         return in_array($flag, $this->flags, true);

@@ -13,13 +13,14 @@ final class Pop3Protocol
     /** @var resource */
     private $stream;
 
-    public function connect(string $host, int $port, string|false $encryption, bool $validateCert, float $timeout = 30.0): void
+    public function connect(string $host, int $port, string $encryption, bool $validateCert, float $timeout = 30.0): void
     {
-        $scheme = match ($encryption) {
-            'ssl' => 'ssl://',
-            'tls' => 'tcp://', // upgraded with stream_socket_enable_crypto() after STLS is out of scope for this polyfill
-            default => 'tcp://',
-        };
+        // /ssl is TLS from the first byte; /tls starts in the clear and
+        // upgrades with STLS below. Both must end up encrypted: c-client
+        // refuses to continue when the upgrade fails, and connecting in
+        // cleartext because the server can't do STLS would hand the caller
+        // the opposite of what the flag asked for.
+        $scheme = $encryption === 'ssl' ? 'ssl://' : 'tcp://';
 
         $context = stream_context_create([
             'ssl' => [
@@ -46,6 +47,25 @@ final class Pop3Protocol
         stream_set_timeout($this->stream, (int) $timeout);
 
         $this->readSingleLine();
+
+        if ($encryption === 'starttls') {
+            $this->startTls();
+        }
+    }
+
+    /**
+     * RFC 2595 STLS. Throws rather than carrying on unencrypted: /tls is a
+     * requirement, not a preference.
+     */
+    private function startTls(): void
+    {
+        $this->command('STLS');
+
+        $crypto = @stream_socket_enable_crypto($this->stream, true, STREAM_CRYPTO_METHOD_ANY_CLIENT);
+
+        if ($crypto !== true) {
+            throw new \RuntimeException('Unable to negotiate TLS with this server');
+        }
     }
 
     public function login(string $user, string $password): void

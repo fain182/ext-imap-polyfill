@@ -7,6 +7,8 @@ GREENMAIL_IMAGE := docker.io/greenmail/standalone:2.1.12
 GREENMAIL_NAME := ext-imap-polyfill-greenmail
 GREENMAIL_PORT := 13143
 GREENMAIL_POP3_PORT := 13110
+GREENMAIL_IMAPS_PORT := 13993
+GREENMAIL_POP3S_PORT := 13995
 DOVECOT_IMAGE := docker.io/dovecot/dovecot:latest
 DOVECOT_NAME := ext-imap-polyfill-dovecot
 DOVECOT_PORT := 13144
@@ -35,7 +37,9 @@ greenmail-up:
 		--network $(NETWORK_NAME) --network-alias greenmail \
 		-p $(GREENMAIL_PORT):3143 \
 		-p $(GREENMAIL_POP3_PORT):3110 \
-		-e GREENMAIL_OPTS='-Dgreenmail.setup.test.imap -Dgreenmail.setup.test.pop3 -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=testuser:testpass@localhost' \
+		-p $(GREENMAIL_IMAPS_PORT):3993 \
+		-p $(GREENMAIL_POP3S_PORT):3995 \
+		-e GREENMAIL_OPTS='-Dgreenmail.setup.test.imap -Dgreenmail.setup.test.pop3 -Dgreenmail.setup.test.imaps -Dgreenmail.setup.test.pop3s -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=testuser:testpass@localhost' \
 		$(GREENMAIL_IMAGE)
 	@echo "Waiting for Greenmail to greet IMAP clients on port $(GREENMAIL_PORT)..."
 	@until exec 3<>/dev/tcp/127.0.0.1/$(GREENMAIL_PORT) && read -r -t 2 greeting <&3 && [[ "$$greeting" == '* OK'* ]]; do \
@@ -93,6 +97,8 @@ parity: parity-build greenmail-up dovecot-up
 		-e IMAP_POLYFILL_TEST_HOST=greenmail \
 		-e IMAP_POLYFILL_TEST_PORT=3143 \
 		-e IMAP_POLYFILL_TEST_POP3_PORT=3110 \
+		-e IMAP_POLYFILL_TEST_IMAPS_PORT=3993 \
+		-e IMAP_POLYFILL_TEST_POP3S_PORT=3995 \
 		-e IMAP_POLYFILL_DOVECOT_HOST=dovecot \
 		-e IMAP_POLYFILL_DOVECOT_PORT=31143 \
 		-v $(CURDIR):/app:Z \
