@@ -130,11 +130,3 @@ Two things throw instead of pretending, rather than diverging quietly. `imap_sca
 `imap_utf8_to_mutf7`
 
 </details>
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## License
-
-MIT
