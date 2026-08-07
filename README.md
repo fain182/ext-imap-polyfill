@@ -33,7 +33,7 @@ POP3 works too, with the same reduced feature set it has under the real extensio
 |---|---|
 | `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host stays as written in the spec; c-client resolves it to its canonical DNS name |
 | `imap_mail` | always delivers through the `sendmail_path` pipe, and returns false when that ini is empty |
-| `imap_mail_compose` | address lists use the simplified parser of `imap_rfc822_parse_adrlist`: no group or route syntax |
+| `imap_mail_compose` | a group address keeps its members (`Group: , a@b, c@d, ;`); c-client writes the group name and terminator with the member slots blank |
 | `imap_open` | only `OP_READONLY` and `CL_EXPUNGE` act, and of the connection-string flags only `/ssl`, `/tls`, `/novalidate-cert`, `/pop3` and `/readonly`; the rest — other `OP_*` flags, the `$options` argument, `/debug`, `/secure`, `/norsh` — are parsed, then ignored |
 | `imap_reopen` | switches folders on the same connection only: credentials aren't retained, so it can't reconnect elsewhere |
 | `imap_search` | over POP3 only, the criteria grammar is a practical subset: `ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, substring `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT`, `SINCE`/`BEFORE`/`ON` |

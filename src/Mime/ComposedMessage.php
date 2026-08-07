@@ -477,7 +477,14 @@ final class ComposedMessage
 
     private static function renderAddress(\stdClass $address): string
     {
-        $route = self::cat($address->mailbox, null);
+        // Group markers carry no host, and the closing one carries nothing at
+        // all: c-client writes the group name followed by a colon, then an
+        // empty slot per member, then the terminator.
+        if (!isset($address->host)) {
+            return isset($address->mailbox) ? self::cat($address->mailbox, null).': ' : ';';
+        }
+
+        $route = self::cat($address->mailbox ?? '', null);
         if (!str_starts_with($address->host, '@')) {
             $route .= '@'.self::cat($address->host, null);
         }
