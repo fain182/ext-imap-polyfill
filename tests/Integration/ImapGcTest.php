@@ -8,7 +8,7 @@ class ImapGcTest extends GreenmailTestCase
     {
         $folderName = 'GcBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertTrue(imap_gc($connection, 0));
     }
@@ -17,7 +17,7 @@ class ImapGcTest extends GreenmailTestCase
     {
         $folderName = 'GcBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertTrue(imap_gc($connection, IMAP_GC_TEXTS));
     }
@@ -26,7 +26,7 @@ class ImapGcTest extends GreenmailTestCase
     {
         $folderName = 'GcBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertTrue(imap_gc($connection, IMAP_GC_TEXTS | IMAP_GC_ELT | IMAP_GC_ENV));
     }
@@ -35,7 +35,7 @@ class ImapGcTest extends GreenmailTestCase
     {
         $folderName = 'GcValBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_gc(): Argument #2 ($flags) must be a bitmask of IMAP_GC_TEXTS, IMAP_GC_ELT, and IMAP_GC_ENV');

@@ -12,7 +12,7 @@ class ImapLsubTest extends GreenmailTestCase
         $this->makeFolder($subscribedName);
         $this->makeFolder($unsubscribedName);
 
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
         imap_subscribe($connection, self::mailboxSpec($subscribedName));
 
         $result = imap_lsub($connection, self::mailboxSpec(''), "LsubBox{$uniq}*");
@@ -28,7 +28,7 @@ class ImapLsubTest extends GreenmailTestCase
         $folderName = "LsubBox{$uniq}Alias";
         $this->makeFolder($folderName);
 
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
         imap_subscribe($connection, self::mailboxSpec($folderName));
 
         $this->assertSame(
@@ -39,7 +39,7 @@ class ImapLsubTest extends GreenmailTestCase
 
     public function test_returns_false_when_nothing_is_subscribed(): void
     {
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
 
         $this->assertFalse(imap_lsub($connection, self::mailboxSpec(''), 'NoSuchFolderXYZ'.uniqid().'*'));
     }

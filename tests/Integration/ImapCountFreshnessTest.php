@@ -17,7 +17,7 @@ final class ImapCountFreshnessTest extends GreenmailTestCase
     {
         $folderName = 'FreshOwn'.random_int(10000, 99999);
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame(0, imap_num_msg($connection));
 
@@ -37,7 +37,7 @@ final class ImapCountFreshnessTest extends GreenmailTestCase
     {
         $folderName = 'FreshOther'.random_int(10000, 99999);
         $seedClient = $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
         imap_append($connection, self::mailboxSpec($folderName), "Subject: Ours\r\n\r\nBody");
 
         $seedClient->getFolder($folderName)->appendMessage("Subject: Theirs\r\n\r\nBody");
@@ -60,7 +60,7 @@ final class ImapCountFreshnessTest extends GreenmailTestCase
         $folder->appendMessage("Subject: One\r\n\r\nBody");
         $folder->appendMessage("Subject: Two\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
         $this->assertSame(2, imap_num_msg($connection));
 
         imap_delete($connection, '1');

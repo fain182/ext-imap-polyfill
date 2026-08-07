@@ -15,7 +15,7 @@ class ImapGetmailboxesTest extends GreenmailTestCase
     {
         $folderName = 'GetMboxBox' . uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
 
         $result = imap_getmailboxes($connection, self::mailboxSpec(''), '*');
 

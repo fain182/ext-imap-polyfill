@@ -8,7 +8,7 @@ class ImapCheckTest extends GreenmailTestCase
     {
         $folderName = 'CheckBox' . uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_check($connection);
 
@@ -24,7 +24,7 @@ class ImapCheckTest extends GreenmailTestCase
     {
         $folderName = 'CheckBox' . uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         // Everything but the host is pinned: c-client resolves the host to
         // its canonical DNS name (environment-dependent), the polyfill
@@ -33,7 +33,7 @@ class ImapCheckTest extends GreenmailTestCase
             sprintf(
                 '/^\{[^:}]+:%d\/imap\/novalidate-cert\/user="%s"\}%s$/',
                 self::port(),
-                self::USER,
+                self::user(),
                 preg_quote($folderName, '/')
             ),
             imap_check($connection)->Mailbox
@@ -44,13 +44,13 @@ class ImapCheckTest extends GreenmailTestCase
     {
         $folderName = 'CheckBox' . uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD, OP_READONLY);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password(), OP_READONLY);
 
         $this->assertMatchesRegularExpression(
             sprintf(
                 '/^\{[^:}]+:%d\/imap\/novalidate-cert\/readonly\/user="%s"\}%s$/',
                 self::port(),
-                self::USER,
+                self::user(),
                 preg_quote($folderName, '/')
             ),
             imap_check($connection)->Mailbox

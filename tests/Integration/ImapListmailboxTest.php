@@ -8,7 +8,7 @@ class ImapListmailboxTest extends GreenmailTestCase
     {
         $folderName = 'ListAliasBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $reference = self::mailboxSpec('');
 

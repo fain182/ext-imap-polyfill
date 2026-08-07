@@ -16,7 +16,7 @@ final class ImapReadOnlyEnforcementTest extends GreenmailTestCase
         $client = $this->makeFolder($folderName);
         $client->getFolder($folderName)->appendMessage("Subject: Untouched\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD, OP_READONLY);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password(), OP_READONLY);
 
         // imap_setflag_full() answers true whatever the server says — the
         // observable is the flag never landing on the message.
@@ -37,7 +37,7 @@ final class ImapReadOnlyEnforcementTest extends GreenmailTestCase
         $client = $this->makeFolder($folderName);
         $client->getFolder($folderName)->appendMessage("Subject: Unseen\r\n\r\nBody text");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD, OP_READONLY);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password(), OP_READONLY);
 
         $this->assertSame('Body text', imap_body($connection, 1));
         imap_close($connection);

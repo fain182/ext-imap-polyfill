@@ -28,7 +28,7 @@ final class DovecotThreadTest extends DovecotTestCase
 
     public function test_threads_a_reply_chain(): void
     {
-        $connection = imap_open(self::mailboxSpec($this->seedThread()), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($this->seedThread()), self::user(), self::password());
 
         $tree = imap_thread($connection);
 
@@ -58,7 +58,7 @@ final class DovecotThreadTest extends DovecotTestCase
      */
     public function test_replies_hang_off_their_parent(): void
     {
-        $connection = imap_open(self::mailboxSpec($this->seedThread()), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($this->seedThread()), self::user(), self::password());
 
         $tree = imap_thread($connection);
 
@@ -72,7 +72,7 @@ final class DovecotThreadTest extends DovecotTestCase
     public function test_se_uid_reports_uids(): void
     {
         $folderName = $this->seedThread();
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $byMsgno = imap_thread($connection);
         $byUid = imap_thread($connection, SE_UID);

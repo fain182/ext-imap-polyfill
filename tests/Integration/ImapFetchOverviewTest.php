@@ -17,7 +17,7 @@ class ImapFetchOverviewTest extends GreenmailTestCase
             ."Body text"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_fetch_overview($connection, '1:1');
 
@@ -49,7 +49,7 @@ class ImapFetchOverviewTest extends GreenmailTestCase
         $folder->appendMessage("Subject: Two\r\n\r\nBody 2");
         $folder->appendMessage("Subject: Three\r\n\r\nBody 3");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $range = imap_fetch_overview($connection, '1:2');
         $this->assertCount(2, $range);
@@ -69,7 +69,7 @@ class ImapFetchOverviewTest extends GreenmailTestCase
             "Subject: Survivor\r\n\r\nKeep me"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $byMsgno = imap_fetch_overview($connection, '1:1');
         $byUid = imap_fetch_overview($connection, (string) $survivorUid, FT_UID);

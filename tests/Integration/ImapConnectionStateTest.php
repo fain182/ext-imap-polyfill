@@ -8,21 +8,21 @@ class ImapConnectionStateTest extends GreenmailTestCase
     {
         $folderName = 'NumRecentBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame(0, imap_num_recent($connection));
     }
 
     public function test_imap_is_open_returns_true_for_an_open_connection(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
 
         $this->assertTrue(imap_is_open($connection));
     }
 
     public function test_imap_is_open_returns_false_after_close(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
         imap_close($connection);
 
         $this->assertFalse(imap_is_open($connection));
@@ -34,7 +34,7 @@ class ImapConnectionStateTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hello\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
 
         $result = imap_reopen($connection, self::mailboxSpec($folderName));
 

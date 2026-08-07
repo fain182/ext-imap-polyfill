@@ -6,14 +6,14 @@ class ImapPingTest extends GreenmailTestCase
 {
     public function test_returns_true_for_a_live_connection(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
 
         $this->assertTrue(imap_ping($connection));
     }
 
     public function test_throws_value_error_after_close(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
         imap_close($connection);
 
         $this->expectException(\ValueError::class);

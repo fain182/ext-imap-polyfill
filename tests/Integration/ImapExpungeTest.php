@@ -10,7 +10,7 @@ class ImapExpungeTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hello\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
         imap_delete($connection, '1');
 
         $result = imap_expunge($connection);

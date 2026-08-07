@@ -10,7 +10,7 @@ class ImapSearchTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hello World\r\n\r\nBody text");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame([1], imap_search($connection, 'ALL'));
     }
@@ -21,7 +21,7 @@ class ImapSearchTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hello World\r\n\r\nBody text");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertFalse(imap_search($connection, 'SUBJECT nonexistent'));
     }
@@ -33,7 +33,7 @@ class ImapSearchTest extends GreenmailTestCase
             "Subject: Survivor\r\n\r\nKeep me"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame([1], imap_search($connection, 'ALL'));
         $this->assertSame([$survivorUid], imap_search($connection, 'ALL', SE_UID));
@@ -48,7 +48,7 @@ class ImapSearchTest extends GreenmailTestCase
         $folder->appendMessage("Subject: Two\r\n\r\nBody 2");
         $folder->appendMessage("Subject: Three\r\n\r\nBody 3");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
         imap_setflag_full($connection, '2', '\\Flagged \\Seen');
         imap_delete($connection, '3');
 
@@ -67,7 +67,7 @@ class ImapSearchTest extends GreenmailTestCase
         $folder->appendMessage("Subject: Invoice\r\n\r\nBody 2");
         $folder->appendMessage("Subject: Receipt\r\n\r\nBody 3");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
         imap_setflag_full($connection, '1', '\\Flagged');
 
         // FLAGGED alone would already isolate message 1; asserting SUBJECT
@@ -83,7 +83,7 @@ class ImapSearchTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Match Me\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame([1], imap_search($connection, 'SUBJECT "Match Me"'));
     }

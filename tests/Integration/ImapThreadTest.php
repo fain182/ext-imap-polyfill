@@ -14,7 +14,7 @@ final class ImapThreadTest extends GreenmailTestCase
         $folder->appendMessage("Message-ID: <reply2@example.com>\r\nIn-Reply-To: <reply1@example.com>\r\nReferences: <root@example.com> <reply1@example.com>\r\nSubject: Re: Original\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nReply2");
         $folder->appendMessage("Message-ID: <unrelated@example.com>\r\nSubject: Something else\r\nDate: Tue, 07 Jul 2026 08:00:00 +0000\r\n\r\nUnrelated");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame([
             '0.num' => 4, '0.next' => 0, '0.branch' => 1,
@@ -37,7 +37,7 @@ final class ImapThreadTest extends GreenmailTestCase
         $folder->appendMessage("Message-ID: <b@example.com>\r\nSubject: Re: Shared Topic\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nB");
         $folder->appendMessage("Message-ID: <c@example.com>\r\nSubject: Fwd: Shared Topic\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nC");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame([
             '0.num' => 1, '0.next' => 1,
@@ -58,7 +58,7 @@ final class ImapThreadTest extends GreenmailTestCase
         $folder->appendMessage("Message-ID: <dup@example.com>\r\nSubject: Beta\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nDuplicate");
         $folder->appendMessage("Message-ID: <r@example.com>\r\nReferences: <dup@example.com>\r\nSubject: Re: Alpha\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nReply");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         // The first message claiming <dup@...> owns it (the reply threads
         // under it); the duplicate gets its own parentless node instead of
@@ -85,7 +85,7 @@ final class ImapThreadTest extends GreenmailTestCase
         // from t1 and roots its own thread (c-client step 1B).
         $folder->appendMessage("Message-ID: <t3@example.com>\r\nSubject: Three\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nThree");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame([
             '0.num' => 1, '0.next' => 0, '0.branch' => 1,
@@ -105,7 +105,7 @@ final class ImapThreadTest extends GreenmailTestCase
         $folder->appendMessage("Message-ID: <x1@example.com>\r\nSubject: X\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nX1");
         $folder->appendMessage("Message-ID: <x2@example.com>\r\nIn-Reply-To: <x1@example.com>\r\nReferences: <x1@example.com>\r\nSubject: Re: X\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nX2");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $msgnoTree = imap_thread($connection);
         $uidTree = imap_thread($connection, SE_UID);
@@ -119,7 +119,7 @@ final class ImapThreadTest extends GreenmailTestCase
     {
         $folderName = 'ImapThread'.random_int(10000, 99999);
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertFalse(imap_thread($connection));
 

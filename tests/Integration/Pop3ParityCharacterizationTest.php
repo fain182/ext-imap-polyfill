@@ -26,10 +26,10 @@ final class Pop3ParityCharacterizationTest extends GreenmailTestCase
     public function test_characterize_pop3_behavior(): void
     {
         // POP3 has no APPEND command; seed INBOX over IMAP first.
-        $seedClient = new SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);
+        $seedClient = new SeedClient(self::host(), self::port(), self::user(), self::password());
         $seedClient->getFolder('INBOX')->appendMessage("Subject: Pop3 Parity\r\n\r\nHello from parity test");
 
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $this->dump('imap_open', $connection);
 
         if ($connection === false) {
@@ -58,12 +58,12 @@ final class Pop3ParityCharacterizationTest extends GreenmailTestCase
 
     public function test_characterize_pop3_edge_cases(): void
     {
-        $seedClient = new SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);
+        $seedClient = new SeedClient(self::host(), self::port(), self::user(), self::password());
         $folder = $seedClient->getFolder('INBOX');
         $folder->appendMessage("From: alice@example.com\r\nTo: bob@example.com\r\nSubject: First\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nFirst body");
         $folder->appendMessage("From: carol@example.com\r\nTo: bob@example.com\r\nSubject: Second\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nSecond body");
 
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $this->dump('imap_num_msg (2 msgs)', imap_num_msg($connection));
         $this->dump('imap_headerinfo(1) From/To/Date', (function () use ($connection) {
             $h = imap_headerinfo($connection, 1);
@@ -97,12 +97,12 @@ final class Pop3ParityCharacterizationTest extends GreenmailTestCase
         // Reconnect and check UID stability across separate connections
         // (real POP3 servers use UIDL for this; matters for imap_uid callers
         // who cache UIDs across requests).
-        $reconnected = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $reconnected = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $this->dump('uid1 stable across reconnect', imap_uid($reconnected, 1) === $uid1);
         imap_close($reconnected);
 
         // OP_READONLY: does imap_open itself refuse pop3?
-        $readonly = @imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD, OP_READONLY);
+        $readonly = @imap_open(self::pop3MailboxSpec(), self::user(), self::password(), OP_READONLY);
         $this->dump('imap_open with OP_READONLY', $readonly);
         $this->dump('imap_open with OP_READONLY error', imap_last_error());
         if ($readonly !== false) {
@@ -115,7 +115,7 @@ final class Pop3ParityCharacterizationTest extends GreenmailTestCase
 
     public function test_characterize_pop3_hierarchy_and_append_errors(): void
     {
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
         $this->dump('imap_createmailbox(bare name)', @imap_createmailbox($connection, 'INBOX.Sub'));
         $this->dump('imap_createmailbox error', imap_last_error());
@@ -136,7 +136,7 @@ final class Pop3ParityCharacterizationTest extends GreenmailTestCase
         $this->dump('imap_append error', imap_last_error());
 
         // Non-INBOX folder in the mailbox spec itself.
-        $other = @imap_open(sprintf('{%s:%d/pop3/novalidate-cert}Other', self::host(), self::pop3Port()), self::USER, self::PASSWORD);
+        $other = @imap_open(sprintf('{%s:%d/pop3/novalidate-cert}Other', self::host(), self::pop3Port()), self::user(), self::password());
         $this->dump('imap_open non-INBOX folder', $other);
         $this->dump('imap_open non-INBOX folder error', imap_last_error());
 

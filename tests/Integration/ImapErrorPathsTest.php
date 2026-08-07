@@ -68,7 +68,7 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $folderName = 'OverviewEmptyBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         // No messages exist, so "1:*" resolves to an empty id list.
         $this->assertSame([], imap_fetch_overview($connection, '1:*'));
@@ -92,7 +92,7 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $folderName = 'ListErrBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertFalse(imap_list($connection, self::mailboxSpec(''), 'NoSuchFolderXYZ*'));
     }
@@ -101,7 +101,7 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $folderName = 'GetMboxErrBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertFalse(imap_getmailboxes($connection, self::mailboxSpec(''), 'NoSuchFolderXYZ*'));
     }
@@ -115,7 +115,7 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $folderName = 'ListProtoErrBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         // Greenmail rejects a '*' that isn't the last character of the pattern.
         $this->assertFalse(imap_list($connection, self::mailboxSpec(''), 'No*Such'));
@@ -126,7 +126,7 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $folderName = 'GetMboxProtoErrBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertFalse(imap_getmailboxes($connection, self::mailboxSpec(''), 'No*Such'));
     }
@@ -154,7 +154,7 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $folderName = 'AppendErrBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_append($connection, self::mailboxSpec('NoSuchFolder'.uniqid()), "Subject: Hi\r\n\r\nBody");
 
@@ -172,7 +172,7 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $folderName = 'ErrTextBox'.uniqid();
         $this->makeFolder($folderName)->getFolder($folderName)->appendMessage("Subject: Hi\r\n\r\nBody");
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_mail_copy($connection, '1', 'NoSuchFolder'.uniqid());
         $error = imap_last_error();
@@ -204,7 +204,7 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $folderName = 'UidErrBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         imap_uid($connection, 0);
@@ -214,7 +214,7 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $folderName = 'MsgnoErrBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         imap_msgno($connection, -1);

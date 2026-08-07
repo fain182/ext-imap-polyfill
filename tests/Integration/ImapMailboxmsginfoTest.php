@@ -17,7 +17,7 @@ class ImapMailboxmsginfoTest extends GreenmailTestCase
         // \Recent would make the Unread count session-timing-dependent.
         $seedClient->openFolder($folderName);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
         imap_setflag_full($connection, '1', '\\Seen');
         imap_delete($connection, '2');
 
@@ -39,7 +39,7 @@ class ImapMailboxmsginfoTest extends GreenmailTestCase
         $folderName = 'MsgInfoBox'.uniqid();
         $this->makeFolder($folderName);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $info = imap_mailboxmsginfo($connection);
 

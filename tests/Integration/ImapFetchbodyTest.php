@@ -19,7 +19,7 @@ class ImapFetchbodyTest extends GreenmailTestCase
             "Subject: Simple\r\nContent-Type: text/plain\r\n\r\nJust one part\r\n"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame('Just one part', imap_fetchbody($connection, 1, '1'));
     }
@@ -43,7 +43,7 @@ class ImapFetchbodyTest extends GreenmailTestCase
             ."--B1--\r\n";
         $seedClient->getFolder($folderName)->appendMessage($message);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame('Hello body', imap_fetchbody($connection, 1, '1'));
         $this->assertSame('AAAA', imap_fetchbody($connection, 1, '2'));
@@ -60,7 +60,7 @@ class ImapFetchbodyTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hi\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame("Subject: Hi\r\n", imap_fetchbody($connection, 1, '0'));
     }
@@ -92,7 +92,7 @@ class ImapFetchbodyTest extends GreenmailTestCase
             ."--B1--\r\n";
         $seedClient->getFolder($folderName)->appendMessage($message);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame('Plain alt', imap_fetchbody($connection, 1, '1.1'));
         $this->assertSame('<b>Html alt</b>', imap_fetchbody($connection, 1, '1.2'));
@@ -107,7 +107,7 @@ class ImapFetchbodyTest extends GreenmailTestCase
             "Subject: Whole\r\nContent-Type: text/plain\r\n\r\nEntire body\r\n"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $whole = imap_fetchbody($connection, 1, '');
 
@@ -122,7 +122,7 @@ class ImapFetchbodyTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Peek\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_fetchbody($connection, 1, '1', FT_PEEK);
 
@@ -136,7 +136,7 @@ class ImapFetchbodyTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: NoPeek\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_fetchbody($connection, 1, '1');
 
@@ -151,7 +151,7 @@ class ImapFetchbodyTest extends GreenmailTestCase
             "Subject: Survivor\r\nContent-Type: text/plain\r\n\r\nSurvivor body"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $byMsgno = imap_fetchbody($connection, 1, '1');
         $byUid = imap_fetchbody($connection, $survivorUid, '1', FT_UID);
@@ -164,7 +164,7 @@ class ImapFetchbodyTest extends GreenmailTestCase
     {
         $folderName = 'FetchBodyValBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_fetchbody(): Argument #2 ($message_num) must be greater than 0');

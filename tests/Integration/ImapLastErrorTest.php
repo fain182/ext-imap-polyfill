@@ -20,14 +20,14 @@ class ImapLastErrorTest extends GreenmailTestCase
 
     public function test_returns_the_message_of_the_last_error(): void
     {
-        imap_open(self::mailboxSpec(), self::USER, 'wrong-password');
+        imap_open(self::mailboxSpec(), self::user(), 'wrong-password');
 
         $this->assertIsString(imap_last_error());
     }
 
     public function test_is_cleared_when_imap_errors_drains_the_stack(): void
     {
-        imap_open(self::mailboxSpec(), self::USER, 'wrong-password');
+        imap_open(self::mailboxSpec(), self::user(), 'wrong-password');
         $this->assertIsString(imap_last_error());
 
         imap_errors();

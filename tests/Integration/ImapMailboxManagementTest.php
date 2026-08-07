@@ -7,7 +7,7 @@ class ImapMailboxManagementTest extends GreenmailTestCase
     public function test_creates_a_mailbox(): void
     {
         $folderName = 'CreateBox'.uniqid();
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
 
         $result = imap_createmailbox($connection, self::mailboxSpec($folderName));
 
@@ -18,7 +18,7 @@ class ImapMailboxManagementTest extends GreenmailTestCase
     public function test_imap_create_is_an_alias(): void
     {
         $folderName = 'CreateAliasBox'.uniqid();
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
 
         $this->assertTrue(imap_create($connection, self::mailboxSpec($folderName)));
     }
@@ -27,7 +27,7 @@ class ImapMailboxManagementTest extends GreenmailTestCase
     {
         $folderName = 'DeleteBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
 
         $result = imap_deletemailbox($connection, self::mailboxSpec($folderName));
 
@@ -40,7 +40,7 @@ class ImapMailboxManagementTest extends GreenmailTestCase
         $folderName = 'RenameBox'.uniqid();
         $newName = 'RenamedBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
 
         $result = imap_renamemailbox($connection, self::mailboxSpec($folderName), self::mailboxSpec($newName));
 
@@ -55,7 +55,7 @@ class ImapMailboxManagementTest extends GreenmailTestCase
         $folderName = 'RenameAliasBox'.uniqid();
         $newName = 'RenamedAliasBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
 
         $this->assertTrue(imap_rename($connection, self::mailboxSpec($folderName), self::mailboxSpec($newName)));
     }

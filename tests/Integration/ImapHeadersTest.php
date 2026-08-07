@@ -18,7 +18,7 @@ final class ImapHeadersTest extends GreenmailTestCase
         $message = "From: Alice Smith <alice@example.com>\r\nTo: bob@example.com\r\nSubject: First message\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nBody 1";
         $client->getFolder($folderName)->appendMessage($message);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $headers = imap_headers($connection);
 
@@ -43,7 +43,7 @@ final class ImapHeadersTest extends GreenmailTestCase
         $message = "From: carol@example.com\r\nTo: bob@example.com\r\nSubject: This subject is definitely longer than twenty five characters\r\nDate: Tue, 07 Jul 2026 08:00:00 +0000\r\n\r\nBody";
         $client->getFolder($folderName)->appendMessage($message);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $headers = imap_headers($connection);
 
@@ -83,7 +83,7 @@ final class ImapHeadersTest extends GreenmailTestCase
         $client->openFolder($folderName);
         $client->command('STORE', ['1', '+FLAGS.SILENT', '(OtherSession)']);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
         imap_setflag_full($connection, '1', 'KeyA KeyB');
 
         $headers = imap_headers($connection);
@@ -97,7 +97,7 @@ final class ImapHeadersTest extends GreenmailTestCase
     {
         $folderName = self::randomFolderName(__FUNCTION__);
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame([], imap_headers($connection));
 

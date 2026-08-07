@@ -8,8 +8,31 @@ use PHPUnit\Framework\TestCase;
 
 abstract class GreenmailTestCase extends TestCase
 {
-    protected const USER = 'testuser';
-    protected const PASSWORD = 'testpass';
+    protected static function user(): string
+    {
+        return getenv('IMAP_POLYFILL_TEST_USER') ?: 'testuser';
+    }
+
+    protected static function password(): string
+    {
+        return getenv('IMAP_POLYFILL_TEST_PASSWORD') ?: 'testpass';
+    }
+
+    /**
+     * The connection flags every spec in this suite carries. Overridable so
+     * the same tests can run against a server reached over TLS with a real
+     * certificate, where "/novalidate-cert" would be wrong.
+     */
+    protected static function flags(): string
+    {
+        return getenv('IMAP_POLYFILL_TEST_FLAGS') ?: '/imap/novalidate-cert';
+    }
+
+    /** What the seeding client has to speak to reach the same server. */
+    protected static function encryption(): string
+    {
+        return str_contains(self::flags(), '/ssl') ? 'ssl' : '';
+    }
 
     protected static function host(): string
     {
@@ -38,7 +61,7 @@ abstract class GreenmailTestCase extends TestCase
 
     protected static function mailboxSpec(string $folder = 'INBOX'): string
     {
-        return sprintf('{%s:%d/imap/novalidate-cert}%s', self::host(), self::port(), $folder);
+        return sprintf('{%s:%d%s}%s', self::host(), self::port(), self::flags(), $folder);
     }
 
     protected static function pop3MailboxSpec(): string
@@ -53,7 +76,7 @@ abstract class GreenmailTestCase extends TestCase
      */
     protected function makeFolder(string $name): SeedClient
     {
-        $client = new SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);
+        $client = new SeedClient(self::host(), self::port(), self::user(), self::password(), self::encryption());
         $client->createFolder($name);
 
         return $client;
@@ -92,7 +115,7 @@ abstract class GreenmailTestCase extends TestCase
     protected function openConnectionToFolderThatThenDisappears(string $folderName): \IMAP\Connection
     {
         $seedClient = $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
         $seedClient->deleteFolder($folderName);
 
         return $connection;

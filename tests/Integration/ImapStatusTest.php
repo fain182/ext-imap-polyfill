@@ -12,7 +12,7 @@ class ImapStatusTest extends GreenmailTestCase
         $folder->appendMessage("Subject: One\r\n\r\nBody 1");
         $folder->appendMessage("Subject: Two\r\n\r\nBody 2");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
         imap_setflag_full($connection, '1', '\\Seen');
 
         $status = imap_status($connection, self::mailboxSpec($folderName), SA_ALL);
@@ -31,7 +31,7 @@ class ImapStatusTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: One\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $status = imap_status($connection, self::mailboxSpec($folderName), SA_MESSAGES);
 
@@ -43,14 +43,14 @@ class ImapStatusTest extends GreenmailTestCase
 
     public function test_returns_false_for_a_nonexistent_folder(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
 
         $this->assertFalse(imap_status($connection, self::mailboxSpec('NoSuchFolder'.uniqid()), SA_ALL));
     }
 
     public function test_rejects_flags_outside_the_sa_constants(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         imap_status($connection, self::mailboxSpec(), 4096);

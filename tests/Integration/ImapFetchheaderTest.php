@@ -10,7 +10,7 @@ class ImapFetchheaderTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hello World\r\n\r\nBody text");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $header = imap_fetchheader($connection, 1);
 
@@ -27,7 +27,7 @@ class ImapFetchheaderTest extends GreenmailTestCase
         );
         $this->assertGreaterThan(1, $survivorUid, 'fixture must produce uid != msgno to be a meaningful test');
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $byMsgno = imap_fetchheader($connection, 1);
         $byUid = imap_fetchheader($connection, $survivorUid, FT_UID);
@@ -40,7 +40,7 @@ class ImapFetchheaderTest extends GreenmailTestCase
     {
         $folderName = 'FetchHeaderValBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_fetchheader(): Argument #2 ($message_num) must be greater than 0');

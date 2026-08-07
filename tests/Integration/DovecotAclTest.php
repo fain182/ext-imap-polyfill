@@ -12,15 +12,15 @@ final class DovecotAclTest extends DovecotTestCase
     {
         $folderName = 'DcAcl'.random_int(10000, 99999);
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $acl = imap_getacl($connection, $folderName);
 
         $this->assertIsArray($acl);
-        $this->assertArrayHasKey(self::USER, $acl);
+        $this->assertArrayHasKey(self::user(), $acl);
         // The owner holds at least lookup and read on a folder they created.
-        $this->assertStringContainsString('l', $acl[self::USER]);
-        $this->assertStringContainsString('r', $acl[self::USER]);
+        $this->assertStringContainsString('l', $acl[self::user()]);
+        $this->assertStringContainsString('r', $acl[self::user()]);
 
         imap_close($connection);
     }
@@ -29,7 +29,7 @@ final class DovecotAclTest extends DovecotTestCase
     {
         $folderName = 'DcAclSet'.random_int(10000, 99999);
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertTrue(imap_setacl($connection, $folderName, 'someoneelse', 'lr'));
 
@@ -43,7 +43,7 @@ final class DovecotAclTest extends DovecotTestCase
     {
         $folderName = 'DcAclEdit'.random_int(10000, 99999);
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_setacl($connection, $folderName, 'someoneelse', 'lr');
         imap_setacl($connection, $folderName, 'someoneelse', 'lrw');
@@ -56,7 +56,7 @@ final class DovecotAclTest extends DovecotTestCase
 
     public function test_getacl_returns_false_for_a_nonexistent_mailbox(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
 
         $this->assertFalse(@imap_getacl($connection, 'NoSuchFolder'.random_int(10000, 99999)));
 
@@ -65,7 +65,7 @@ final class DovecotAclTest extends DovecotTestCase
 
     public function test_setacl_returns_false_for_a_nonexistent_mailbox(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
 
         $this->assertFalse(imap_setacl($connection, 'NoSuchFolder'.random_int(10000, 99999), 'someoneelse', 'lr'));
 

@@ -24,7 +24,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
             ."Body text"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_headerinfo($connection, 1);
 
@@ -65,7 +65,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
             ."Body text"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_headerinfo($connection, 1);
 
@@ -90,7 +90,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
             "Subject: Minimal\r\nFrom: joe@example.com\r\nTo: jane@example.com\r\n\r\nBody"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_headerinfo($connection, 1);
 
@@ -112,7 +112,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
             "Subject: A longer subject line\r\nFrom: Joe Doe <joe@example.com>\r\n\r\nBody"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_headerinfo($connection, 1, 25, 10);
 
@@ -128,7 +128,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
             "Subject: S\r\nFrom: jane@example.com\r\n\r\nBody"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_headerinfo($connection, 1, 20, 0);
 
@@ -147,7 +147,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
             "Subject: S\r\nFrom: jane@example.com\r\n\r\nBody"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_headerinfo($connection, 1);
 
@@ -162,7 +162,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
         $folderName = 'HeaderinfoValBox'.uniqid();
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: S\r\n\r\nBody");
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_headerinfo(): Argument #3 ($from_length) must be between 0 and 1024');
@@ -174,7 +174,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
         $folderName = 'HeaderinfoValBox'.uniqid();
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: S\r\n\r\nBody");
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_headerinfo(): Argument #4 ($subject_length) must be between 0 and 1024');
@@ -185,7 +185,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
     {
         $folderName = 'HeaderinfoValBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_headerinfo(): Argument #2 ($message_num) must be greater than 0');

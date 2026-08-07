@@ -12,7 +12,7 @@ class ImapMailCopyTest extends GreenmailTestCase
         $seedClient->createFolder($targetName);
         $seedClient->getFolder($sourceName)->appendMessage("Subject: Travelling\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($sourceName), self::user(), self::password());
 
         $result = imap_mail_copy($connection, '1', $targetName);
 
@@ -33,7 +33,7 @@ class ImapMailCopyTest extends GreenmailTestCase
         $seedClient->createFolder($targetName);
         $seedClient->getFolder($sourceName)->appendMessage("Subject: Travelling\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($sourceName), self::user(), self::password());
 
         // Unlike imap_append()/imap_status(), COPY takes the bare folder
         // name: c-client sends the mailbox argument verbatim, so a
@@ -49,7 +49,7 @@ class ImapMailCopyTest extends GreenmailTestCase
         $seedClient->createFolder($targetName);
         $seedClient->getFolder($sourceName)->appendMessage("Subject: Travelling\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($sourceName), self::user(), self::password());
 
         $result = imap_mail_copy($connection, '1', $targetName, CP_MOVE);
 
@@ -68,7 +68,7 @@ class ImapMailCopyTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($sourceName);
         $seedClient->getFolder($sourceName)->appendMessage("Subject: Travelling\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($sourceName), self::user(), self::password());
 
         $this->assertFalse(imap_mail_copy($connection, '1', 'NoSuchFolder'.uniqid()));
     }
@@ -79,7 +79,7 @@ class ImapMailCopyTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($sourceName);
         $seedClient->getFolder($sourceName)->appendMessage("Subject: Travelling\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($sourceName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         imap_mail_copy($connection, '1', $sourceName, 16);

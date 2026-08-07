@@ -10,7 +10,7 @@ class ImapSetflagFullTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hello\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_setflag_full($connection, '1', '\\Seen \\Flagged');
 
@@ -30,7 +30,7 @@ class ImapSetflagFullTest extends GreenmailTestCase
         $folder->appendMessage("Subject: Two\r\n\r\nBody 2");
         $folder->appendMessage("Subject: Three\r\n\r\nBody 3");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_setflag_full($connection, '1:2', '\\Seen');
 
@@ -49,7 +49,7 @@ class ImapSetflagFullTest extends GreenmailTestCase
         $folder->appendMessage("Subject: Two\r\n\r\nBody 2");
         $folder->appendMessage("Subject: Three\r\n\r\nBody 3");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_setflag_full($connection, '1,3', '\\Flagged');
 
@@ -65,7 +65,7 @@ class ImapSetflagFullTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hello\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         imap_setflag_full($connection, '1', '\\Seen', 9999);
@@ -78,7 +78,7 @@ class ImapSetflagFullTest extends GreenmailTestCase
             "Subject: Survivor\r\n\r\nKeep me"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_setflag_full($connection, (string) $survivorUid, '\\Flagged', ST_UID);
 

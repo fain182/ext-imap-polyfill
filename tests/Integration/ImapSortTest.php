@@ -18,7 +18,7 @@ final class ImapSortTest extends GreenmailTestCase
 
     public function test_sort_by_date_ascending(): void
     {
-        $connection = imap_open(self::mailboxSpec($this->seed()), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($this->seed()), self::user(), self::password());
 
         $this->assertSame([3, 1, 2], imap_sort($connection, SORTDATE, false));
 
@@ -27,7 +27,7 @@ final class ImapSortTest extends GreenmailTestCase
 
     public function test_sort_by_date_descending(): void
     {
-        $connection = imap_open(self::mailboxSpec($this->seed()), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($this->seed()), self::user(), self::password());
 
         $this->assertSame([2, 1, 3], imap_sort($connection, SORTDATE, true));
 
@@ -36,7 +36,7 @@ final class ImapSortTest extends GreenmailTestCase
 
     public function test_sort_by_from(): void
     {
-        $connection = imap_open(self::mailboxSpec($this->seed()), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($this->seed()), self::user(), self::password());
 
         $this->assertSame([1, 3, 2], imap_sort($connection, SORTFROM, false));
 
@@ -45,7 +45,7 @@ final class ImapSortTest extends GreenmailTestCase
 
     public function test_sort_by_size(): void
     {
-        $connection = imap_open(self::mailboxSpec($this->seed()), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($this->seed()), self::user(), self::password());
 
         $this->assertSame([1, 3, 2], imap_sort($connection, SORTSIZE, false));
 
@@ -54,7 +54,7 @@ final class ImapSortTest extends GreenmailTestCase
 
     public function test_sort_with_se_uid_returns_uids(): void
     {
-        $connection = imap_open(self::mailboxSpec($this->seed()), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($this->seed()), self::user(), self::password());
 
         $msgnos = imap_sort($connection, SORTARRIVAL, false);
         $uids = imap_sort($connection, SORTARRIVAL, false, SE_UID);
@@ -66,7 +66,7 @@ final class ImapSortTest extends GreenmailTestCase
 
     public function test_sort_with_search_criteria_restricts_results(): void
     {
-        $connection = imap_open(self::mailboxSpec($this->seed()), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($this->seed()), self::user(), self::password());
 
         $this->assertSame([2], imap_sort($connection, SORTDATE, false, 0, 'SUBJECT Second'));
 
@@ -94,7 +94,7 @@ final class ImapSortTest extends GreenmailTestCase
         $folder->appendMessage("Subject: Alpha\r\nDate: Tue, 07 Jul 2026 12:00:00 +0000\r\n\r\n3");
         $client->openFolder($folderName);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame($client->sorted('SUBJECT'), imap_sort($connection, SORTSUBJECT, false));
         $this->assertSame($client->sorted('REVERSE SUBJECT'), imap_sort($connection, SORTSUBJECT, true));
@@ -104,7 +104,7 @@ final class ImapSortTest extends GreenmailTestCase
 
     public function test_sort_invalid_criteria_throws(): void
     {
-        $connection = imap_open(self::mailboxSpec($this->seed()), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($this->seed()), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
 
@@ -115,7 +115,7 @@ final class ImapSortTest extends GreenmailTestCase
     {
         $folderName = 'ImapSortEmpty'.random_int(10000, 99999);
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame([], imap_sort($connection, SORTDATE, false));
 

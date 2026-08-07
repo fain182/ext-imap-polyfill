@@ -10,7 +10,7 @@ class ImapDeleteTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hello\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_delete($connection, '1');
 
@@ -28,7 +28,7 @@ class ImapDeleteTest extends GreenmailTestCase
             "Subject: Survivor\r\n\r\nKeep me"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_delete($connection, (string) $survivorUid, FT_UID);
 
@@ -42,7 +42,7 @@ class ImapDeleteTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hello\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         // imap_delete has no failure mode: it returns true no matter what the
         // sequence matches; a failed STORE is only visible via imap_last_error().
@@ -58,7 +58,7 @@ class ImapDeleteTest extends GreenmailTestCase
         $folder->appendMessage("Subject: Two\r\n\r\nBody 2");
         $folder->appendMessage("Subject: Three\r\n\r\nBody 3");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_delete($connection, '1:2');
 

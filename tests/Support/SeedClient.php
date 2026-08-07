@@ -15,10 +15,10 @@ final class SeedClient
 {
     private readonly SeedConnection $connection;
 
-    public function __construct(string $host, int $port, string $user, string $password)
+    public function __construct(string $host, int $port, string $user, string $password, string $encryption = '')
     {
         $this->connection = new SeedConnection(new ImapStream());
-        $this->connection->connect($host, $port);
+        $this->connection->connect($host, $port, ['encryption' => $encryption]);
         $this->connection->login($user, $password);
     }
 

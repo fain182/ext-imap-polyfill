@@ -19,7 +19,7 @@ class ImapGetsubscribedTest extends GreenmailTestCase
         $this->makeFolder($subscribedName);
         $this->makeFolder($unsubscribedName);
 
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
         imap_subscribe($connection, self::mailboxSpec($subscribedName));
 
         $result = imap_getsubscribed($connection, self::mailboxSpec(''), "GetSubBox{$uniq}*");

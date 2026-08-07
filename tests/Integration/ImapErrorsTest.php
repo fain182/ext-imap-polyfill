@@ -25,7 +25,7 @@ class ImapErrorsTest extends GreenmailTestCase
 
     public function test_returns_and_drains_accumulated_errors(): void
     {
-        imap_open(self::mailboxSpec(), self::USER, 'wrong-password');
+        imap_open(self::mailboxSpec(), self::user(), 'wrong-password');
 
         $errors = imap_errors();
 

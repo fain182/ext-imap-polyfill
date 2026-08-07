@@ -9,7 +9,7 @@ class ImapNumMsgTest extends GreenmailTestCase
         $folderName = 'EmptyBox' . uniqid();
         $this->makeFolder($folderName);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame(0, imap_num_msg($connection));
     }
@@ -20,7 +20,7 @@ class ImapNumMsgTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hello\r\n\r\nBody text");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame(1, imap_num_msg($connection));
     }

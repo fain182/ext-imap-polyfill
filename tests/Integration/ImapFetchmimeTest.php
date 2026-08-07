@@ -25,7 +25,7 @@ class ImapFetchmimeTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage(self::MULTIPART_MESSAGE);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $mime = imap_fetchmime($connection, 1, '2');
 
@@ -40,7 +40,7 @@ class ImapFetchmimeTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage(self::MULTIPART_MESSAGE);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_fetchmime($connection, 1, '1', FT_PEEK);
 
@@ -54,7 +54,7 @@ class ImapFetchmimeTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage(self::MULTIPART_MESSAGE);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_fetchmime($connection, 1, '1');
 
@@ -69,7 +69,7 @@ class ImapFetchmimeTest extends GreenmailTestCase
             self::MULTIPART_MESSAGE
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $byMsgno = imap_fetchmime($connection, 1, '1');
         $byUid = imap_fetchmime($connection, $survivorUid, '1', FT_UID);
@@ -82,7 +82,7 @@ class ImapFetchmimeTest extends GreenmailTestCase
     {
         $folderName = 'FetchMimeValBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_fetchmime(): Argument #2 ($message_num) must be greater than 0');
@@ -94,7 +94,7 @@ class ImapFetchmimeTest extends GreenmailTestCase
         $folderName = 'FetchMimeValBox'.uniqid();
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage(self::MULTIPART_MESSAGE);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_fetchmime(): Argument #4 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');

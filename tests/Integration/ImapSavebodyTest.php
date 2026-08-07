@@ -26,7 +26,7 @@ class ImapSavebodyTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage(self::MULTIPART_MESSAGE);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $path = tempnam(sys_get_temp_dir(), 'imap_savebody_');
 
@@ -44,7 +44,7 @@ class ImapSavebodyTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage(self::MULTIPART_MESSAGE);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $stream = fopen('php://memory', 'w+b');
 
@@ -63,7 +63,7 @@ class ImapSavebodyTest extends GreenmailTestCase
             "Subject: Whole\r\nContent-Type: text/plain\r\n\r\nEntire body\r\n"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $path = tempnam(sys_get_temp_dir(), 'imap_savebody_');
 
@@ -89,7 +89,7 @@ class ImapSavebodyTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hi\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $path = tempnam(sys_get_temp_dir(), 'imap_savebody_');
 
@@ -108,7 +108,7 @@ class ImapSavebodyTest extends GreenmailTestCase
             "Subject: Survivor\r\nContent-Type: text/plain\r\n\r\nSurvivor body"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $path = tempnam(sys_get_temp_dir(), 'imap_savebody_');
 
@@ -126,7 +126,7 @@ class ImapSavebodyTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage(self::MULTIPART_MESSAGE);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertFalse(@imap_savebody($connection, '/nonexistent-dir/imap_savebody_test', 1, '1'));
     }
@@ -135,7 +135,7 @@ class ImapSavebodyTest extends GreenmailTestCase
     {
         $folderName = 'SaveBodyValBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_savebody(): Argument #3 ($message_num) must be greater than 0');
@@ -147,7 +147,7 @@ class ImapSavebodyTest extends GreenmailTestCase
         $folderName = 'SaveBodyValBox'.uniqid();
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage(self::MULTIPART_MESSAGE);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_savebody(): Argument #5 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');

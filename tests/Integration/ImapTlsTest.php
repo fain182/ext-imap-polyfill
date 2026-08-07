@@ -25,8 +25,8 @@ final class ImapTlsTest extends GreenmailTestCase
 
         $connection = imap_open(
             sprintf('{%s:%d/imap/ssl/novalidate-cert}%s', self::host(), self::imapsPort(), $folderName),
-            self::USER,
-            self::PASSWORD,
+            self::user(),
+            self::password(),
         );
 
         $this->assertNotFalse($connection);
@@ -42,13 +42,13 @@ final class ImapTlsTest extends GreenmailTestCase
     #[Group('greenmail-only')]
     public function test_ssl_over_pop3_opens_a_usable_connection(): void
     {
-        $client = new \ImapPolyfill\Tests\Support\SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);
+        $client = new \ImapPolyfill\Tests\Support\SeedClient(self::host(), self::port(), self::user(), self::password());
         $client->getFolder('INBOX')->appendMessage("Subject: Pop3 Over TLS\r\n\r\nBody");
 
         $connection = imap_open(
             sprintf('{%s:%d/pop3/ssl/novalidate-cert}INBOX', self::host(), self::pop3sPort()),
-            self::USER,
-            self::PASSWORD,
+            self::user(),
+            self::password(),
         );
 
         $this->assertNotFalse($connection);
@@ -65,8 +65,8 @@ final class ImapTlsTest extends GreenmailTestCase
     {
         $connection = @imap_open(
             sprintf('{%s:%d/imap/ssl}INBOX', self::host(), self::imapsPort()),
-            self::USER,
-            self::PASSWORD,
+            self::user(),
+            self::password(),
         );
 
         $this->assertFalse($connection);

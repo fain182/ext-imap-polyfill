@@ -6,7 +6,7 @@ class ImapCloseTest extends GreenmailTestCase
 {
     public function test_closes_the_connection_and_returns_true(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
 
         $result = imap_close($connection);
 
@@ -17,7 +17,7 @@ class ImapCloseTest extends GreenmailTestCase
 
     public function test_accepts_cl_expunge_flag(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
 
         $result = imap_close($connection, CL_EXPUNGE);
 
@@ -26,7 +26,7 @@ class ImapCloseTest extends GreenmailTestCase
 
     public function test_rejects_flags_other_than_cl_expunge(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         imap_close($connection, 42);

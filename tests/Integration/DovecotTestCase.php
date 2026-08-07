@@ -18,8 +18,15 @@ use PHPUnit\Framework\TestCase;
  */
 abstract class DovecotTestCase extends TestCase
 {
-    protected const USER = 'testuser';
-    protected const PASSWORD = 'testpass';
+    protected static function user(): string
+    {
+        return 'testuser';
+    }
+
+    protected static function password(): string
+    {
+        return 'testpass';
+    }
 
     /** Dovecot's own hierarchy separator, where Greenmail uses a dot. */
     protected const SEPARATOR = '/';
@@ -60,7 +67,7 @@ abstract class DovecotTestCase extends TestCase
      */
     protected function makeFolder(string $name): SeedClient
     {
-        $client = new SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);
+        $client = new SeedClient(self::host(), self::port(), self::user(), self::password());
         $client->createFolder($name);
 
         return $client;

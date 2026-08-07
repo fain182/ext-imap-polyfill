@@ -8,7 +8,7 @@ class ImapAppendTest extends GreenmailTestCase
     {
         $folderName = 'AppendBox' . uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_append($connection, self::mailboxSpec($folderName), "Subject: Appended\r\n\r\nBody text\r\n");
 
@@ -20,7 +20,7 @@ class ImapAppendTest extends GreenmailTestCase
     {
         $folderName = 'AppendBox' . uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         imap_append($connection, self::mailboxSpec($folderName), "Subject: Appended\r\n\r\nBody text\r\n", '\\Seen');
 
@@ -32,7 +32,7 @@ class ImapAppendTest extends GreenmailTestCase
     {
         $folderName = 'AppendBox' . uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $timestamp = 1700000000;
         imap_append(

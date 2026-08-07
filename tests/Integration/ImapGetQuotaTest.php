@@ -13,7 +13,7 @@ class ImapGetQuotaTest extends GreenmailTestCase
     #[Group('greenmail-only')]
     public function test_reports_the_quota_set_on_a_root(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
         $this->assertTrue(imap_set_quota($connection, 'INBOX', 768));
 
         $quota = imap_get_quota($connection, 'INBOX');
@@ -34,7 +34,7 @@ class ImapGetQuotaTest extends GreenmailTestCase
      */
     public function test_returns_false_for_an_unknown_quota_root(): void
     {
-        $connection = imap_open(self::mailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
         imap_set_quota($connection, 'INBOX', 768);
 
         $this->assertFalse(@imap_get_quota($connection, 'NoSuchRoot'.random_int(10000, 99999)));

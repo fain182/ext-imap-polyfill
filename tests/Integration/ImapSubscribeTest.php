@@ -8,7 +8,7 @@ class ImapSubscribeTest extends GreenmailTestCase
     {
         $folderName = 'SubscribeBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec('INBOX'), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
 
         $this->assertTrue(imap_subscribe($connection, self::mailboxSpec($folderName)));
         $this->assertTrue(imap_unsubscribe($connection, self::mailboxSpec($folderName)));

@@ -12,7 +12,7 @@ class ImapMailMoveTest extends GreenmailTestCase
         $seedClient->createFolder($targetName);
         $seedClient->getFolder($sourceName)->appendMessage("Subject: Moving\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($sourceName), self::user(), self::password());
 
         $result = imap_mail_move($connection, '1', $targetName);
 
@@ -36,7 +36,7 @@ class ImapMailMoveTest extends GreenmailTestCase
         $targetName = 'MoveDstBox'.uniqid();
         $this->makeFolder($targetName);
 
-        $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($sourceName), self::user(), self::password());
 
         $result = imap_mail_move($connection, (string) $survivorUid, $targetName, CP_UID);
 
@@ -51,7 +51,7 @@ class ImapMailMoveTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($sourceName);
         $seedClient->getFolder($sourceName)->appendMessage("Subject: Moving\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($sourceName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($sourceName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         imap_mail_move($connection, '1', $sourceName, 9999);

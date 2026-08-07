@@ -14,7 +14,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
 {
     private function seedClient(): SeedClient
     {
-        $client = new SeedClient(self::host(), self::port(), self::USER, self::PASSWORD);
+        $client = new SeedClient(self::host(), self::port(), self::user(), self::password());
 
         return $client;
     }
@@ -27,7 +27,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
             "From: alice@example.com\r\nTo: bob@example.com\r\nSubject: Hello\r\n\r\nHello body\r\n"
         );
 
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $count = imap_num_msg($connection);
 
         $header = imap_headerinfo($connection, $count);
@@ -46,7 +46,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
         $folder = $client->getFolder('INBOX');
         $folder->appendMessage("Subject: Overview Me\r\n\r\nBody");
 
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $count = imap_num_msg($connection);
 
         $overview = imap_fetch_overview($connection, (string) $count);
@@ -72,7 +72,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
         $folder->appendMessage("Subject: Zulus\r\n\r\nBody");
         $folder->appendMessage("Subject: Re: Zulu\r\n\r\nBody");
 
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $count = imap_num_msg($connection);
         $sorted = imap_sort($connection, SORTSUBJECT, false);
 
@@ -96,7 +96,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
     {
         $this->seedClient()->getFolder('INBOX')->appendMessage("Subject: Uid Rule\r\n\r\nBody");
 
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $count = imap_num_msg($connection);
 
         $this->assertSame($count, imap_uid($connection, $count));
@@ -111,12 +111,12 @@ final class Pop3MailboxTest extends GreenmailTestCase
         $folder = $client->getFolder('INBOX');
         $folder->appendMessage("Subject: Uid Me\r\n\r\nBody");
 
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $count = imap_num_msg($connection);
         $uid = imap_uid($connection, $count);
         imap_close($connection);
 
-        $reconnected = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $reconnected = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $this->assertSame($uid, imap_uid($reconnected, $count));
         $this->assertSame($count, imap_msgno($reconnected, $uid));
         imap_close($reconnected);
@@ -129,7 +129,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
         $marker = 'Uniq'.random_int(10000, 99999);
         $folder->appendMessage("Subject: {$marker}\r\n\r\nBody");
 
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $count = imap_num_msg($connection);
 
         $all = imap_search($connection, 'ALL');
@@ -148,7 +148,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
         $folder = $client->getFolder('INBOX');
         $folder->appendMessage("Subject: Flag Me\r\n\r\nBody");
 
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $count = imap_num_msg($connection);
 
         $this->assertTrue(imap_setflag_full($connection, (string) $count, '\\Seen'));
@@ -164,7 +164,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
     public function test_mail_copy_and_move_fail(): void
     {
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
         $this->assertFalse(@imap_mail_copy($connection, '1', 'INBOX.Other'));
         $this->assertFalse(@imap_mail_move($connection, '1', 'INBOX.Other'));
@@ -174,7 +174,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
     public function test_append_fails(): void
     {
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
         $this->assertFalse(@imap_append($connection, 'INBOX', "Subject: x\r\n\r\nbody"));
 
@@ -183,7 +183,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
     public function test_hierarchy_mutation_fails(): void
     {
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
         $this->assertFalse(@imap_createmailbox($connection, 'INBOX.Sub'));
         $this->assertFalse(@imap_deletemailbox($connection, 'INBOX.Sub'));
@@ -194,7 +194,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
     public function test_subscribe_and_unsubscribe_noop_succeed(): void
     {
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
         $this->assertTrue(imap_subscribe($connection, 'INBOX'));
         $this->assertTrue(imap_unsubscribe($connection, 'INBOX'));
@@ -204,7 +204,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
     public function test_list_returns_only_inbox(): void
     {
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
         $list = imap_list($connection, self::pop3MailboxSpec(), '*');
 
@@ -221,7 +221,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
         $folder = $client->getFolder('INBOX');
         $folder->appendMessage("Subject: Structure Me\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nHello");
 
-        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $count = imap_num_msg($connection);
 
         $structure = imap_fetchstructure($connection, $count);

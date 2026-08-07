@@ -12,7 +12,7 @@ class ImapFetchstructureTest extends GreenmailTestCase
             "Subject: Hello\r\nContent-Type: text/plain; charset=us-ascii\r\n\r\nHello body\r\n"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_fetchstructure($connection, 1);
 
@@ -44,7 +44,7 @@ class ImapFetchstructureTest extends GreenmailTestCase
             ."--BOUND1--\r\n";
         $seedClient->getFolder($folderName)->appendMessage($message);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_fetchstructure($connection, 1);
 
@@ -85,7 +85,7 @@ class ImapFetchstructureTest extends GreenmailTestCase
             ."--B1--\r\n";
         $seedClient->getFolder($folderName)->appendMessage($message);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_fetchstructure($connection, 1);
 
@@ -111,7 +111,7 @@ class ImapFetchstructureTest extends GreenmailTestCase
             "Subject: Survivor\r\nContent-Type: text/plain; charset=us-ascii\r\n\r\nBody"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $byMsgno = imap_fetchstructure($connection, 1);
         $byUid = imap_fetchstructure($connection, $survivorUid, FT_UID);
@@ -124,7 +124,7 @@ class ImapFetchstructureTest extends GreenmailTestCase
     {
         $folderName = 'StructValBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_fetchstructure(): Argument #2 ($message_num) must be greater than 0');

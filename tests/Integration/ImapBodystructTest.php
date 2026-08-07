@@ -12,7 +12,7 @@ class ImapBodystructTest extends GreenmailTestCase
             "Subject: Hello\r\nContent-Type: text/plain; charset=us-ascii\r\n\r\nHello body\r\n"
         );
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $result = imap_bodystruct($connection, 1, '1');
 
@@ -42,7 +42,7 @@ class ImapBodystructTest extends GreenmailTestCase
             ."--B1--\r\n";
         $seedClient->getFolder($folderName)->appendMessage($message);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $part1 = imap_bodystruct($connection, 1, '1');
         $part2 = imap_bodystruct($connection, 1, '2');
@@ -81,7 +81,7 @@ class ImapBodystructTest extends GreenmailTestCase
             ."--B1--\r\n";
         $seedClient->getFolder($folderName)->appendMessage($message);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $htmlAlt = imap_bodystruct($connection, 1, '1.2');
 
@@ -108,7 +108,7 @@ class ImapBodystructTest extends GreenmailTestCase
             ."--B1--\r\n";
         $seedClient->getFolder($folderName)->appendMessage($message);
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $structure = imap_fetchstructure($connection, 1);
         $part1 = imap_bodystruct($connection, 1, '1');
@@ -122,7 +122,7 @@ class ImapBodystructTest extends GreenmailTestCase
         $seedClient = $this->makeFolder($folderName);
         $seedClient->getFolder($folderName)->appendMessage("Subject: Hi\r\n\r\nBody");
 
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertFalse(imap_bodystruct($connection, 1, '2'));
     }
@@ -131,7 +131,7 @@ class ImapBodystructTest extends GreenmailTestCase
     {
         $folderName = 'BodystructValBox'.uniqid();
         $this->makeFolder($folderName);
-        $connection = imap_open(self::mailboxSpec($folderName), self::USER, self::PASSWORD);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_bodystruct(): Argument #2 ($message_num) must be greater than 0');
