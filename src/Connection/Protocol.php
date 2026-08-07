@@ -27,6 +27,13 @@ final class Protocol
 
     private string $uidTableFor = '';
 
+    private ?string $selectedFolder = null;
+
+    private bool $selectedReadOnly = false;
+
+    /** @var array<int, mixed> the FLAGS lists of the last real SELECT/EXAMINE */
+    private array $selectedFlags = [];
+
     public function __construct(private readonly ImapEngineConnection $connection)
     {
     }
@@ -36,6 +43,25 @@ final class Protocol
      */
     public function selectOrExamine(string $folder, bool $readOnly): array
     {
+        // c-client selects a mailbox once and keeps it: the counts it reports
+        // afterwards come from untagged responses arriving on whatever
+        // command runs next, not from re-selecting. Re-selecting per call
+        // costs a round trip on every single imap_* function, and against a
+        // mailbox of any size that round trip is the dominant cost.
+        if ($folder === $this->selectedFolder && $readOnly === $this->selectedReadOnly) {
+            $counts = $this->connection->counts();
+
+            if ($counts['exists'] !== null) {
+                return [
+                    'exists' => $counts['exists'],
+                    'recent' => $counts['recent'] ?? 0,
+                    'flags' => $this->selectedFlags,
+                ];
+            }
+        }
+
+        $this->connection->forgetCounts();
+
         $responses = $this->connection->sendAndCollect(
             $readOnly ? 'EXAMINE' : 'SELECT',
             [Str::literal($folder)],
@@ -65,8 +91,13 @@ final class Protocol
             }
         }
 
-        // Every wrapper re-selects before its operation, so this is where the
-        // uid table can tell whether it is still describing the same messages.
+        $this->selectedFolder = $folder;
+        $this->selectedReadOnly = $readOnly;
+        $this->selectedFlags = $result['flags'] ?? [];
+
+        // A real SELECT is the one moment the uid table can be trusted to
+        // describe these messages; from here the count tracked on the
+        // connection decides when it stops.
         $fingerprint = sprintf('%s/%d/%d', $folder, $result['uidvalidity'] ?? 0, $result['exists'] ?? 0);
         if ($fingerprint !== $this->uidTableFor) {
             $this->uidTable = null;
@@ -210,6 +241,11 @@ final class Protocol
      */
     public function getUid(): array
     {
+        $exists = $this->connection->counts()['exists'];
+        if ($this->uidTable !== null && $exists !== null && count($this->uidTable) !== $exists) {
+            $this->uidTable = null;
+        }
+
         if ($this->uidTable !== null) {
             return $this->uidTable;
         }
@@ -269,6 +305,16 @@ final class Protocol
     public function noop(): void
     {
         $this->connection->noop();
+    }
+
+    /**
+     * c-client's imap_check() sends CHECK, and the untagged EXISTS/RECENT it
+     * comes back with are what imap_check() reports. It is the one place that
+     * has to reach the server: everything else reads the tracked counts.
+     */
+    public function check(): void
+    {
+        $this->connection->sendAndCollect('CHECK');
     }
 
     public function expunge(): void

@@ -272,6 +272,15 @@ final class Pop3Backend implements ConnectionBackend
         throw new \RuntimeException('Copy not valid for POP3');
     }
 
+    /**
+     * POP3 has no CHECK, and this backend re-STATs on every select anyway,
+     * so its counts are never stale to begin with.
+     */
+    public function check(): void
+    {
+        $this->protocol->noop();
+    }
+
     public function noop(): void
     {
         $this->protocol->noop();

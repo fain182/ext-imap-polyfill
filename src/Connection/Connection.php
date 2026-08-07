@@ -142,13 +142,22 @@ final class Connection
         $this->readOnly = $readOnly;
     }
 
+    public function check(): void
+    {
+        $this->backend->check();
+    }
+
     /**
-     * Re-selects the current folder before an operation, the way every
-     * wrapper function needs to. Uses EXAMINE instead of SELECT when the
-     * connection was opened with OP_READONLY, so a read-only imap_open()
-     * doesn't get silently escalated back to read-write on the next call —
-     * matching ext-imap, the read-only guarantee itself is enforced by the
-     * IMAP server rejecting writes, not by this client.
+     * Makes sure the current folder is the selected one before an operation,
+     * the way every wrapper function needs. Uses EXAMINE instead of SELECT
+     * when the connection was opened with OP_READONLY, so a read-only
+     * imap_open() doesn't get silently escalated back to read-write on the
+     * next call — matching ext-imap, the read-only guarantee itself is
+     * enforced by the IMAP server rejecting writes, not by this client.
+     *
+     * Only actually selects when the selection changed: the counts it returns
+     * otherwise come from the untagged responses the backend tracks, which is
+     * how c-client reports them too.
      *
      * @return array<string, mixed>
      */

@@ -24,6 +24,10 @@ use ImapPolyfill\Support\ErrorStack;
  */
 final class ImapEngineConnection extends ImapConnection
 {
+    private ?int $exists = null;
+
+    private ?int $recent = null;
+
     /**
      * @param list<string|array{0: string, 1: string}> $tokens
      *
@@ -69,11 +73,57 @@ final class ImapEngineConnection extends ImapConnection
     {
         $reply = parent::nextReply();
 
-        if ($reply instanceof UntaggedResponse && ($alert = self::alertText($reply)) !== null) {
-            ErrorStack::pushAlert($alert);
+        if ($reply instanceof UntaggedResponse) {
+            $this->absorbCounts($reply);
+
+            if (($alert = self::alertText($reply)) !== null) {
+                ErrorStack::pushAlert($alert);
+            }
         }
 
         return $reply;
+    }
+
+    /**
+     * Message counts as last reported for the selected folder, or null when
+     * nothing has reported them since the folder was selected.
+     *
+     * @return array{exists: ?int, recent: ?int}
+     */
+    public function counts(): array
+    {
+        return ['exists' => $this->exists, 'recent' => $this->recent];
+    }
+
+    /**
+     * Called when the selection changes: counts describe one folder only.
+     */
+    public function forgetCounts(): void
+    {
+        $this->exists = null;
+        $this->recent = null;
+    }
+
+    /**
+     * c-client folds "* n EXISTS", "* n RECENT" and "* n EXPUNGE" into its
+     * stream cache wherever they turn up — they are not tied to SELECT, and
+     * a server may volunteer them on any command. Tracking them here is what
+     * lets the polyfill report counts without re-selecting the folder first.
+     *
+     * EXPUNGE carries the message number that went away, not a new total, so
+     * the count is decremented rather than replaced.
+     */
+    private function absorbCounts(UntaggedResponse $response): void
+    {
+        $keyword = (string) ($response->tokenAt(2) ?? '');
+        $number = (int) (string) $response->type();
+
+        match ($keyword) {
+            'EXISTS' => $this->exists = $number,
+            'RECENT' => $this->recent = $number,
+            'EXPUNGE' => $this->exists = max(0, ($this->exists ?? 1) - 1),
+            default => null,
+        };
     }
 
     /**

@@ -196,6 +196,9 @@ final class Session
         $this->connection->ensureOpen();
 
         try {
+            // A live query, unlike the cached counters imap_num_msg() reads:
+            // CHECK makes the server report the folder's current state.
+            $this->connection->check();
             $status = $this->connection->selectOrExamine();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());

@@ -122,6 +122,13 @@ interface ConnectionBackend
     public function noop(): void;
 
     /**
+     * Asks the server to report the selected folder's state, the way
+     * c-client's CHECK does. Unlike the other reads this one must reach the
+     * server: imap_check() is a live query.
+     */
+    public function check(): void;
+
+    /**
      * @param string[] $items
      *
      * @return array<string, int>
