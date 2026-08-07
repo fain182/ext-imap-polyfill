@@ -23,9 +23,8 @@ Requires PHP 8.1+. The dependency tree declares two extensions, `ext-json` (alwa
 
 The package declares `provide: ext-imap`, so other dependencies that require `ext-imap` install cleanly alongside it.
 
-## Usage
-
-Your existing `imap_*` code runs unchanged:
+<details>
+<summary>What the calling code looks like — unchanged</summary>
 
 ```php
 $imap = imap_open('{imap.example.com:993/imap/ssl}INBOX', 'user@example.com', $password);
@@ -37,6 +36,23 @@ foreach (imap_search($imap, 'UNSEEN') ?: [] as $msgno) {
 
 imap_close($imap);
 ```
+
+</details>
+
+## Compatibility
+
+This is not a reimplementation of all `imap_*` functions — **72 of 75 (96%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing three all scan mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`): SCAN is an RFC 2060-era command, dropped from IMAP4rev1, that in practice only c-client's own UW-IMAP server ever implemented, so there is nothing left to test them against. Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
+
+Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Any function not listed in the table below is expected to match the real extension exactly; these are the known, deliberate divergences:
+
+| Function | Divergence |
+|---|---|
+| `imap_check` | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
+| `imap_mail` | delivery always goes through the `sendmail_path` pipe (false when that ini is empty) — the real extension's Windows build spoke SMTP via the `SMTP`/`smtp_port` ini settings instead |
+| `imap_mailboxmsginfo` | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
+| `imap_mail_compose` | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax) |
+| `imap_open` | of the `$flags` bitmask, only `OP_READONLY` and `CL_EXPUNGE` change behavior — the other `OP_*` flags are validated, then ignored; the `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored |
+| `imap_reopen` | only switches folders on the same connection — can't reconnect to a different host, since credentials aren't retained after `imap_open` |
 
 ### Connection string flags
 
@@ -52,23 +68,13 @@ When no port is given, the default follows the service and encryption, like c-cl
 
 Any other flag (`/imap`, `/norsh`, `/secure`, `/debug`, …) is accepted and ignored, so existing connection strings parse fine.
 
-## Coverage
+### Cross-cutting limits
 
-This is not a reimplementation of all `imap_*` functions — **72 of 75 (96%)** are implemented, chosen to cover the common path of connecting, reading, and moderating a mailbox. The missing three all scan mailboxes by text content (`imap_scan`, `imap_scanmailbox`, `imap_listscan`): SCAN is an RFC 2060-era command, dropped from IMAP4rev1, that in practice only c-client's own UW-IMAP server ever implemented, so there is nothing left to test them against. Calling any of them will simply hit PHP's "undefined function" error, same as before this package existed.
+- **No NNTP**: `{host/nntp}` is parsed but ignored — the connection silently falls back to IMAP instead of talking NNTP.
+- **POP3** support mirrors real ext-imap's own treatment of POP3: a single mailbox always named `INBOX`, `SEARCH`/`STATUS`/`BODYSTRUCTURE` synthesized client-side, flags lasting only for the lifetime of the connection, and copy/move/append/mailbox-management failing outright. The one divergence: `imap_search()`'s criteria grammar over POP3 is a practical subset (`ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT` substring match, `SINCE`/`BEFORE`/`ON`), not the full RFC3501 grammar.
+- **Warnings** are raised as `E_USER_WARNING`, not `E_WARNING` — userland code can't raise the exact error level the C extension uses.
 
-Every implemented function's object/array shape (property names, casing, flag semantics) is checked against the real extension — see [Verifying against real ext-imap](#verifying-against-real-ext-imap) below. Any function not listed in the table below is expected to match the real extension exactly; these are the known, deliberate divergences:
-
-| Function | Divergence |
-|---|---|
-| `imap_check` | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
-| `imap_mail` | delivery always goes through the `sendmail_path` pipe (false when that ini is empty) — the real extension's Windows build spoke SMTP via the `SMTP`/`smtp_port` ini settings instead |
-| `imap_mailboxmsginfo` | the host in the `Mailbox` property stays as given in the spec — c-client resolves it to its canonical DNS name |
-| `imap_mail_compose` | address lists go through the same simplified parser as `imap_rfc822_parse_adrlist` (no group or route syntax) |
-| `imap_open` | of the `$flags` bitmask, only `OP_READONLY` and `CL_EXPUNGE` change behavior — the other `OP_*` flags are validated, then ignored; the `$options` argument (e.g. `DISABLE_AUTHENTICATOR`) is ignored |
-| `imap_reopen` | only switches folders on the same connection — can't reconnect to a different host, since credentials aren't retained after `imap_open` |
-
-<details>
-<summary>Full list of the 72 implemented functions</summary>
+### The 72 implemented functions
 
 `imap_8bit`,
 `imap_alerts`,
@@ -142,16 +148,6 @@ Every implemented function's object/array shape (property names, casing, flag se
 `imap_utf7_encode`,
 `imap_utf8`,
 `imap_utf8_to_mutf7`
-
-</details>
-
-## Limitations
-
-Cross-cutting divergences from the real extension (per-function ones are in the [Coverage](#coverage) divergences table):
-
-- **No NNTP**: `{host/nntp}` is parsed but ignored — the connection silently falls back to IMAP instead of talking NNTP.
-- **POP3** support mirrors real ext-imap's own treatment of POP3: a single mailbox always named `INBOX`, `SEARCH`/`STATUS`/`BODYSTRUCTURE` synthesized client-side, flags lasting only for the lifetime of the connection, and copy/move/append/mailbox-management failing outright. The one divergence: `imap_search()`'s criteria grammar over POP3 is a practical subset (`ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT` substring match, `SINCE`/`BEFORE`/`ON`), not the full RFC3501 grammar.
-- **Warnings** are raised as `E_USER_WARNING`, not `E_WARNING` — userland code can't raise the exact error level the C extension uses.
 
 ## Development
 
