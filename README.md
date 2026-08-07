@@ -29,7 +29,7 @@ The package declares `provide: ext-imap`, so other dependencies that require `ex
 
 One limit is likely to come up: **`imap_reopen()` only switches folders**, on the connection it already has. It can't reopen against a different host, because credentials aren't kept after `imap_open()`.
 
-The other two gaps probably won't. `imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` are undefined — SCAN was dropped from IMAP4rev1 and in practice only c-client's own UW-IMAP server ever implemented it, so no server you can reach would answer them anyway. And NNTP isn't spoken at all: worth knowing mostly because a `{host/nntp}` spec doesn't fail, it quietly connects over IMAP instead.
+The other two gaps probably won't, and both refuse loudly rather than pretending. `imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` throw: SCAN was dropped from IMAP4rev1 and in practice only c-client's own UW-IMAP server ever implemented it, so no server you can reach would answer them anyway. Opening a `{host/nntp}` mailbox throws too, instead of quietly connecting over IMAP as it used to.
 
 `imap_open()` acts on `OP_READONLY` and `CL_EXPUNGE` and on the `/ssl`, `/tls`, `/novalidate-cert`, `/pop3` and `/readonly` flags; the remaining `OP_*` flags, the `$options` argument and flags like `/debug` and `/secure` are parsed and then ignored.
 

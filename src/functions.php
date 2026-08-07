@@ -455,6 +455,41 @@ if (!function_exists('imap_rfc822_parse_headers')) {
     }
 }
 
+if (!function_exists('imap_scan')) {
+    /**
+     * Defined rather than left out: `function_exists('imap_scan')` is true
+     * under the real extension, so a caller feature-detecting would take a
+     * different branch here than there.
+     */
+    /**
+     * @return never ext-imap declares array|false here; this one only ever throws.
+     */
+    function imap_scan(\IMAP\Connection $imap, string $reference, string $pattern, string $content): array|false
+    {
+        throw \ImapPolyfill\Support\UnsupportedFeature::scan('imap_scan');
+    }
+}
+
+if (!function_exists('imap_scanmailbox')) {
+    /**
+     * @return never ext-imap declares array|false here; this one only ever throws.
+     */
+    function imap_scanmailbox(\IMAP\Connection $imap, string $reference, string $pattern, string $content): array|false
+    {
+        throw \ImapPolyfill\Support\UnsupportedFeature::scan('imap_scanmailbox');
+    }
+}
+
+if (!function_exists('imap_listscan')) {
+    /**
+     * @return never ext-imap declares array|false here; this one only ever throws.
+     */
+    function imap_listscan(\IMAP\Connection $imap, string $reference, string $pattern, string $content): array|false
+    {
+        throw \ImapPolyfill\Support\UnsupportedFeature::scan('imap_listscan');
+    }
+}
+
 if (!function_exists('imap_createmailbox')) {
     function imap_createmailbox(\IMAP\Connection $imap, string $mailbox): bool
     {

@@ -44,6 +44,12 @@ final class Session
             return false;
         }
 
+        // Refused rather than quietly opened over IMAP, which is what
+        // happened before and is worse than any error.
+        if ($spec->hasFlag('nntp')) {
+            throw \ImapPolyfill\Support\UnsupportedFeature::nntp($mailbox);
+        }
+
         $isPop3 = $spec->hasFlag('pop3');
         $backend = $isPop3
             ? self::connectPop3($spec, $mailbox, $user, $password, $retries)
