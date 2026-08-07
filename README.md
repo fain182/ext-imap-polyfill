@@ -61,17 +61,18 @@ In the `{host[:port][/flag...]}folder` mailbox spec, the flags that change behav
 - `/ssl` — implicit TLS
 - `/tls` — STARTTLS
 - `/novalidate-cert` — skip TLS certificate validation
-- `/pop3` — connect over POP3 instead of IMAP
+- `/pop3` — connect over POP3 instead of IMAP, with the same reduced feature set as under the real extension: one mailbox named `INBOX`, `SEARCH`/`STATUS`/`BODYSTRUCTURE` synthesized client-side, flags lasting only for the connection, copy/move/append/mailbox-management refused
 - `/readonly` — open the mailbox read-only, same as passing `OP_READONLY`
 
 When no port is given, the default follows the service and encryption, like c-client: IMAP 143 (993 with `/ssl`), POP3 110 (995 with `/ssl`).
 
 Any other flag (`/imap`, `/norsh`, `/secure`, `/debug`, …) is accepted and ignored, so existing connection strings parse fine.
 
-### Cross-cutting limits
+### Cross-cutting divergences
+
+Differences from the real extension that aren't tied to one function:
 
 - **No NNTP**: `{host/nntp}` parses, then connects over IMAP anyway.
-- **POP3** can do less than IMAP, inherited from the real extension rather than added here: one mailbox named `INBOX`, `SEARCH`/`STATUS`/`BODYSTRUCTURE` synthesized client-side, flags lasting only for the connection, copy/move/append/mailbox-management refused.
 - **Warnings** are `E_USER_WARNING`, not `E_WARNING`: userland can't raise the level the C extension used.
 
 ### The 72 implemented functions
