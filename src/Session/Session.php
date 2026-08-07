@@ -313,6 +313,11 @@ final class Session
 
         try {
             $this->connection->protocol()->noop();
+        } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException) {
+            // Reporting a dead stream is what this function is for, so
+            // finding one is an answer rather than a failure: c-client
+            // returns NIL and logs nothing.
+            return false;
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -362,22 +367,9 @@ final class Session
         $prefix = $spec->normalizedPrefixBase($isPop3 ? 'pop3' : 'imap', $secure);
 
         if ($prefix !== $this->connection->mailboxPrefix()) {
-            $user = $this->connection->user();
-            $backend = $isPop3
-                ? self::connectPop3($spec, $mailbox, $user, $this->connection->password(), $retries)
-                : self::connectImap($spec, $user, $this->connection->password(), $retries);
+            $status = $this->redial($spec, $mailbox, $isPop3, $prefix, $readOnly, $retries);
 
-            if ($backend === false) {
-                return false;
-            }
-
-            $this->connection->reconnect($backend, $prefix, $user, $spec->folder, $readOnly);
-
-            try {
-                $status = $this->connection->selectOrExamine();
-            } catch (\Throwable $e) {
-                ErrorStack::push($e->getMessage());
-
+            if ($status === false) {
                 return false;
             }
 
@@ -392,6 +384,16 @@ final class Session
 
         try {
             $status = $this->connection->selectOrExamineFolder($spec->folder, $readOnly);
+        } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException) {
+            // Losing the socket is not losing the connection: c-client
+            // dials the host again and logs back in rather than reporting
+            // a dead stream, which is what makes a session survive a server
+            // that hangs up on it. Same host as before — the prefix matched.
+            $status = $this->redial($spec, $mailbox, $isPop3, $prefix, $readOnly, $retries);
+
+            if ($status === false) {
+                return false;
+            }
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -409,5 +411,36 @@ final class Session
         }
 
         return true;
+    }
+
+    /**
+     * Opens a second connection from the credentials imap_open() kept, hands
+     * it to the existing IMAP\Connection in place of the one it holds, and
+     * selects the spec's folder on it — the whole of what c-client's
+     * mail_open() does to a stream it is reopening elsewhere, and to one
+     * whose socket is gone.
+     *
+     * @return array<string, mixed>|false the selected folder's status
+     */
+    private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, string $prefix, bool $readOnly, int $retries): array|false
+    {
+        $user = $this->connection->user();
+        $backend = $isPop3
+            ? self::connectPop3($spec, $mailbox, $user, $this->connection->password(), $retries)
+            : self::connectImap($spec, $user, $this->connection->password(), $retries);
+
+        if ($backend === false) {
+            return false;
+        }
+
+        $this->connection->reconnect($backend, $prefix, $user, $spec->folder, $readOnly);
+
+        try {
+            return $this->connection->selectOrExamine();
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
     }
 }
