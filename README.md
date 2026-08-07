@@ -2,14 +2,15 @@
 
 [![Tests](https://github.com/fain182/ext-imap-polyfill/actions/workflows/tests.yml/badge.svg)](https://github.com/fain182/ext-imap-polyfill/actions/workflows/tests.yml)
 [![Latest Version](https://img.shields.io/packagist/v/fain182/ext-imap-polyfill)](https://packagist.org/packages/fain182/ext-imap-polyfill)
+[![Downloads](https://img.shields.io/packagist/dt/fain182/ext-imap-polyfill)](https://packagist.org/packages/fain182/ext-imap-polyfill)
 [![PHP Version](https://img.shields.io/packagist/dependency-v/fain182/ext-imap-polyfill/php?label=php)](https://packagist.org/packages/fain182/ext-imap-polyfill)
 [![License](https://img.shields.io/packagist/l/fain182/ext-imap-polyfill)](LICENSE)
 
-A drop-in polyfill for the `imap_*` functions removed from PHP core in 8.4.
+**A drop-in polyfill for the `imap_*` functions removed from PHP core in 8.4.** Install it and your existing code keeps working — same function names, same arguments, same objects coming back.
 
 PHP 8.4 moved `ext-imap` out of core and onto PECL ([RFC](https://wiki.php.net/rfc/unbundle_imap_pspell_oci8)). The C library behind it, c-client, has been unmaintained since 2007 and is disappearing from distributions, so the PECL package gets harder to install every release — and the alternative, rewriting against an OOP library, is a migration rather than a version bump.
 
-This package defines the same global `imap_*` functions, backed by [directorytree/imapengine](https://github.com/DirectoryTree/ImapEngine) for IMAP and a small raw client for POP3.
+This package defines the same global `imap_*` functions, backed by [directorytree/imapengine](https://github.com/DirectoryTree/ImapEngine) for IMAP and a small raw client for POP3. No C extension, no c-client.
 
 ## Install
 
@@ -17,22 +18,43 @@ This package defines the same global `imap_*` functions, backed by [directorytre
 composer require fain182/ext-imap-polyfill
 ```
 
-No code changes. If `ext-imap` is present (e.g. you're still on PHP 8.3), the polyfill is a no-op — safe to add before you upgrade, not just after.
+That's the whole migration. The code you already have runs unchanged:
 
-Requires PHP 8.1+; the dependency tree declares only `ext-json` and `ext-iconv`. (Earlier releases needed `--ignore-platform-req=ext-zip`; this one doesn't.)
+```php
+$imap = imap_open('{imap.example.com:993/imap/ssl}INBOX', 'user@example.com', 'password');
 
-The package declares `provide: ext-imap`, so other dependencies that require `ext-imap` install cleanly alongside it.
+foreach (imap_search($imap, 'UNSEEN') ?: [] as $msgno) {
+    $overview = imap_fetch_overview($imap, (string) $msgno)[0];
 
-## Compatibility
+    echo $overview->subject, "\n";
+    echo imap_qprint(imap_fetchbody($imap, $msgno, '1')), "\n";
+}
 
-**72 of 75** `imap_*` functions are implemented, and what they return is checked against the real extension rather than against this package's own idea of it — the suite runs a second time with the genuine `ext-imap` loaded ([how](CONTRIBUTING.md)). Anything not named below matches it. POP3 works too, with the same reduced feature set it has there.
+imap_close($imap);
+```
 
-Two things are missing, and both refuse loudly rather than pretending. `imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` throw: SCAN was dropped from IMAP4rev1 and in practice only c-client's own UW-IMAP server ever implemented it, so no server you can reach would answer them anyway. Opening a `{host/nntp}` mailbox throws too — the real extension speaks NNTP and this doesn't.
+If `ext-imap` is present — you're still on PHP 8.3, or someone installed the PECL build — the polyfill is a no-op and the real extension keeps handling every call. It's safe to add *before* you upgrade, not just after.
 
-`imap_open()` acts on `OP_READONLY` and `CL_EXPUNGE` and on the `/ssl`, `/tls`, `/novalidate-cert`, `/pop3` and `/readonly` flags; the remaining `OP_*` flags, the `$options` argument and flags like `/debug` and `/secure` are parsed and then ignored.
+Requires PHP 8.1+; the dependency tree declares only `ext-json` and `ext-iconv`. The package declares `provide: ext-imap`, so other dependencies that require `ext-imap` install cleanly alongside it.
+
+## Why a polyfill instead of rewriting
+
+Libraries like [webklex/php-imap](https://github.com/Webklex/php-imap) or [ddeboer/imap](https://github.com/ddeboer/imap) are good, and if you're writing new code you should probably use one. But they have their own API: adopting one means touching every call site, re-deriving what your code did with `imap_fetchstructure()`'s parts tree, and re-testing all of it — a project, scheduled against everything else.
+
+This package is a `composer require` in an afternoon. Your diff is one line in `composer.json`.
+
+## Faithful, and checked that way
+
+Matching the manual isn't enough — the point is matching *the extension you're replacing*, quirks included: the property order inside a `stdClass`, the fact that `imap_fetch_overview()` returns `[]` where its neighbours return `false`, the exact `ValueError` text on a bad flag bitmask.
+
+So the test suite doesn't just run against this package. **The same 279 integration tests run a second time against the genuine `ext-imap`**, in a PHP 8.3 container, hitting the same servers — if the polyfill and the extension disagree, the build says so. On top of that, 96 unit tests cover the internals, and the whole suite is re-run against a second IMAP server (Greenmail and Dovecot) to catch behaviour that only holds on one of them.
+
+That's what caught `imap_uid()` over POP3 returning the server's UIDL cast to an integer — right on one server, nonsense on the other.
+
+POP3 is supported too, with the same reduced feature set it has under the real extension.
 
 <details>
-<summary>Behavioural fine print</summary>
+<summary>Fine print: the corners where it differs</summary>
 
 Worth reading if something doesn't match byte for byte, not before.
 
@@ -48,9 +70,14 @@ Worth reading if something doesn't match byte for byte, not before.
 
 Warnings are raised as `E_USER_WARNING` rather than `E_WARNING`, which userland cannot produce.
 
+Two things throw instead of pretending, rather than diverging quietly. `imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` speak a command dropped from IMAP4rev1 that in practice only c-client's own UW-IMAP server ever implemented — no server you can reach would answer them. And opening a `{host/nntp}` mailbox throws: the real extension speaks NNTP, this doesn't.
+
+`imap_open()` acts on `OP_READONLY` and `CL_EXPUNGE` and on the `/ssl`, `/tls`, `/novalidate-cert`, `/pop3` and `/readonly` flags; the remaining `OP_*` flags, the `$options` argument and flags like `/debug` and `/secure` are parsed and then ignored.
+
 </details>
 
-### The 72 implemented functions
+<details>
+<summary>Every function it defines</summary>
 
 `imap_8bit`,
 `imap_alerts`,
@@ -124,6 +151,8 @@ Warnings are raised as `E_USER_WARNING` rather than `E_WARNING`, which userland 
 `imap_utf7_encode`,
 `imap_utf8`,
 `imap_utf8_to_mutf7`
+
+</details>
 
 ## Contributing
 
