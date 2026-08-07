@@ -59,4 +59,23 @@ class ImapMailboxManagementTest extends GreenmailTestCase
 
         $this->assertTrue(imap_rename($connection, self::mailboxSpec($folderName), self::mailboxSpec($newName)));
     }
+
+    /**
+     * A server refusing a command quotes the offending mailbox name back,
+     * and a non-ASCII name makes that response carry bytes outside ASCII.
+     * The name each server echoes differs (one decodes the modified UTF-7,
+     * the other repeats it verbatim), so only the ASCII tail is pinned —
+     * what matters is that the rejection reaches the error stack as the
+     * server's own text at all.
+     */
+    public function test_a_rejected_command_naming_a_non_ascii_mailbox_records_the_server_response(): void
+    {
+        $suffix = uniqid();
+        $missing = mb_convert_encoding('MissingBox_àèì_'.$suffix, 'UTF7-IMAP', 'UTF-8');
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
+        imap_errors();
+
+        $this->assertFalse(imap_deletemailbox($connection, self::mailboxSpec($missing)));
+        $this->assertStringContainsString($suffix, implode('|', imap_errors() ?: []));
+    }
 }

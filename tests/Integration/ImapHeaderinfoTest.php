@@ -191,4 +191,32 @@ class ImapHeaderinfoTest extends GreenmailTestCase
         $this->expectExceptionMessage('imap_headerinfo(): Argument #2 ($message_num) must be greater than 0');
         imap_headerinfo($connection, 0);
     }
+
+    /**
+     * A subject too long for one line arrives folded onto continuation
+     * lines. c-client unfolds it and hands back the encoded words still
+     * encoded, joined by the folding whitespace — decoding is
+     * imap_utf8()/imap_mime_header_decode()'s job, not this one's.
+     */
+    public function test_a_folded_subject_is_unfolded_rather_than_dropped(): void
+    {
+        $folderName = 'HeaderinfoFoldBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $first = '=?UTF-8?B?'.base64_encode(str_repeat('A', 30)).'?=';
+        $second = '=?UTF-8?B?'.base64_encode(str_repeat('B', 30)).'?=';
+        $seedClient->getFolder($folderName)->appendMessage(
+            "Subject: {$first}\r\n {$second}\r\n"
+            ."From: joe@example.com\r\n"
+            ."\r\n"
+            ."Body"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $result = imap_headerinfo($connection, 1);
+
+        $this->assertSame("{$first} {$second}", $result->subject);
+        $this->assertSame("{$first} {$second}", $result->Subject);
+        $this->assertSame(str_repeat('A', 30).str_repeat('B', 30), imap_utf8($result->subject));
+    }
 }

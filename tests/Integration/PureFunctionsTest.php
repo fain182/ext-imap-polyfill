@@ -60,6 +60,18 @@ final class PureFunctionsTest extends TestCase
                 'a =?UTF-8?B?Yg==?= c',
                 [['default', 'a '], ['UTF-8', 'b'], ['default', ' c']],
             ],
+            // RFC 2047 §6.2: whitespace *between* two encoded words is
+            // folding, not content, and disappears with them. Only there —
+            // the surroundings case above keeps the spaces that border
+            // ordinary text.
+            'space between adjacent segments is dropped' => [
+                '=?UTF-8?B?YQ==?= =?UTF-8?B?Yg==?=',
+                [['UTF-8', 'a'], ['UTF-8', 'b']],
+            ],
+            'so is a tab, and so is a run of them' => [
+                "=?UTF-8?B?YQ==?=\t =?UTF-8?B?Yg==?=",
+                [['UTF-8', 'a'], ['UTF-8', 'b']],
+            ],
         ];
     }
 
