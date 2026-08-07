@@ -36,6 +36,8 @@ POP3 works too, with the same reduced feature set it has under the real extensio
 | `imap_mail_compose` | a group address keeps its members (`Group: , a@b, c@d, ;`); c-client writes the group name and terminator with the member slots blank |
 | `imap_open` | only `OP_READONLY` and `CL_EXPUNGE` act, and of the connection-string flags only `/ssl`, `/tls`, `/novalidate-cert`, `/pop3` and `/readonly`; the rest — other `OP_*` flags, the `$options` argument, `/debug`, `/secure`, `/norsh` — are parsed, then ignored |
 | `imap_reopen` | switches folders on the same connection only: credentials aren't retained, so it can't reconnect elsewhere |
+| `imap_utf7_encode`, `imap_utf7_decode` | non-ASCII is converted per character; c-client packs the input's bytes into UTF-16 units instead, so `caffè` encodes to `caff&AMMAqA-` rather than `caff&w6g-` |
+| `imap_utf8` | decodes an ISO-8859-1 segment to precomposed UTF-8 (`café`, U+00E9); c-client emits the decomposed form (`cafe` + U+0301) |
 | `imap_search` | over POP3 only, the criteria grammar is a practical subset: `ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, substring `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT`, `SINCE`/`BEFORE`/`ON` |
 
 ### Cross-cutting divergences

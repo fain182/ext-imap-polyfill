@@ -43,7 +43,9 @@ final class Timeouts
             IMAP_OPENTIMEOUT => $default,
             IMAP_READTIMEOUT => $default,
             IMAP_WRITETIMEOUT => $default,
-            IMAP_CLOSETIMEOUT => $default,
+            // c-client leaves the close timeout at zero: it has no
+            // separate one, so it never reports default_socket_timeout here.
+            IMAP_CLOSETIMEOUT => 0,
         ];
     }
 }

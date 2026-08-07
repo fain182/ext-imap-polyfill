@@ -44,11 +44,14 @@ final class MimeText
      * them, matching imap_mime_header_decode(). Unlike decode(), consecutive
      * encoded-words are NOT joined into one — each stays a separate segment.
      *
-     * @return \stdClass[]
+     * @return \stdClass[]|false
      */
-    public static function decodeSegments(string $text): array
+    public static function decodeSegments(string $text): array|false
     {
-        $pattern = '/=\?(?P<charset>[^?\s]+)\?(?P<encoding>[BbQq])\?(?P<data>[^?]*)\?=/';
+        // c-client accepts any single character as the encoding and only
+        // acts on B and Q; anything else leaves the data untouched but still
+        // produces a segment carrying the charset.
+        $pattern = '/=\?(?P<charset>[^?\s]+)\?(?P<encoding>[^?])\?(?P<data>[^?]*)\?=/';
 
         $segments = [];
         $cursor = 0;
@@ -63,9 +66,19 @@ final class MimeText
                 $encoding = $matches['encoding'][$index][0];
                 $data = $matches['data'][$index][0];
 
-                $bytes = strcasecmp($encoding, 'B') === 0
-                    ? base64_decode($data)
-                    : quoted_printable_decode(str_replace('_', ' ', $data));
+                if (strcasecmp($encoding, 'B') === 0) {
+                    $bytes = base64_decode($data, true);
+
+                    // One undecodable segment fails the whole call, as in
+                    // php_imap.c where rfc822_base64() returning NIL aborts.
+                    if ($bytes === false) {
+                        return false;
+                    }
+                } elseif (strcasecmp($encoding, 'Q') === 0) {
+                    $bytes = quoted_printable_decode(str_replace('_', ' ', $data));
+                } else {
+                    $bytes = $data;
+                }
 
                 $segments[] = self::segment($charset, $bytes);
                 $cursor = $offset + strlen($fullMatch);

@@ -6,6 +6,7 @@ use ImapPolyfill\Address\AddressList;
 
 final class HeaderInfo
 {
+    /** In the order php_imap.c writes them into the envelope object. */
     private const ADDRESS_HEADERS = [
         'to' => 'to',
         'from' => 'from',
@@ -88,29 +89,10 @@ final class HeaderInfo
         $fields = RawHeaderFields::parse($rawHeader);
         $result = new \stdClass();
 
-        foreach (self::ADDRESS_HEADERS as $header => $property) {
-            if (!isset($fields[$header])) {
-                continue;
-            }
-
-            $result->$property = AddressList::parse($fields[$header], $defaultHost)->toLegacyArray();
-            $result->{$property.'address'} = $fields[$header];
-        }
-
-        // RFC 5322: Reply-To and Sender default to From when not explicitly set.
-        foreach (['reply_to', 'sender'] as $property) {
-            if (!isset($result->$property) && isset($result->from)) {
-                $result->$property = $result->from;
-                $result->{$property.'address'} = $result->fromaddress;
-            }
-        }
-
-        foreach (['message-id' => 'message_id', 'in-reply-to' => 'in_reply_to', 'references' => 'references'] as $header => $property) {
-            if (isset($fields[$header])) {
-                $result->$property = $fields[$header];
-            }
-        }
-
+        // php_imap.c fills the envelope in this order, and the order is
+        // observable: foreach, get_object_vars() and var_dump() all show it.
+        // Note that each address list is preceded by its raw "*address"
+        // string, not followed by it.
         if (isset($fields['date'])) {
             $result->date = $fields['date'];
             $result->Date = $fields['date'];
@@ -119,6 +101,29 @@ final class HeaderInfo
         if (isset($fields['subject'])) {
             $result->subject = $fields['subject'];
             $result->Subject = $fields['subject'];
+        }
+
+        foreach (['in-reply-to' => 'in_reply_to', 'message-id' => 'message_id', 'references' => 'references'] as $header => $property) {
+            if (isset($fields[$header])) {
+                $result->$property = $fields[$header];
+            }
+        }
+
+        foreach (self::ADDRESS_HEADERS as $header => $property) {
+            if (!isset($fields[$header])) {
+                continue;
+            }
+
+            $result->{$property.'address'} = $fields[$header];
+            $result->$property = AddressList::parse($fields[$header], $defaultHost)->toLegacyArray();
+        }
+
+        // RFC 5322: Reply-To and Sender default to From when not explicitly set.
+        foreach (['reply_to', 'sender'] as $property) {
+            if (!isset($result->$property) && isset($result->from)) {
+                $result->{$property.'address'} = $result->fromaddress;
+                $result->$property = $result->from;
+            }
         }
 
         return $result;

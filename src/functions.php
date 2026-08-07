@@ -366,13 +366,23 @@ if (!function_exists('imap_append')) {
 if (!function_exists('imap_base64')) {
     function imap_base64(string $string): string|false
     {
-        return base64_decode($string);
+        // c-client's rfc822_base64() refuses input outside the alphabet
+        // rather than skipping it; whitespace stays legal either way.
+        return base64_decode($string, true);
     }
 }
 
 if (!function_exists('imap_qprint')) {
     function imap_qprint(string $string): string|false
     {
+        // c-client's rfc822_qprint() reports a bad "=" sequence and still
+        // hands back the text, quoting the input from that "=" onwards.
+        if (preg_match('/=(?![0-9A-Fa-f]{2}|\r?\n)/', $string, $match, PREG_OFFSET_CAPTURE) === 1) {
+            \ImapPolyfill\Support\ErrorStack::push(
+                'Invalid quoted-printable sequence: '.substr($string, $match[0][1])
+            );
+        }
+
         return quoted_printable_decode($string);
     }
 }
@@ -403,9 +413,7 @@ if (!function_exists('imap_utf8_to_mutf7')) {
 if (!function_exists('imap_mutf7_to_utf8')) {
     function imap_mutf7_to_utf8(string $string): string|false
     {
-        $result = @mb_convert_encoding($string, 'UTF-8', 'UTF7-IMAP');
-
-        return $result !== false ? $result : false;
+        return \ImapPolyfill\Mime\ModifiedUtf7::toUtf8($string);
     }
 }
 
@@ -419,26 +427,14 @@ if (!function_exists('imap_utf7_encode')) {
 if (!function_exists('imap_utf7_decode')) {
     function imap_utf7_decode(string $string): string|false
     {
-        $result = @mb_convert_encoding($string, 'ISO-8859-1', 'UTF7-IMAP');
-
-        return $result !== false ? $result : false;
+        return \ImapPolyfill\Mime\ModifiedUtf7::toIso88591($string);
     }
 }
 
 if (!function_exists('imap_rfc822_write_address')) {
     function imap_rfc822_write_address(string $mailbox, string $hostname, string $personal): string|false
     {
-        $address = "{$mailbox}@{$hostname}";
-
-        if ($personal === '') {
-            return $address;
-        }
-
-        if (str_contains($personal, ',')) {
-            $personal = '"'.$personal.'"';
-        }
-
-        return "{$personal} <{$address}>";
+        return \ImapPolyfill\Address\Rfc822Address::write($mailbox, $hostname, $personal);
     }
 }
 
