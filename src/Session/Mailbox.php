@@ -39,7 +39,7 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $ids = $this->connection->protocol()->search($tokens, $uidMode);
+            $ids = $this->connection->protocol()->search($tokens, $uidMode, $charset);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -95,7 +95,22 @@ final class Mailbox
         }
 
         try {
-            $this->connection->selectOrExamine();
+            $status = $this->connection->selectOrExamine();
+        } catch (\Throwable $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        // c-client checks the number against the count it already holds and
+        // answers from that, so a message past the end of the folder is
+        // simply absent rather than a failed FETCH — nothing to report, and
+        // nothing said to the server.
+        if ($messageNum > (int) ($status['exists'] ?? 0)) {
+            return false;
+        }
+
+        try {
             $data = $this->connection->protocol()->fetch(
                 ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
                 [$messageNum],
@@ -109,6 +124,10 @@ final class Mailbox
         }
 
         $message = $data[$messageNum] ?? reset($data);
+
+        if (!is_array($message)) {
+            return false;
+        }
 
         return HeaderInfo::build(
             $message['RFC822.HEADER'],
