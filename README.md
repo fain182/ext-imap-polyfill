@@ -149,7 +149,7 @@ Docker or Podman is required for `test-integration` (a `docker-compose.yml` is i
 
 ### Verifying against real ext-imap
 
-`make parity` runs the exact same integration suite a second time, in a PHP 8.3 container with the genuine `ext-imap` extension installed from source, against the same Greenmail fixture. This is the real check that this polyfill's shapes and behavior actually match the extension it's replacing, not just internally-consistent test assertions.
+`make parity` runs the exact same integration suite a second time, in a PHP 8.3 container with the genuine `ext-imap` extension installed from source, against the same two fixtures. This is the real check that this polyfill's shapes and behavior actually match the extension it's replacing, not just internally-consistent test assertions.
 
 ```bash
 make parity
