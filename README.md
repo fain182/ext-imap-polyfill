@@ -31,30 +31,7 @@ That's what caught `imap_uid()` over POP3 returning the server's UIDL cast to an
 POP3 is supported too, with the same reduced feature set it has under the real extension.
 
 <details>
-<summary>Fine print: the corners where it differs</summary>
-
-Worth reading if something doesn't match byte for byte, not before.
-
-| Function | Divergence |
-|---|---|
-| `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host stays as written in the spec; c-client resolves it to its canonical DNS name |
-| `imap_mail` | always delivers through the `sendmail_path` pipe, and returns false when that ini is empty |
-| `imap_mail_compose` | a group address keeps its members (`Group: , a@b, c@d, ;`); c-client writes the group name and terminator with the member slots blank |
-| `imap_search` | over POP3 only, the criteria grammar is a practical subset: `ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, substring `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT`, `SINCE`/`BEFORE`/`ON` |
-| `imap_timeout` | `IMAP_WRITETIMEOUT` is stored and read back, but not applied: a PHP socket has one timeout covering both directions, and the read timeout takes it |
-| `imap_utf7_encode`, `imap_utf7_decode` | non-ASCII is converted per character; c-client packs the input's bytes into UTF-16 units instead, so `caffè` encodes to `caff&AMMAqA-` rather than `caff&w6g-` |
-| `imap_utf8` | decodes an ISO-8859-1 segment to precomposed UTF-8 (`café`, U+00E9); c-client emits the decomposed form (`cafe` + U+0301) |
-
-Warnings are raised as `E_USER_WARNING` rather than `E_WARNING`, which userland cannot produce.
-
-Two things throw instead of pretending, rather than diverging quietly. `imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` speak a command dropped from IMAP4rev1 that in practice only c-client's own UW-IMAP server ever implemented — no server you can reach would answer them. And opening a `{host/nntp}` mailbox throws: the real extension speaks NNTP, this doesn't.
-
-`imap_open()` acts on `OP_READONLY` and `CL_EXPUNGE` and on the `/ssl`, `/tls`, `/novalidate-cert`, `/pop3` and `/readonly` flags; the remaining `OP_*` flags, the `$options` argument and flags like `/debug` and `/secure` are parsed and then ignored.
-
-</details>
-
-<details>
-<summary>Every function it defines</summary>
+<summary>Function reference</summary>
 
 `imap_8bit`,
 `imap_alerts`,
@@ -128,5 +105,23 @@ Two things throw instead of pretending, rather than diverging quietly. `imap_sca
 `imap_utf7_encode`,
 `imap_utf8`,
 `imap_utf8_to_mutf7`
+
+### Notes on individual functions
+
+| Function | Divergence |
+|---|---|
+| `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host stays as written in the spec; c-client resolves it to its canonical DNS name |
+| `imap_mail` | always delivers through the `sendmail_path` pipe, and returns false when that ini is empty |
+| `imap_mail_compose` | a group address keeps its members (`Group: , a@b, c@d, ;`); c-client writes the group name and terminator with the member slots blank |
+| `imap_search` | over POP3 only, the criteria grammar is a practical subset: `ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, substring `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT`, `SINCE`/`BEFORE`/`ON` |
+| `imap_timeout` | `IMAP_WRITETIMEOUT` is stored and read back, but not applied: a PHP socket has one timeout covering both directions, and the read timeout takes it |
+| `imap_utf7_encode`, `imap_utf7_decode` | non-ASCII is converted per character; c-client packs the input's bytes into UTF-16 units instead, so `caffè` encodes to `caff&AMMAqA-` rather than `caff&w6g-` |
+| `imap_utf8` | decodes an ISO-8859-1 segment to precomposed UTF-8 (`café`, U+00E9); c-client emits the decomposed form (`cafe` + U+0301) |
+
+`imap_open()` acts on `OP_READONLY` and `CL_EXPUNGE` and on the `/ssl`, `/tls`, `/novalidate-cert`, `/pop3` and `/readonly` flags; the remaining `OP_*` flags, the `$options` argument and flags like `/debug` and `/secure` are parsed and then ignored.
+
+`imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` throw: they speak a command dropped from IMAP4rev1 that in practice only c-client's own UW-IMAP server ever implemented, so no server you can reach would answer them. Opening a `{host/nntp}` mailbox throws too — the real extension speaks NNTP, this doesn't.
+
+Warnings are raised as `E_USER_WARNING` rather than `E_WARNING`, which userland cannot produce.
 
 </details>
