@@ -20,12 +20,6 @@ That's the whole migration. No call sites to touch, no API to learn, nothing els
 
 If `ext-imap` is present — you're still on PHP 8.3, or someone installed the PECL build — the polyfill is a no-op and the real extension keeps handling every call. It's safe to add *before* you upgrade, not just after. It also declares `provide: ext-imap`, so dependencies that require the extension install cleanly alongside it.
 
-## Why a polyfill instead of rewriting
-
-Libraries like [webklex/php-imap](https://github.com/Webklex/php-imap) or [ddeboer/imap](https://github.com/ddeboer/imap) are good, and if you're writing new code you should probably use one. But they have their own API: adopting one means touching every call site, re-deriving what your code did with `imap_fetchstructure()`'s parts tree, and re-testing all of it — a project, scheduled against everything else.
-
-This package is a `composer require` in an afternoon. Your diff is one line in `composer.json`.
-
 ## Faithful, and checked that way
 
 Matching the manual isn't enough — the point is matching *the extension you're replacing*, quirks included: the property order inside a `stdClass`, the fact that `imap_fetch_overview()` returns `[]` where its neighbours return `false`, the exact `ValueError` text on a bad flag bitmask.
