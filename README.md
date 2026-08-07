@@ -24,7 +24,7 @@ If `ext-imap` is present — you're still on PHP 8.3, or someone installed the P
 
 Matching the manual isn't enough — the point is matching *the extension you're replacing*, quirks included: the property order inside a `stdClass`, the fact that `imap_fetch_overview()` returns `[]` where its neighbours return `false`, the exact `ValueError` text on a bad flag bitmask.
 
-So the test suite doesn't just run against this package. **The same 279 integration tests run a second time against the genuine `ext-imap`**, in a PHP 8.3 container, hitting the same servers — if the polyfill and the extension disagree, the build says so. On top of that, 96 unit tests cover the internals, and the whole suite is re-run against a second IMAP server (Greenmail and Dovecot) to catch behaviour that only holds on one of them.
+So the test suite doesn't just run against this package. **Every integration test runs a second time against the genuine `ext-imap`**, in a PHP 8.3 container, hitting the same servers — if the polyfill and the extension disagree, the build says so. On top of that, a unit suite covers the internals, and the whole thing is re-run against a second IMAP server (Greenmail and Dovecot) to catch behaviour that only holds on one of them.
 
 That's what caught `imap_uid()` over POP3 returning the server's UIDL cast to an integer — right on one server, nonsense on the other.
 
@@ -113,6 +113,8 @@ POP3 is supported too, with the same reduced feature set it has under the real e
 | `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host stays as written in the spec; c-client resolves it to its canonical DNS name |
 | `imap_mail` | always delivers through the `sendmail_path` pipe, and returns false when that ini is empty |
 | `imap_mail_compose` | a group address keeps its members (`Group: , a@b, c@d, ;`); c-client writes the group name and terminator with the member slots blank |
+| `imap_open` | the warning on a failed open is `E_USER_WARNING` where c-client's is `E_WARNING`; the message text is identical, but `trigger_error()` cannot raise a non-user warning from PHP |
+| `imap_open` with `OP_HALFOPEN` | a call that still reaches the wire on a half-open connection (`imap_search`) leaves the server's refusal on the error stack; c-client answers those from the stream itself and records nothing. Return values match either way |
 | `imap_search` | over POP3 only, the criteria grammar is a practical subset: `ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, substring `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT`, `SINCE`/`BEFORE`/`ON` |
 | `imap_timeout` | `IMAP_WRITETIMEOUT` is stored and read back, but not applied: a PHP socket has one timeout covering both directions, and the read timeout takes it |
 | `imap_utf7_encode`, `imap_utf7_decode` | non-ASCII is converted per character; c-client packs the input's bytes into UTF-16 units instead, so `caffè` encodes to `caff&AMMAqA-` rather than `caff&w6g-` |
