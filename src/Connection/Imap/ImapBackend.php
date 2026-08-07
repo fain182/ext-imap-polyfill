@@ -143,6 +143,11 @@ final class ImapBackend implements ConnectionBackend
         $this->protocol->noop();
     }
 
+    public function check(): void
+    {
+        $this->protocol->check();
+    }
+
     public function folderStatus(string $folder, array $items): array
     {
         return $this->protocol->folderStatus($folder, $items);
