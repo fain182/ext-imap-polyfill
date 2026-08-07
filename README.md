@@ -25,27 +25,33 @@ The package declares `provide: ext-imap`, so other dependencies that require `ex
 
 ## Compatibility
 
-**72 of 75** `imap_*` functions are implemented. The missing three are the SCAN family (`imap_scan`, `imap_scanmailbox`, `imap_listscan`) — a command dropped from IMAP4rev1 that in practice only UW-IMAP ever spoke, so there is nothing left to characterize it against. Calling them hits PHP's "undefined function" error, same as before this package existed.
+**72 of 75** `imap_*` functions are implemented, and what they return is checked against the real extension rather than against this package's own idea of it — the suite runs a second time with the genuine `ext-imap` loaded ([how](CONTRIBUTING.md)). Anything not named below matches it. POP3 works too, with the same reduced feature set it has there.
 
-POP3 works too, with the same reduced feature set it has under the real extension. Shapes and behaviour are checked against that extension itself — the test suite runs a second time with the genuine `ext-imap` loaded, see [CONTRIBUTING.md](CONTRIBUTING.md). Anything not listed here matches it:
+Three things will stop you, and they are the ones worth checking before you adopt it:
+
+- **No NNTP.** `{host/nntp}` parses, then connects over IMAP anyway. The real extension speaks it; this doesn't.
+- **No scanning by message text** — `imap_scan`, `imap_scanmailbox`, `imap_listscan` are undefined. SCAN was dropped from IMAP4rev1 and in practice only c-client's own UW-IMAP server ever implemented it, so there is no server left to check an implementation against. This one is unlikely to change.
+- **`imap_reopen()` only switches folders**, on the connection it already has. It can't reopen against a different host, because credentials aren't kept after `imap_open()`.
+
+Beyond those, `imap_open()` acts on `OP_READONLY` and `CL_EXPUNGE` and on the `/ssl`, `/tls`, `/novalidate-cert`, `/pop3` and `/readonly` flags; the remaining `OP_*` flags, the `$options` argument and flags like `/debug` and `/secure` are parsed and then ignored.
+
+<details>
+<summary>Behavioural fine print</summary>
+
+Worth reading if something doesn't match byte for byte, not before.
 
 | Function | Divergence |
 |---|---|
 | `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host stays as written in the spec; c-client resolves it to its canonical DNS name |
 | `imap_mail` | always delivers through the `sendmail_path` pipe, and returns false when that ini is empty |
 | `imap_mail_compose` | a group address keeps its members (`Group: , a@b, c@d, ;`); c-client writes the group name and terminator with the member slots blank |
-| `imap_open` | only `OP_READONLY` and `CL_EXPUNGE` act, and of the connection-string flags only `/ssl`, `/tls`, `/novalidate-cert`, `/pop3` and `/readonly`; the rest — other `OP_*` flags, the `$options` argument, `/debug`, `/secure`, `/norsh` — are parsed, then ignored |
-| `imap_reopen` | switches folders on the same connection only: credentials aren't retained, so it can't reconnect elsewhere |
+| `imap_search` | over POP3 only, the criteria grammar is a practical subset: `ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, substring `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT`, `SINCE`/`BEFORE`/`ON` |
 | `imap_utf7_encode`, `imap_utf7_decode` | non-ASCII is converted per character; c-client packs the input's bytes into UTF-16 units instead, so `caffè` encodes to `caff&AMMAqA-` rather than `caff&w6g-` |
 | `imap_utf8` | decodes an ISO-8859-1 segment to precomposed UTF-8 (`café`, U+00E9); c-client emits the decomposed form (`cafe` + U+0301) |
-| `imap_search` | over POP3 only, the criteria grammar is a practical subset: `ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, substring `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT`, `SINCE`/`BEFORE`/`ON` |
 
-### Cross-cutting divergences
+Warnings are raised as `E_USER_WARNING` rather than `E_WARNING`, which userland cannot produce.
 
-Differences from the real extension that aren't tied to one function:
-
-- **No NNTP**: `{host/nntp}` parses, then connects over IMAP anyway.
-- **Warnings** are `E_USER_WARNING`, not `E_WARNING`: userland can't raise the level the C extension used.
+</details>
 
 ### The 72 implemented functions
 
