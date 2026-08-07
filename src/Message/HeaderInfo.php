@@ -42,7 +42,7 @@ final class HeaderInfo
         $result->Draft = in_array('\\Draft', $flags, true) ? 'X' : ' ';
 
         $result->Msgno = sprintf('%4d', $msgno);
-        $result->MailDate = $internalDate;
+        $result->MailDate = InternalDate::padDay($internalDate);
         $result->Size = $size;
         $result->udate = strtotime($internalDate);
 

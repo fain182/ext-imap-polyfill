@@ -56,15 +56,10 @@ final class HeadersLine
         return $custom === [] ? '' : '{'.implode(' ', $custom).'} ';
     }
 
-    /**
-     * Re-pads the day like c-client's mail_date(): space-padded, not
-     * zero-padded (e.g. " 7-Jul-2026", not "07-Jul-2026").
-     */
+    /** The day and month of the internal date, c-client's padding included. */
     private static function dateField(string $internalDate): string
     {
-        $day = (int) substr($internalDate, 0, 2);
-
-        return sprintf('%2d', $day).substr($internalDate, 2, 9);
+        return substr(InternalDate::padDay($internalDate), 0, 11);
     }
 
     /**

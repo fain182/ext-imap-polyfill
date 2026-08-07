@@ -193,6 +193,46 @@ class ImapHeaderinfoTest extends GreenmailTestCase
     }
 
     /**
+     * A message number past the end of the folder is not an error to
+     * report: c-client answers it from the count it already holds, without
+     * asking the server, so nothing reaches the error stack either.
+     */
+    public function test_returns_false_without_an_error_for_a_message_that_is_not_there(): void
+    {
+        $folderName = 'HeaderinfoEmptyBox'.uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+        imap_errors();
+
+        $this->assertFalse(imap_headerinfo($connection, 1));
+        $this->assertFalse(imap_errors());
+    }
+
+    /**
+     * The day of MailDate is space-padded, never zero-padded — c-client's
+     * mail_date() normalizes it on the way out, whichever of the two forms
+     * RFC 3501's date-day-fixed allows the server sent.
+     */
+    public function test_maildate_pads_a_single_digit_day_with_a_space(): void
+    {
+        $folderName = 'HeaderinfoDateBox'.uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+        imap_append(
+            $connection,
+            self::mailboxSpec($folderName),
+            "Subject: Dated\r\nFrom: joe@example.com\r\n\r\nBody",
+            '\\Seen',
+            '03-Jan-2012 09:30:03 +0000'
+        );
+        imap_reopen($connection, self::mailboxSpec($folderName));
+
+        $result = imap_headerinfo($connection, 1);
+
+        $this->assertSame(' 3-Jan-2012 09:30:03 +0000', $result->MailDate);
+    }
+
+    /**
      * A subject too long for one line arrives folded onto continuation
      * lines. c-client unfolds it and hands back the encoded words still
      * encoded, joined by the folding whitespace — decoding is
