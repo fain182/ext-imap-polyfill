@@ -17,7 +17,10 @@ final class MimeText
     public static function decode(string $text): string
     {
         $decoded = preg_replace_callback(
-            '/=\?(?P<charset>[^?\s]+)\?(?P<encoding>[BbQq])\?(?P<data>[^?]*)\?=(?:\s+(?==\?[^?\s]+\?[BbQq]\?))?/',
+            // RFC 2047 lets no whitespace inside an encoded word, and
+            // c-client holds the line: a "word" with a space in its payload
+            // is left standing as the text it evidently is.
+            '/=\?(?P<charset>[^?\s]+)\?(?P<encoding>[BbQq])\?(?P<data>[^?\s]*)\?=(?:\s+(?==\?[^?\s]+\?[BbQq]\?))?/',
             static function (array $matches): string {
                 $charset = $matches['charset'];
                 $bytes = strcasecmp($matches['encoding'], 'B') === 0

@@ -420,14 +420,14 @@ if (!function_exists('imap_mutf7_to_utf8')) {
 if (!function_exists('imap_utf7_encode')) {
     function imap_utf7_encode(string $string): string
     {
-        return mb_convert_encoding($string, 'UTF7-IMAP', 'ISO-8859-1');
+        return \ImapPolyfill\Mime\ModifiedUtf7::fromBytes($string);
     }
 }
 
 if (!function_exists('imap_utf7_decode')) {
     function imap_utf7_decode(string $string): string|false
     {
-        return \ImapPolyfill\Mime\ModifiedUtf7::toIso88591($string);
+        return \ImapPolyfill\Mime\ModifiedUtf7::toBytes($string);
     }
 }
 
