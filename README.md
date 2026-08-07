@@ -23,22 +23,6 @@ Requires PHP 8.1+; the dependency tree declares only `ext-json` and `ext-iconv`.
 
 The package declares `provide: ext-imap`, so other dependencies that require `ext-imap` install cleanly alongside it.
 
-<details>
-<summary>What the calling code looks like — unchanged</summary>
-
-```php
-$imap = imap_open('{imap.example.com:993/imap/ssl}INBOX', 'user@example.com', $password);
-
-foreach (imap_search($imap, 'UNSEEN') ?: [] as $msgno) {
-    $overview = imap_fetch_overview($imap, (string) $msgno)[0];
-    echo "{$overview->from}: {$overview->subject}\n";
-}
-
-imap_close($imap);
-```
-
-</details>
-
 ## Compatibility
 
 **72 of 75** `imap_*` functions are implemented. The missing three are the SCAN family (`imap_scan`, `imap_scanmailbox`, `imap_listscan`) — a command dropped from IMAP4rev1 that in practice only UW-IMAP ever spoke, so there is nothing left to characterize it against. Calling them hits PHP's "undefined function" error, same as before this package existed.
@@ -139,10 +123,11 @@ Differences from the real extension that aren't tied to one function:
 ## Development
 
 ```bash
-make install          # composer install
-make test-unit        # pure-PHP tests, no server needed
+make install           # composer install
+make test-unit         # pure-PHP tests, no server needed
 make test-integration  # spins up disposable Greenmail (IMAP+POP3) and Dovecot servers, runs the full suite against them
 make test              # both of the above
+make phpstan           # static analysis at level 6
 ```
 
 Docker or Podman is required for `test-integration` (a `docker-compose.yml` is included for the equivalent setup with compose tooling). Almost every test runs against Greenmail; a second Dovecot fixture covers the two commands Greenmail has no support for, THREAD and ACL. Tests needing it skip themselves when it isn't running.
