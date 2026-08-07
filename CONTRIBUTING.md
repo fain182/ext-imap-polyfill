@@ -18,7 +18,9 @@ Almost every test runs against **Greenmail** (IMAP on 127.0.0.1:13143, POP3 on 1
 
 Bring one up on its own with `make greenmail-up` / `make dovecot-up` (and the matching `-down`). Tests needing Dovecot **skip themselves when it isn't running**, so check the skip count before reading a run as green.
 
-Override the hosts and ports with `IMAP_POLYFILL_TEST_HOST`, `IMAP_POLYFILL_TEST_PORT`, `IMAP_POLYFILL_TEST_POP3_PORT`, `IMAP_POLYFILL_DOVECOT_HOST`, `IMAP_POLYFILL_DOVECOT_PORT`.
+Override the hosts and ports with `IMAP_POLYFILL_TEST_HOST`, `IMAP_POLYFILL_TEST_PORT`, `IMAP_POLYFILL_TEST_POP3_PORT`, `IMAP_POLYFILL_DOVECOT_HOST`, `IMAP_POLYFILL_DOVECOT_PORT`, and the credentials and connection flags with `IMAP_POLYFILL_TEST_USER`, `IMAP_POLYFILL_TEST_PASSWORD`, `IMAP_POLYFILL_TEST_FLAGS`, `IMAP_POLYFILL_TEST_POP3_FLAGS`.
+
+Together those are enough to point the Greenmail suite at a real mailbox somewhere (`IMAP_POLYFILL_TEST_FLAGS=/imap/ssl`), which is worth doing occasionally — it is how the `imap_timeout()` bug surfaced. Build specs with `mailboxSpec()`/`pop3MailboxSpec()` and seed with `seedClient()` so a new test comes along for free; writing `{host:port/imap/novalidate-cert}` by hand instead means cleartext to a TLS port, which does not fail, it waits.
 
 ## Verifying against the real extension
 

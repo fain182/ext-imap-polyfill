@@ -2,8 +2,6 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
-use ImapPolyfill\Tests\Support\SeedClient;
-
 /**
  * Exploratory characterization test: observes how the *real* ext-imap
  * extension behaves when a mailbox spec uses the /pop3 service, so we can
@@ -26,7 +24,7 @@ final class Pop3ParityCharacterizationTest extends GreenmailTestCase
     public function test_characterize_pop3_behavior(): void
     {
         // POP3 has no APPEND command; seed INBOX over IMAP first.
-        $seedClient = new SeedClient(self::host(), self::port(), self::user(), self::password());
+        $seedClient = self::seedClient();
         $seedClient->getFolder('INBOX')->appendMessage("Subject: Pop3 Parity\r\n\r\nHello from parity test");
 
         $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
@@ -58,7 +56,7 @@ final class Pop3ParityCharacterizationTest extends GreenmailTestCase
 
     public function test_characterize_pop3_edge_cases(): void
     {
-        $seedClient = new SeedClient(self::host(), self::port(), self::user(), self::password());
+        $seedClient = self::seedClient();
         $folder = $seedClient->getFolder('INBOX');
         $folder->appendMessage("From: alice@example.com\r\nTo: bob@example.com\r\nSubject: First\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nFirst body");
         $folder->appendMessage("From: carol@example.com\r\nTo: bob@example.com\r\nSubject: Second\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nSecond body");
@@ -136,7 +134,7 @@ final class Pop3ParityCharacterizationTest extends GreenmailTestCase
         $this->dump('imap_append error', imap_last_error());
 
         // Non-INBOX folder in the mailbox spec itself.
-        $other = @imap_open(sprintf('{%s:%d/pop3/novalidate-cert}Other', self::host(), self::pop3Port()), self::user(), self::password());
+        $other = @imap_open(self::pop3MailboxSpec('Other'), self::user(), self::password());
         $this->dump('imap_open non-INBOX folder', $other);
         $this->dump('imap_open non-INBOX folder error', imap_last_error());
 

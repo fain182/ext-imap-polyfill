@@ -2,8 +2,6 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
-use ImapPolyfill\Tests\Support\SeedClient;
-
 /**
  * POP3 message reading, flags/delete, search, and structure. Greenmail's
  * POP3 service only ever exposes a single shared INBOX (see
@@ -12,16 +10,9 @@ use ImapPolyfill\Tests\Support\SeedClient;
  */
 final class Pop3MailboxTest extends GreenmailTestCase
 {
-    private function seedClient(): SeedClient
-    {
-        $client = new SeedClient(self::host(), self::port(), self::user(), self::password());
-
-        return $client;
-    }
-
     public function test_headerinfo_body_and_fetchbody(): void
     {
-        $client = $this->seedClient();
+        $client = self::seedClient();
         $folder = $client->getFolder('INBOX');
         $folder->appendMessage(
             "From: alice@example.com\r\nTo: bob@example.com\r\nSubject: Hello\r\n\r\nHello body\r\n"
@@ -42,7 +33,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
     public function test_fetch_overview(): void
     {
-        $client = $this->seedClient();
+        $client = self::seedClient();
         $folder = $client->getFolder('INBOX');
         $folder->appendMessage("Subject: Overview Me\r\n\r\nBody");
 
@@ -68,7 +59,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
      */
     public function test_sort_orders_locally_when_the_protocol_has_no_sort(): void
     {
-        $folder = $this->seedClient()->getFolder('INBOX');
+        $folder = self::seedClient()->getFolder('INBOX');
         $folder->appendMessage("Subject: Zulus\r\n\r\nBody");
         $folder->appendMessage("Subject: Re: Zulu\r\n\r\nBody");
 
@@ -94,7 +85,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
      */
     public function test_uid_is_the_message_number(): void
     {
-        $this->seedClient()->getFolder('INBOX')->appendMessage("Subject: Uid Rule\r\n\r\nBody");
+        self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Uid Rule\r\n\r\nBody");
 
         $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
         $count = imap_num_msg($connection);
@@ -107,7 +98,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
     public function test_uid_stable_across_reconnect(): void
     {
-        $client = $this->seedClient();
+        $client = self::seedClient();
         $folder = $client->getFolder('INBOX');
         $folder->appendMessage("Subject: Uid Me\r\n\r\nBody");
 
@@ -124,7 +115,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
     public function test_search_all_and_subject(): void
     {
-        $client = $this->seedClient();
+        $client = self::seedClient();
         $folder = $client->getFolder('INBOX');
         $marker = 'Uniq'.random_int(10000, 99999);
         $folder->appendMessage("Subject: {$marker}\r\n\r\nBody");
@@ -144,7 +135,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
     public function test_setflag_and_delete(): void
     {
-        $client = $this->seedClient();
+        $client = self::seedClient();
         $folder = $client->getFolder('INBOX');
         $folder->appendMessage("Subject: Flag Me\r\n\r\nBody");
 
@@ -217,7 +208,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
     public function test_fetchstructure_single_part(): void
     {
-        $client = $this->seedClient();
+        $client = self::seedClient();
         $folder = $client->getFolder('INBOX');
         $folder->appendMessage("Subject: Structure Me\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nHello");
 

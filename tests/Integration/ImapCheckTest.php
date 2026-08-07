@@ -31,8 +31,9 @@ class ImapCheckTest extends GreenmailTestCase
         // reports it as given — the documented divergence.
         $this->assertMatchesRegularExpression(
             sprintf(
-                '/^\{[^:}]+:%d\/imap\/novalidate-cert\/user="%s"\}%s$/',
+                '/^\{[^:}]+:%d%s\/user="%s"\}%s$/',
                 self::port(),
+                preg_quote(self::flags(), '/'),
                 self::user(),
                 preg_quote($folderName, '/')
             ),
@@ -48,8 +49,9 @@ class ImapCheckTest extends GreenmailTestCase
 
         $this->assertMatchesRegularExpression(
             sprintf(
-                '/^\{[^:}]+:%d\/imap\/novalidate-cert\/readonly\/user="%s"\}%s$/',
+                '/^\{[^:}]+:%d%s\/readonly\/user="%s"\}%s$/',
                 self::port(),
+                preg_quote(self::flags(), '/'),
                 self::user(),
                 preg_quote($folderName, '/')
             ),

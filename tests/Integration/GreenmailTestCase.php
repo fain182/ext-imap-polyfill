@@ -59,24 +59,41 @@ abstract class GreenmailTestCase extends TestCase
         return (int) (getenv('IMAP_POLYFILL_TEST_POP3S_PORT') ?: 13995);
     }
 
-    protected static function mailboxSpec(string $folder = 'INBOX'): string
+    /** The POP3 counterpart of flags(), for the same reason. */
+    protected static function pop3Flags(): string
     {
-        return sprintf('{%s:%d%s}%s', self::host(), self::port(), self::flags(), $folder);
-    }
-
-    protected static function pop3MailboxSpec(): string
-    {
-        return sprintf('{%s:%d/pop3/novalidate-cert}INBOX', self::host(), self::pop3Port());
+        return getenv('IMAP_POLYFILL_TEST_POP3_FLAGS') ?: '/pop3/novalidate-cert';
     }
 
     /**
-     * Creates a fresh, empty folder directly on the server and returns a
-     * connected client, for seeding test fixtures without depending on the
-     * polyfill functions under test.
+     * $extraFlags carries the ones a single test is about (/readonly), which
+     * belong after the connection flags every spec shares.
      */
+    protected static function mailboxSpec(string $folder = 'INBOX', string $extraFlags = ''): string
+    {
+        return sprintf('{%s:%d%s%s}%s', self::host(), self::port(), self::flags(), $extraFlags, $folder);
+    }
+
+    protected static function pop3MailboxSpec(string $folder = 'INBOX', string $extraFlags = ''): string
+    {
+        return sprintf('{%s:%d%s%s}%s', self::host(), self::pop3Port(), self::pop3Flags(), $extraFlags, $folder);
+    }
+
+    /**
+     * A client onto the same server the tests talk to, for seeding fixtures
+     * without depending on the polyfill functions under test. Always built
+     * here: constructed by hand it silently loses encryption() and connects
+     * in cleartext to a TLS port, which does not fail — it waits.
+     */
+    protected static function seedClient(): SeedClient
+    {
+        return new SeedClient(self::host(), self::port(), self::user(), self::password(), self::encryption());
+    }
+
+    /** The same, with a fresh empty folder already created on the server. */
     protected function makeFolder(string $name): SeedClient
     {
-        $client = new SeedClient(self::host(), self::port(), self::user(), self::password(), self::encryption());
+        $client = self::seedClient();
         $client->createFolder($name);
 
         return $client;
