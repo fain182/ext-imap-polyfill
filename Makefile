@@ -12,6 +12,7 @@ GREENMAIL_POP3S_PORT := 13995
 DOVECOT_IMAGE := docker.io/dovecot/dovecot:latest
 DOVECOT_NAME := ext-imap-polyfill-dovecot
 DOVECOT_PORT := 13144
+DOVECOT_POP3_PORT := 13111
 NETWORK_NAME := ext-imap-polyfill-net
 PARITY_IMAGE := ext-imap-polyfill-parity
 
@@ -64,6 +65,7 @@ dovecot-up:
 	$(CONTAINER_RUNTIME) run -d --name $(DOVECOT_NAME) \
 		--network $(NETWORK_NAME) --network-alias dovecot \
 		-p $(DOVECOT_PORT):31143 \
+		-p $(DOVECOT_POP3_PORT):31110 \
 		-e USER_PASSWORD=testpass \
 		-v $(CURDIR)/tests/fixtures/dovecot.conf:/etc/dovecot/conf.d/10-test.conf:ro,Z \
 		$(DOVECOT_IMAGE)

@@ -4,8 +4,8 @@ namespace ImapPolyfill\Connection\Pop3;
 
 /**
  * Minimal RFC1939 POP3 client over a raw socket: just the commands this
- * polyfill's ConnectionBackend needs (USER/PASS, STAT, UIDL, RETR, TOP,
- * DELE, RSET, NOOP, QUIT). No APOP/AUTH — Greenmail and the real ext-imap
+ * polyfill's ConnectionBackend needs (USER/PASS, STAT, RETR, TOP, DELE,
+ * RSET, NOOP, QUIT). No APOP/AUTH — Greenmail and the real ext-imap
  * parity target both accept plaintext USER/PASS.
  */
 final class Pop3Protocol
@@ -80,20 +80,6 @@ final class Pop3Protocol
         $parts = explode(' ', $response);
 
         return (int) $parts[0];
-    }
-
-    /**
-     * @return array<int, string> message number => unique id
-     */
-    public function uidl(): array
-    {
-        $result = [];
-        foreach ($this->multilineCommand('UIDL') as $line) {
-            [$msgno, $uid] = explode(' ', $line, 2);
-            $result[(int) $msgno] = $uid;
-        }
-
-        return $result;
     }
 
     public function retr(int $msgno): string

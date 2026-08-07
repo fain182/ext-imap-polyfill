@@ -23,11 +23,18 @@ final class Pop3Backend implements ConnectionBackend
     /** Fake INTERNALDATE: POP3 has none, and real ext-imap reports the epoch. */
     private const FAKE_INTERNAL_DATE = ' 1-Jan-1970 00:00:00 +0000';
 
-    /** @var array<int, string> msgno => uid, refreshed on every select */
+    /**
+     * @var array<int, int> msgno => uid, refreshed on every select
+     *
+     * c-client's POP3 driver numbers messages 1..n and uses that number as
+     * the uid; it never reads the server's UIDL string. Taking the UIDL
+     * instead looks equivalent against a server whose UIDL happens to be the
+     * message number (Greenmail answers "1 1", "2 2"), and falls apart
+     * against one whose UIDL is an opaque token: Dovecot's
+     * "000000016a759b25" cast to int is 16, so imap_uid() invented a number
+     * and imap_msgno() could not find it again.
+     */
     private array $uidByMsgno = [];
-
-    /** @var array<string, int> uid => msgno */
-    private array $msgnoByUid = [];
 
     /** @var array<int, string[]> msgno => IMAP flag names set on it, session-scoped */
     private array $flags = [];
@@ -60,11 +67,10 @@ final class Pop3Backend implements ConnectionBackend
         }
 
         $this->exists = $this->protocol->stat();
-        $this->msgnoByUid = [];
-        foreach ($this->protocol->uidl() as $msgno => $uid) {
-            $this->uidByMsgno[$msgno] = $uid;
-            $this->msgnoByUid[$uid] = $msgno;
-        }
+        $this->uidByMsgno = $this->exists === 0 ? [] : array_combine(
+            range(1, $this->exists),
+            range(1, $this->exists),
+        );
 
         // POP3 has no concept of a message having been seen in a previous
         // session; every message the server still has is "recent" (matches
@@ -131,7 +137,7 @@ final class Pop3Backend implements ConnectionBackend
         $ids = [];
         foreach ($this->uidByMsgno as $msgno => $uid) {
             if (Pop3SearchEvaluator::matches($tokens, $this->rawMessage($msgno), $this->flags[$msgno] ?? [])) {
-                $ids[] = $uidMode === self::UID_MODE ? (int) $uid : $msgno;
+                $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
         }
 
@@ -223,7 +229,7 @@ final class Pop3Backend implements ConnectionBackend
 
     public function getUid(): array
     {
-        return array_map('intval', $this->uidByMsgno);
+        return $this->uidByMsgno;
     }
 
     public function getMessageNumber(string $uid): int
@@ -336,10 +342,12 @@ final class Pop3Backend implements ConnectionBackend
 
     private function resolveMsgno(int|string $uid): int
     {
-        if (!isset($this->msgnoByUid[(string) $uid])) {
+        $msgno = (int) $uid;
+
+        if (!isset($this->uidByMsgno[$msgno])) {
             throw new MessageNotFoundException("Message with uid {$uid} not found");
         }
 
-        return $this->msgnoByUid[(string) $uid];
+        return $msgno;
     }
 }

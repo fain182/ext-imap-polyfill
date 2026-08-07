@@ -82,6 +82,29 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * c-client's POP3 driver numbers messages 1..n and uses that number as
+     * the uid, ignoring the server's UIDL string entirely.
+     *
+     * Greenmail answers UIDL with "1 1", "2 2", so a uid taken from the UIDL
+     * looks identical here and this assertion cannot fail against it. It
+     * fails against a server whose UIDL is an opaque token — Dovecot's
+     * "000000016a759b25" casts to 16 — which is what `make cross-check`
+     * is for.
+     */
+    public function test_uid_is_the_message_number(): void
+    {
+        $this->seedClient()->getFolder('INBOX')->appendMessage("Subject: Uid Rule\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::USER, self::PASSWORD);
+        $count = imap_num_msg($connection);
+
+        $this->assertSame($count, imap_uid($connection, $count));
+        $this->assertSame($count, imap_msgno($connection, $count));
+
+        imap_close($connection);
+    }
+
     public function test_uid_stable_across_reconnect(): void
     {
         $client = $this->seedClient();
