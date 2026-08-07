@@ -120,8 +120,20 @@ final class AddressList
         $current = '';
         $inQuotes = false;
         $inAngles = false;
+        $length = strlen($addresses);
 
-        foreach (str_split($addresses) as $char) {
+        for ($index = 0; $index < $length; ++$index) {
+            $char = $addresses[$index];
+
+            // Inside a quoted string a backslash escapes what follows, so an
+            // escaped quote does not close the string and the delimiters it
+            // hides stay hidden. Unescaping is Address::parse's job.
+            if ($inQuotes && $char === '\\' && $index + 1 < $length) {
+                $current .= $char.$addresses[++$index];
+
+                continue;
+            }
+
             if ($char === '"') {
                 $inQuotes = !$inQuotes;
             } elseif (!$inQuotes && $char === '<') {

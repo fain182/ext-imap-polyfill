@@ -24,6 +24,20 @@ final class Address
             return null;
         }
 
+        $quoted = null;
+
+        if (str_starts_with($part, '"')) {
+            $split = self::splitQuotedName($part);
+
+            // A quote that never closes makes the whole list malformed,
+            // rather than the name running to the end of the input.
+            if ($split === null) {
+                return null;
+            }
+
+            [$quoted, $part] = $split;
+        }
+
         if (!preg_match(
             '/^(?:"?(?P<name>[^"<]*)"?\s+)?<?(?P<mailbox>[^\s@<>]+)(?:@(?P<host>[^\s@<>]+))?>?$/',
             $part,
@@ -37,8 +51,43 @@ final class Address
         return new self(
             $matches['mailbox'],
             ($matches['host'] ?? '') !== '' ? $matches['host'] : $defaultHostname,
-            $personal !== '' ? $personal : null,
+            // An empty name is no name at all — unless it was written as
+            // one, where c-client keeps the empty string it copied out.
+            $quoted ?? ($personal !== '' ? $personal : null),
         );
+    }
+
+    /**
+     * Splits a part opening with a quoted personal name into that name and
+     * whatever follows it. A quoted string is the one place an address may
+     * carry the characters that otherwise delimit the list — a quote of its
+     * own included, escaped — and c-client drops the backslashes as it
+     * copies the name out. Null when the quote never closes.
+     *
+     * @return array{0: string, 1: string}|null [personal, remainder]
+     */
+    private static function splitQuotedName(string $part): ?array
+    {
+        $name = '';
+        $length = strlen($part);
+
+        for ($index = 1; $index < $length; ++$index) {
+            $char = $part[$index];
+
+            if ($char === '\\' && $index + 1 < $length) {
+                $name .= $part[++$index];
+
+                continue;
+            }
+
+            if ($char === '"') {
+                return [$name, trim(substr($part, $index + 1))];
+            }
+
+            $name .= $char;
+        }
+
+        return null;
     }
 
     /** The entry c-client emits where a group begins: its name, and nothing else. */

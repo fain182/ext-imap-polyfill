@@ -53,6 +53,26 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
                     ['mailbox' => 'No-address', 'host' => 'default.host'],
                 ],
             ],
+            // A comma inside the quotes separates nothing, and an escaped
+            // quote must not hand it back to the list.
+            'escaped quote hiding a comma' => [
+                '"say \"hi\", ok" <a@b.com>, b@c.com',
+                [
+                    ['mailbox' => 'a', 'host' => 'b.com', 'personal' => 'say "hi", ok'],
+                    ['mailbox' => 'b', 'host' => 'c.com'],
+                ],
+            ],
+            // An empty name is still a name once it has been written down:
+            // the empty string is set, where an absent name sets nothing.
+            'name written as empty' => [
+                '"" <a@b.com>',
+                [['mailbox' => 'a', 'host' => 'b.com', 'personal' => '']],
+            ],
+            // The name does not simply run to the end of the input.
+            'quote that never closes' => [
+                '"unterminated <a@b.com>',
+                [['mailbox' => 'INVALID_ADDRESS', 'host' => '.SYNTAX-ERROR.']],
+            ],
         ];
     }
 
