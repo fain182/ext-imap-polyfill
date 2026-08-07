@@ -59,7 +59,15 @@ final class MimeText
         if (preg_match_all($pattern, $text, $matches, PREG_OFFSET_CAPTURE)) {
             foreach ($matches[0] as $index => [$fullMatch, $offset]) {
                 if ($offset > $cursor) {
-                    $segments[] = self::segment('default', substr($text, $cursor, $offset - $cursor));
+                    $gap = substr($text, $cursor, $offset - $cursor);
+
+                    // Whitespace between two encoded words is folding, not
+                    // content (RFC 2047 6.2), and belongs to neither. Only
+                    // there: the spaces bordering ordinary text survive, and
+                    // so does a leading or a trailing run.
+                    if ($index === 0 || trim($gap, " \t\r\n") !== '') {
+                        $segments[] = self::segment('default', $gap);
+                    }
                 }
 
                 $charset = $matches['charset'][$index][0];
