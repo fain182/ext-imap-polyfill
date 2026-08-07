@@ -8,23 +8,9 @@ A drop-in polyfill for PHP's `imap_*` functions (removed from core in 8.4), back
 
 ## Commands
 
-```bash
-make install           # composer install
-make test-unit         # pure-PHP tests, no server
-make test-integration  # spins up disposable Greenmail + Dovecot (podman/docker), runs suite, tears down
-make test              # both
-make parity            # same integration suite against REAL ext-imap (PHP 8.3 container) + the same two servers
-make cross-check       # the Greenmail-targeted suite against Dovecot instead, as an audit
-```
+`CONTRIBUTING.md` is the single source for the make targets, the two fixtures and their ports, and how `make parity` and `make cross-check` work. Read it first; don't restate it here, or the two drift.
 
-Two fixtures, because no single test server covers everything:
-
-- **Greenmail** (`make greenmail-up`/`greenmail-down`, 127.0.0.1:13143 IMAP + 13110 POP3) runs every test class except the `Dovecot*` ones. Override with `IMAP_POLYFILL_TEST_HOST`/`IMAP_POLYFILL_TEST_PORT`.
-- **Dovecot** (`make dovecot-up`/`dovecot-down`, 127.0.0.1:13144 IMAP + 13111 POP3) hosts the `Dovecot*` classes, for what Greenmail answers `BAD Invalid command` to — THREAD and ACL — and stands in as the second server for `make cross-check`, which is why it also runs POP3 and the quota plugin. `IMAP_POLYFILL_DOVECOT_HOST`/`IMAP_POLYFILL_DOVECOT_PORT`. Config in `tests/fixtures/dovecot.conf`; note the image is rootless, so its listener is on 31143 inside the container, not 143.
-
-Single test: bring up the fixture that class needs, then
-`vendor/bin/phpunit --filter test_name tests/Integration/ImapOpenTest.php`.
-**A `DovecotTestCase` class with no Dovecot running reports "skipped", not failed** — check the skip count before believing a green run.
+The short version: `make test` for unit + integration, `make parity` to run the same integration suite against the genuine extension, `make cross-check` to run it against the second server.
 
 ## Architecture
 
@@ -52,7 +38,7 @@ What lands on the stack matters as much as when. A rejected command records the 
 Integration tests are **characterization tests of the real extension** and must be parity-safe: the same test file runs against the polyfill and against genuine ext-imap (`make parity`). Parity is the source of truth — it has caught real asymmetries (c-client's COPY takes the mailbox argument verbatim, while APPEND/STATUS parse the `{host}` prefix off) and fixtures that only work for us (Dovecot advertising STARTTLS: fine for this polyfill, fatal for c-client, which upgrades whenever the server offers it). Practices that keep tests parity-safe:
 
 - Fresh uniquely-named folder per test via `GreenmailTestCase::makeFolder()`; never depend on shared state.
-- **A test passes against either fixture unless it says otherwise.** `make cross-check` points the Greenmail-targeted suite at Dovecot; anything that can only hold against one server carries `#[Group('greenmail-only')]` *and a docblock saying why* (trailing newline in BODY[TEXT], `\Recent` timing, Dovecot's read-only quota, its preexisting folders). Default to untagged: a new test that quietly depends on one server should break the audit, which is exactly how the POP3 uid bug surfaced — `imap_uid()` returned the UIDL string cast to int, which is the message number on Greenmail and garbage anywhere else.
+- **A test passes against either fixture unless it says otherwise** — see `make cross-check` in CONTRIBUTING.md for the tagging rule. It is worth the trouble: it is what caught `imap_uid()` over POP3 returning the server's UIDL string cast to int, which is the message number on Greenmail and garbage anywhere else.
 - **Don't hardcode one server version's behavior.** An `imap_sort(SORTSUBJECT)` test once asserted Greenmail's raw-subject ordering and broke the day upstream implemented RFC 5256 base subjects. Assert the contract instead — compare against what the server itself answers (`SeedClient::sorted()`), or pin the command sent with a `FakeStream` unit test.
 - `DovecotTestCase` is standalone on purpose: it shares no base with `GreenmailTestCase`, since the two differ in hierarchy separator (`/` vs `.`), POP3 service and preexisting folders. Put a test there only when Greenmail cannot host it at all; everything else stays on Greenmail.
 - `makeMsgnoUidMismatchFixture()` when testing UID-flag code paths, so uid≠msgno and the test can't pass by coincidence.

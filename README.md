@@ -27,7 +27,7 @@ The package declares `provide: ext-imap`, so other dependencies that require `ex
 
 **72 of 75** `imap_*` functions are implemented. The missing three are the SCAN family (`imap_scan`, `imap_scanmailbox`, `imap_listscan`) — a command dropped from IMAP4rev1 that in practice only UW-IMAP ever spoke, so there is nothing left to characterize it against. Calling them hits PHP's "undefined function" error, same as before this package existed.
 
-POP3 works too, with the same reduced feature set it has under the real extension. Shapes and behaviour are checked against that extension ([how](#verifying-against-real-ext-imap)); anything not listed here matches it:
+POP3 works too, with the same reduced feature set it has under the real extension. Shapes and behaviour are checked against that extension itself — the test suite runs a second time with the genuine `ext-imap` loaded, see [CONTRIBUTING.md](CONTRIBUTING.md). Anything not listed here matches it:
 
 | Function | Divergence |
 |---|---|
@@ -122,29 +122,9 @@ Differences from the real extension that aren't tied to one function:
 `imap_utf8`,
 `imap_utf8_to_mutf7`
 
-## Development
+## Contributing
 
-```bash
-make install           # composer install
-make test-unit         # pure-PHP tests, no server needed
-make test-integration  # spins up disposable Greenmail (IMAP+POP3) and Dovecot servers, runs the full suite against them
-make test              # both of the above
-make phpstan           # static analysis at level 6
-```
-
-Docker or Podman is required for `test-integration` (a `docker-compose.yml` is included for the equivalent setup with compose tooling). Almost every test runs against Greenmail; a second Dovecot fixture covers the two commands Greenmail has no support for, THREAD and ACL. Tests needing it skip themselves when it isn't running.
-
-`make cross-check` runs the same suite against Dovecot instead of Greenmail, skipping the handful of tests that can only hold against one of them. It is an audit rather than part of `make test`: a failure means a test — or this polyfill — has grown attached to one server's behaviour.
-
-### Verifying against real ext-imap
-
-`make parity` runs the exact same integration suite a second time, in a PHP 8.3 container with the genuine `ext-imap` extension installed from source, against the same two fixtures. This is the real check that this polyfill's shapes and behavior actually match the extension it's replacing, not just internally-consistent test assertions.
-
-```bash
-make parity
-```
-
-This requires building a container image (`Dockerfile.parity`) the first time, which takes a few minutes.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
