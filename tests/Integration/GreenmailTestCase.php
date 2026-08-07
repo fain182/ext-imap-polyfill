@@ -26,6 +26,16 @@ abstract class GreenmailTestCase extends TestCase
         return (int) (getenv('IMAP_POLYFILL_TEST_POP3_PORT') ?: 13110);
     }
 
+    protected static function imapsPort(): int
+    {
+        return (int) (getenv('IMAP_POLYFILL_TEST_IMAPS_PORT') ?: 13993);
+    }
+
+    protected static function pop3sPort(): int
+    {
+        return (int) (getenv('IMAP_POLYFILL_TEST_POP3S_PORT') ?: 13995);
+    }
+
     protected static function mailboxSpec(string $folder = 'INBOX'): string
     {
         return sprintf('{%s:%d/imap/novalidate-cert}%s', self::host(), self::port(), $folder);

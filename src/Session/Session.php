@@ -80,13 +80,6 @@ final class Session
 
     private static function connectImap(MailboxSpec $spec, string $user, string $password, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
     {
-        $encryption = '';
-        if ($spec->hasFlag('ssl')) {
-            $encryption = 'ssl';
-        } elseif ($spec->hasFlag('tls')) {
-            $encryption = 'tls';
-        }
-
         $attempts = 1 + max(0, $retries);
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
             $connection = new \ImapPolyfill\Connection\Imap\ImapEngineConnection(
@@ -95,7 +88,7 @@ final class Session
 
             try {
                 $connection->connect($spec->host, $spec->port, [
-                    'encryption' => $encryption,
+                    'encryption' => $spec->encryption(),
                     'validate_cert' => !$spec->hasFlag('novalidate-cert'),
                 ]);
                 $connection->login($user, $password);
@@ -117,19 +110,12 @@ final class Session
 
     private static function connectPop3(MailboxSpec $spec, string $mailbox, string $user, string $password, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
     {
-        $encryption = false;
-        if ($spec->hasFlag('ssl')) {
-            $encryption = 'ssl';
-        } elseif ($spec->hasFlag('tls')) {
-            $encryption = 'tls';
-        }
-
         $attempts = 1 + max(0, $retries);
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
             $protocol = new \ImapPolyfill\Connection\Pop3\Pop3Protocol();
 
             try {
-                $protocol->connect($spec->host, $spec->port, $encryption, !$spec->hasFlag('novalidate-cert'));
+                $protocol->connect($spec->host, $spec->port, $spec->encryption(), !$spec->hasFlag('novalidate-cert'));
                 $protocol->login($user, $password);
 
                 return new \ImapPolyfill\Connection\Pop3\Pop3Backend($protocol, $spec->host, $mailbox);
