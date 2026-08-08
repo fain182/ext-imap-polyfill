@@ -112,7 +112,6 @@ POP3 is supported too, with the same reduced feature set it has under the real e
 |---|---|
 | `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host stays as written in the spec; c-client resolves it to its canonical DNS name |
 | `imap_mail` | always delivers through the `sendmail_path` pipe, and returns false when that ini is empty |
-| `imap_mail_compose` | a group address keeps its members (`Group: , a@b, c@d, ;`); c-client writes the group name and terminator with the member slots blank |
 | `imap_open` | the warning on a failed open is `E_USER_WARNING` where c-client's is `E_WARNING`; the message text is identical, but `trigger_error()` cannot raise a non-user warning from PHP |
 | `imap_open` with `OP_HALFOPEN` | a call that still reaches the wire on a half-open connection (`imap_search`) leaves the server's refusal on the error stack; c-client answers those from the stream itself and records nothing. Return values match either way |
 | `imap_open` with `OP_PROTOTYPE` | opens the connection normally. c-client returns the driver's prototype stream instead — never dialing, and segfaulting PHP on `imap_check()` or `imap_ping()` |

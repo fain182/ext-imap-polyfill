@@ -455,7 +455,34 @@ final class ComposedMessage
         $line = ($resent ? 'ReSent-' : '').$name.': ';
         $lineLength = strlen($name) + ($resent ? strlen('ReSent-') : 0);
         $lastIndex = count($addresses) - 1;
+        $inGroup = false;
+
         foreach (array_values($addresses) as $i => $address) {
+            // A group is written as its name, then one blank slot per member,
+            // then the terminator: c-client keeps the shape of the group and
+            // drops the members inside it, and no comma appears anywhere in
+            // between. "Group: a@b, c@d;" goes out as "Group: \r\n    \r\n    ;".
+            if (self::opensGroup($address)) {
+                $line .= self::cat($address->mailbox ?? '', null).': ';
+                $inGroup = true;
+
+                continue;
+            }
+
+            if (self::closesGroup($address)) {
+                $line .= ';';
+                $inGroup = false;
+
+                continue;
+            }
+
+            if ($inGroup) {
+                $line .= self::CRLF.'    ';
+                $lineLength = 4;
+
+                continue;
+            }
+
             $chunk = self::renderAddress($address);
             if ($i < $lastIndex) {
                 $chunk .= ', ';
@@ -473,15 +500,24 @@ final class ComposedMessage
         return $line.self::CRLF;
     }
 
+    /** A group opens with a name and no host. */
+    private static function opensGroup(\stdClass $address): bool
+    {
+        return !isset($address->host) && isset($address->mailbox);
+    }
+
+    /** ...and closes with an entry carrying neither. */
+    private static function closesGroup(\stdClass $address): bool
+    {
+        return !isset($address->host) && !isset($address->mailbox);
+    }
+
+    /**
+     * One ordinary address. The group markers never reach here — addressLine()
+     * writes those itself, since they carry their own separators.
+     */
     private static function renderAddress(\stdClass $address): string
     {
-        // Group markers carry no host, and the closing one carries nothing at
-        // all: c-client writes the group name followed by a colon, then an
-        // empty slot per member, then the terminator.
-        if (!isset($address->host)) {
-            return isset($address->mailbox) ? self::cat($address->mailbox, null).': ' : ';';
-        }
-
         $route = self::cat($address->mailbox ?? '', null);
         if (!str_starts_with($address->host, '@')) {
             $route .= '@'.self::cat($address->host, null);

@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -309,5 +310,41 @@ class ImapMailComposeTest extends TestCase
 
         $this->assertIsString($result);
         $this->assertStringContainsString("Subject: Long\r\n subject\r\n", $result);
+    }
+
+    /**
+     * A group keeps its shape and loses its members: c-client writes the
+     * name, one blank slot per member on its own continuation line, and the
+     * terminator. No comma appears anywhere inside it.
+     *
+     * @param non-empty-string $to
+     */
+    #[DataProvider('groupAddresses')]
+    public function test_a_group_address_is_written_with_blank_member_slots(string $to, string $expected): void
+    {
+        $result = imap_mail_compose(
+            ['from' => 'me@example.com', 'to' => $to, 'subject' => 'S'],
+            [['type' => TYPETEXT, 'contents.data' => 'x']],
+        );
+
+        $this->assertIsString($result);
+        $this->assertStringContainsString($expected, $result);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function groupAddresses(): iterable
+    {
+        yield 'two members' => ['Group: a@b.com, c@d.com;', "To: Group: \r\n    \r\n    ;\r\n"];
+        yield 'one member' => ['Group: a@b.com;', "To: Group: \r\n    ;\r\n"];
+        yield 'three members' => ['Group: a@b.com, c@d.com, e@f.com;', "To: Group: \r\n    \r\n    \r\n    ;\r\n"];
+        yield 'a named member is a slot like any other' => ['Group: Alice <a@b.com>;', "To: Group: \r\n    ;\r\n"];
+
+        // No members, no slots, and no fold either.
+        yield 'empty group' => ['Group: ;', "To: Group: ;\r\n"];
+
+        // The address before it keeps its ordinary separator.
+        yield 'an address then a group' => ['a@b.com, Group: c@d.com;', "To: a@b.com, Group: \r\n    ;\r\n"];
     }
 }
