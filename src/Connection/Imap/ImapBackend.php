@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Connection\Imap;
 
 use ImapPolyfill\Connection\ConnectionBackend;
+use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\Protocol;
 
 /**
@@ -23,7 +24,7 @@ final class ImapBackend implements ConnectionBackend
         return 'imap';
     }
 
-    public function selectOrExamineFolder(string $folder, bool $readOnly): array
+    public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState
     {
         return $this->protocol->selectOrExamine($folder, $readOnly);
     }

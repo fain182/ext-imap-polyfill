@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Connection\Pop3;
 
 use ImapPolyfill\Connection\ConnectionBackend;
+use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Connection\MessageNotFoundException;
@@ -56,7 +57,7 @@ final class Pop3Backend implements ConnectionBackend
         return 'pop3';
     }
 
-    public function selectOrExamineFolder(string $folder, bool $readOnly): array
+    public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState
     {
         if ($readOnly) {
             throw new \RuntimeException('Read-only POP3 access not available');
@@ -75,7 +76,7 @@ final class Pop3Backend implements ConnectionBackend
         // POP3 has no concept of a message having been seen in a previous
         // session; every message the server still has is "recent" (matches
         // real ext-imap's observed imap_status()/imap_check() output).
-        return ['exists' => $this->exists, 'recent' => $this->exists];
+        return new FolderState($this->exists, $this->exists);
     }
 
     public function host(): string

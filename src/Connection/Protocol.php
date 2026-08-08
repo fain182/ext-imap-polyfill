@@ -31,17 +31,14 @@ final class Protocol
 
     private bool $selectedReadOnly = false;
 
-    /** @var array<int, mixed> the FLAGS lists of the last real SELECT/EXAMINE */
+    /** @var list<string> the flags the last real SELECT/EXAMINE advertised */
     private array $selectedFlags = [];
 
     public function __construct(private readonly ImapEngineConnection $connection)
     {
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function selectOrExamine(string $folder, bool $readOnly): array
+    public function selectOrExamine(string $folder, bool $readOnly): FolderState
     {
         // c-client selects a mailbox once and keeps it: the counts it reports
         // afterwards come from untagged responses arriving on whatever
@@ -52,11 +49,11 @@ final class Protocol
             $counts = $this->connection->counts();
 
             if ($counts['exists'] !== null) {
-                return [
-                    'exists' => $counts['exists'],
-                    'recent' => $counts['recent'] ?? 0,
-                    'flags' => $this->selectedFlags,
-                ];
+                return new FolderState(
+                    $counts['exists'],
+                    $counts['recent'] ?? 0,
+                    flags: $this->selectedFlags,
+                );
             }
         }
 
@@ -67,55 +64,62 @@ final class Protocol
             [Str::literal($folder)],
         );
 
-        $result = [];
+        $exists = null;
+        $recent = 0;
+        $uidValidity = null;
+        $flags = [];
+
         foreach ($responses as $response) {
             $type = (string) $response->type();
 
             if ($type === 'FLAGS') {
-                $flags = $response->tokenAt(2);
-                $result['flags'][] = $flags instanceof Data ? self::value($flags) : [];
+                $advertised = $response->tokenAt(2);
+                foreach ($advertised instanceof Data ? $advertised->tokens() : [] as $flag) {
+                    $flags[] = (string) $flag;
+                }
                 continue;
             }
 
             // "* 3 EXISTS" / "* 1 RECENT": the count is the response type slot.
             $keyword = (string) ($response->tokenAt(2) ?? '');
-            if ($keyword === 'EXISTS' || $keyword === 'RECENT') {
-                $result[strtolower($keyword)] = (int) $type;
+            if ($keyword === 'EXISTS') {
+                $exists = (int) $type;
+                continue;
+            }
+            if ($keyword === 'RECENT') {
+                $recent = (int) $type;
                 continue;
             }
 
             // "* OK [UIDVALIDITY 1234]", kept only to invalidate the uid table.
             $code = $response->tokenAt(2);
             if ($code instanceof ResponseCodeData && (string) ($code->tokenAt(0) ?? '') === 'UIDVALIDITY') {
-                $result['uidvalidity'] = (int) (string) ($code->tokenAt(1) ?? 0);
+                $uidValidity = (int) (string) ($code->tokenAt(1) ?? 0);
             }
         }
 
         // An untagged EXISTS is required of a SELECT/EXAMINE response by both
-        // IMAP4rev1 and IMAP4rev2, so its absence is a parse that went wrong,
-        // not a server being terse. Every caller reads the count as
-        // `$status['exists'] ?? 0`, and a mailbox reporting zero messages
-        // reads as a working polyfill on an empty folder rather than as a
-        // failure. RECENT gets no such check: IMAP4rev2 deprecated \Recent,
-        // and a server that omits it is within its rights.
-        if (!isset($result['exists'])) {
+        // IMAP4rev1 and IMAP4rev2, so its absence is a parse that went wrong
+        // rather than a server being terse — and a folder that answers zero
+        // messages reads as a working polyfill on an empty one.
+        if ($exists === null) {
             throw new \RuntimeException('no EXISTS in '.($readOnly ? 'EXAMINE' : 'SELECT').' response');
         }
 
         $this->selectedFolder = $folder;
         $this->selectedReadOnly = $readOnly;
-        $this->selectedFlags = $result['flags'] ?? [];
+        $this->selectedFlags = $flags;
 
         // A real SELECT is the one moment the uid table can be trusted to
         // describe these messages; from here the count tracked on the
         // connection decides when it stops.
-        $fingerprint = sprintf('%s/%d/%d', $folder, $result['uidvalidity'] ?? 0, $result['exists']);
+        $fingerprint = sprintf('%s/%d/%d', $folder, $uidValidity ?? 0, $exists);
         if ($fingerprint !== $this->uidTableFor) {
             $this->uidTable = null;
             $this->uidTableFor = $fingerprint;
         }
 
-        return $result;
+        return new FolderState($exists, $recent, $uidValidity, $flags);
     }
 
     /**

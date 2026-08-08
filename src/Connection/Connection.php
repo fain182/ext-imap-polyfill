@@ -3,6 +3,7 @@
 namespace IMAP;
 
 use ImapPolyfill\Connection\ConnectionBackend;
+use ImapPolyfill\Connection\FolderState;
 
 /**
  * Polyfill for the opaque IMAP\Connection class ext-imap registers natively.
@@ -222,10 +223,8 @@ final class Connection
      * Only actually selects when the selection changed: the counts it returns
      * otherwise come from the untagged responses the backend tracks, which is
      * how c-client reports them too.
-     *
-     * @return array<string, mixed>
      */
-    public function selectOrExamine(): array
+    public function selectOrExamine(): FolderState
     {
         // A half-open connection has no selection to make or restore, and
         // an empty folder is what every caller of this reads as "nothing
@@ -237,7 +236,7 @@ final class Connection
         // stream->halfopen without asking, so its stack stays empty. The
         // return values match either way.
         if ($this->halfOpen) {
-            return ['exists' => 0, 'recent' => 0];
+            return new FolderState(0, 0);
         }
 
         return $this->selectOrExamineFolder($this->folder, $this->readOnly);
@@ -247,20 +246,14 @@ final class Connection
      * Selects/examines a folder other than the currently-remembered one,
      * e.g. to probe a target folder before imap_reopen() commits to it via
      * reselect(). Does not touch $this->folder/$this->readOnly itself.
-     *
-     * @return array<string, mixed>
      */
-    public function selectOrExamineFolder(string $folder, bool $readOnly): array
+    public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState
     {
-        $data = $this->backend->selectOrExamineFolder($folder, $readOnly);
+        $state = $this->backend->selectOrExamineFolder($folder, $readOnly);
 
-        foreach ($data['flags'] ?? [] as $flagList) {
-            if (is_array($flagList)) {
-                $this->registerUserFlags($flagList);
-            }
-        }
+        $this->registerUserFlags($state->flags);
 
-        return $data;
+        return $state;
     }
 
     /**

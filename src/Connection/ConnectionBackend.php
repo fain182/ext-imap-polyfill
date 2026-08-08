@@ -14,10 +14,7 @@ interface ConnectionBackend
     /** The value ext-imap reports as imap_check()'s stdClass->Driver. */
     public function driverName(): string;
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function selectOrExamineFolder(string $folder, bool $readOnly): array;
+    public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState;
 
     public function host(): string;
 

@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Session;
 
+use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\MessageNotFoundException;
 use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Mailbox\MailboxReference;
@@ -68,10 +69,8 @@ final class Mailbox
      * out and nothing is logged. A UID is not a position in the folder, so
      * it is not checked this way. A selection that fails outright is
      * another matter, and is reported as any failure is.
-     *
-     * @return array<string, mixed>|false
      */
-    private function selectionCovering(int $messageNum, int $uidMode): array|false
+    private function selectionCovering(int $messageNum, int $uidMode): FolderState|false
     {
         try {
             $status = $this->connection->selectOrExamine();
@@ -81,7 +80,7 @@ final class Mailbox
             return false;
         }
 
-        if ($uidMode !== UidMode::UID && $messageNum > (int) ($status['exists'] ?? 0)) {
+        if ($uidMode !== UidMode::UID && $messageNum > $status->exists) {
             return false;
         }
 
@@ -144,7 +143,7 @@ final class Mailbox
         // answers from that, so a message past the end of the folder is
         // simply absent rather than a failed FETCH — nothing to report, and
         // nothing said to the server.
-        if ($messageNum > (int) ($status['exists'] ?? 0)) {
+        if ($messageNum > $status->exists) {
             return false;
         }
 
@@ -192,7 +191,7 @@ final class Mailbox
 
         try {
             $status = $this->connection->selectOrExamine();
-            $exists = (int) ($status['exists'] ?? 0);
+            $exists = $status->exists;
             $ids = MessageSequence::parse($sequence)->expand($exists);
 
             if ($ids === []) {
@@ -523,7 +522,7 @@ final class Mailbox
         try {
             $status = $this->connection->selectOrExamine();
 
-            if ($messageNum > ($status['exists'] ?? 0)) {
+            if ($messageNum > $status->exists) {
                 trigger_error('imap_uid(): Bad message number', E_USER_WARNING);
 
                 return false;
@@ -645,7 +644,7 @@ final class Mailbox
 
         try {
             $status = $this->connection->selectOrExamine();
-            $exists = $status['exists'] ?? 0;
+            $exists = $status->exists;
 
             if ($exists === 0) {
                 return [];
@@ -702,7 +701,7 @@ final class Mailbox
 
         try {
             $status = $this->connection->selectOrExamine();
-            $exists = $status['exists'] ?? 0;
+            $exists = $status->exists;
 
             // c-client hands the whole sort to the server whenever it
             // advertises SORT, and only falls back to its own algorithms when
@@ -792,7 +791,7 @@ final class Mailbox
 
         try {
             $status = $this->connection->selectOrExamine();
-            $exists = $status['exists'] ?? 0;
+            $exists = $status->exists;
 
             if ($exists === 0) {
                 return false;

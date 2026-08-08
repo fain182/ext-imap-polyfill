@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Session;
 
+use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Mailbox\MailboxSpec;
 use ImapPolyfill\Support\ErrorStack;
@@ -80,7 +81,7 @@ final class Session
 
         try {
             $status = $connection->selectOrExamine();
-            $connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
+            $connection->rememberCounts($status->exists, $status->recent);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -188,7 +189,7 @@ final class Session
             return $this->connection->numMessages();
         }
 
-        $this->connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
+        $this->connection->rememberCounts($status->exists, $status->recent);
 
         return $this->connection->numMessages();
     }
@@ -206,7 +207,7 @@ final class Session
             return $this->connection->numRecent();
         }
 
-        $this->connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
+        $this->connection->rememberCounts($status->exists, $status->recent);
 
         return $this->connection->numRecent();
     }
@@ -237,8 +238,8 @@ final class Session
         $result->Date = date('r');
         $result->Driver = $this->connection->driverName();
         $result->Mailbox = $this->connection->mailboxString();
-        $result->Nmsgs = $status['exists'] ?? 0;
-        $result->Recent = $status['recent'] ?? 0;
+        $result->Nmsgs = $status->exists;
+        $result->Recent = $status->recent;
 
         return $result;
     }
@@ -249,7 +250,7 @@ final class Session
 
         try {
             $status = $this->connection->selectOrExamine();
-            $exists = $status['exists'] ?? 0;
+            $exists = $status->exists;
 
             $unread = 0;
             $deleted = 0;
@@ -292,7 +293,7 @@ final class Session
         $result->Driver = $this->connection->driverName();
         $result->Mailbox = $this->connection->mailboxString();
         $result->Nmsgs = $exists;
-        $result->Recent = $status['recent'] ?? 0;
+        $result->Recent = $status->recent;
 
         return $result;
     }
@@ -380,7 +381,7 @@ final class Session
                 return false;
             }
 
-            $this->connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
+            $this->connection->rememberCounts($status->exists, $status->recent);
 
             if ($flags !== 0) {
                 $this->connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
@@ -408,7 +409,7 @@ final class Session
         }
 
         $this->connection->reselect($spec->folder, $readOnly);
-        $this->connection->rememberCounts($status['exists'] ?? 0, $status['recent'] ?? 0);
+        $this->connection->rememberCounts($status->exists, $status->recent);
 
         // Mirrors php_imap.c: a nonzero $flags overrides the remembered
         // CL_EXPUNGE state outright (even clearing it if CL_EXPUNGE isn't in
@@ -426,10 +427,8 @@ final class Session
      * selects the spec's folder on it — the whole of what c-client's
      * mail_open() does to a stream it is reopening elsewhere, and to one
      * whose socket is gone.
-     *
-     * @return array<string, mixed>|false the selected folder's status
      */
-    private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, string $prefix, bool $readOnly, int $retries): array|false
+    private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, string $prefix, bool $readOnly, int $retries): FolderState|false
     {
         $user = $this->connection->user();
         $backend = $isPop3
