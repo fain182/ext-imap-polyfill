@@ -8,9 +8,12 @@ make test-unit         # pure-PHP tests, no server needed
 make test-integration  # spins up the fixtures, runs the suite against them, tears them down
 make test              # both of the above
 make phpstan           # static analysis at level 6
+make install-lowest    # re-resolve to the oldest versions composer.json allows
 ```
 
 Docker or Podman is required from `test-integration` onwards; `docker-compose.yml` describes the same setup for compose tooling.
+
+`make install-lowest` exists because `composer.lock` is committed: every other command installs that one pinned set, so nothing would otherwise test the *bottom* of a constraint. It rewrites the lock to the oldest releases allowed — imapengine 1.25.0 rather than 1.25.4 — and the test targets pick those up, which is how CI checks that `^1.25` means what it claims. It is the one command here that leaves the tree dirty: `git checkout composer.lock && make install` puts it back.
 
 ## The two fixtures
 

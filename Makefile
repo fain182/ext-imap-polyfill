@@ -16,10 +16,21 @@ DOVECOT_POP3_PORT := 13111
 NETWORK_NAME := ext-imap-polyfill-net
 PARITY_IMAGE := ext-imap-polyfill-parity
 
-.PHONY: install test test-unit test-integration cross-check phpstan greenmail-up greenmail-down dovecot-up dovecot-down parity parity-build
+.PHONY: install install-lowest test test-unit test-integration cross-check phpstan greenmail-up greenmail-down dovecot-up dovecot-down parity parity-build
 
 install:
 	composer install
+
+## Re-resolves every dependency to the oldest release composer.json allows, so
+## a run exercises the bottom of the declared constraints instead of the single
+## set composer.lock pins. That is the half `make test` cannot reach: nothing
+## else here ever installs imapengine 1.25.0 rather than 1.25.4, so a constraint
+## claiming more than it supports would surface in a user's install, not ours.
+## Rewrites composer.lock in place — the `install` prerequisite of the test
+## targets then installs *from* that rewritten lock, which is what carries the
+## old versions into the run. `git checkout composer.lock && make install` undoes it.
+install-lowest:
+	composer update --prefer-lowest --prefer-stable
 
 phpstan: install
 	vendor/bin/phpstan analyse --memory-limit=1G
