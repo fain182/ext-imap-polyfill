@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Session;
 
+use ImapPolyfill\Connection\Credentials;
 use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Mailbox\MailboxSpec;
@@ -53,10 +54,20 @@ final class Session
             throw \ImapPolyfill\Support\UnsupportedFeature::nntp($mailbox);
         }
 
+        $credentials = new Credentials(
+            // php_imap.c's mm_login() answers c-client with the spec's /user=
+            // when it has one, and only then with imap_open()'s argument.
+            $spec->switches->user ?? $user,
+            $password,
+            $spec->switches->authuser,
+            $spec->switches->anonymous || (bool) ($flags & OP_ANONYMOUS),
+            $spec->switches->secure || (bool) ($flags & OP_SECURE),
+        );
+
         $isPop3 = $spec->service === Service::Pop3;
         $backend = $isPop3
-            ? self::connectPop3($spec, $mailbox, $user, $password, $retries)
-            : self::connectImap($spec, $user, $password, $retries);
+            ? self::connectPop3($spec, $mailbox, $credentials, $retries)
+            : self::connectImap($spec, $credentials, $retries);
 
         if ($backend === false) {
             return false;
@@ -65,14 +76,14 @@ final class Session
         // c-client treats a /readonly flag in the spec the same as passing
         // OP_READONLY (mail_valid_net_parse sets the stream read-only bit).
         $readOnly = (bool) ($flags & OP_READONLY) || $spec->switches->readOnly;
-        $secure = $spec->switches->secure || (bool) ($flags & OP_SECURE);
         $connection = new \IMAP\Connection(
             $backend,
             $spec->folder,
-            $spec->normalizedPrefixBase($secure, $spec->switches->tls),
-            $user,
+            $spec->normalizedPrefixBase($credentials->secure, $spec->switches->tls),
+            $credentials->user,
             $readOnly,
-            $password,
+            $credentials->password,
+            $credentials->anonymous,
         );
         $connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
 
@@ -92,7 +103,7 @@ final class Session
         return $connection;
     }
 
-    public static function connectImap(MailboxSpec $spec, string $user, string $password, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
+    public static function connectImap(MailboxSpec $spec, Credentials $credentials, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
     {
         $attempts = 1 + max(0, $retries);
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
@@ -106,7 +117,21 @@ final class Session
                     'validate_cert' => !$spec->switches->novalidate,
                     'timeout' => Timeouts::seconds(IMAP_OPENTIMEOUT),
                 ]);
-                $connection->login($user, $password);
+
+                if ($credentials->anonymous) {
+                    // c-client offers the client's own host name as the
+                    // anonymous contact address (net_localhost).
+                    $connection->loginAnonymous(gethostname() ?: 'localhost');
+                } else {
+                    $credentials->assertPlaintextLoginAllowed($connection->capabilities());
+                    $connection->login($credentials->user, $credentials->password);
+                }
+
+                // c-client clears its capability cache across authentication:
+                // a server routinely advertises more to a logged-in client
+                // than it did to a stranger, and the gated commands
+                // (SORT, THREAD, QUOTA) read the second answer.
+                $connection->forgetCapabilities();
 
                 return new \ImapPolyfill\Connection\Imap\ImapBackend($connection, $spec->host);
             } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionFailedException $e) {
@@ -123,8 +148,16 @@ final class Session
         return false;
     }
 
-    public static function connectPop3(MailboxSpec $spec, string $mailbox, string $user, string $password, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
+    public static function connectPop3(MailboxSpec $spec, string $mailbox, Credentials $credentials, int $retries): \ImapPolyfill\Connection\ConnectionBackend|false
     {
+        // pop3.c refuses before it dials: the protocol has no anonymous
+        // access to offer, so there is nothing to try.
+        if ($credentials->anonymous) {
+            ErrorStack::push('Anonymous POP3 login not available');
+
+            return false;
+        }
+
         $attempts = 1 + max(0, $retries);
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
             $protocol = new \ImapPolyfill\Connection\Pop3\Pop3Protocol();
@@ -138,7 +171,11 @@ final class Session
                     (float) Timeouts::seconds(IMAP_OPENTIMEOUT),
                     (float) Timeouts::seconds(IMAP_READTIMEOUT),
                 );
-                $protocol->login($user, $password);
+
+                // No CAPA: pop3_auth() checks these before looking at what
+                // the server offers, and this backend has only USER/PASS.
+                $credentials->assertPlaintextLoginAllowed();
+                $protocol->login($credentials->user, $credentials->password);
 
                 return new \ImapPolyfill\Connection\Pop3\Pop3Backend($protocol, $spec->host, $mailbox);
             } catch (\Throwable $e) {
@@ -371,11 +408,21 @@ final class Session
 
         // Naming another server reopens against it, the way c-client's
         // mail_open() does on an existing stream; the credentials come from
-        // the ones imap_open() kept, as php_imap.c answers mm_login() with.
-        $prefix = $spec->normalizedPrefixBase($spec->switches->secure, $spec->switches->tls);
+        // the ones imap_open() kept, as php_imap.c answers mm_login() with —
+        // except for a /user= in this spec, which mm_login() prefers.
+        $credentials = new Credentials(
+            $spec->switches->user ?? $this->connection->user(),
+            $this->connection->password(),
+            $spec->switches->authuser,
+            $spec->switches->anonymous || (bool) ($flags & OP_ANONYMOUS),
+            $spec->switches->secure,
+        );
+        $prefix = $spec->normalizedPrefixBase($credentials->secure, $spec->switches->tls);
 
-        if ($prefix !== $this->connection->mailboxPrefix()) {
-            $status = $this->redial($spec, $mailbox, $isPop3, $prefix, $readOnly, $retries);
+        // A different login is a different session, whatever the host:
+        // mail_usable_network_stream() will not recycle a stream across one.
+        if ($prefix !== $this->connection->mailboxPrefix() || $credentials->user !== $this->connection->user()) {
+            $status = $this->redial($spec, $mailbox, $isPop3, $prefix, $credentials, $readOnly, $retries);
 
             if ($status === false) {
                 return false;
@@ -397,7 +444,7 @@ final class Session
             // dials the host again and logs back in rather than reporting
             // a dead stream, which is what makes a session survive a server
             // that hangs up on it. Same host as before — the prefix matched.
-            $status = $this->redial($spec, $mailbox, $isPop3, $prefix, $readOnly, $retries);
+            $status = $this->redial($spec, $mailbox, $isPop3, $prefix, $credentials, $readOnly, $retries);
 
             if ($status === false) {
                 return false;
@@ -428,18 +475,17 @@ final class Session
      * mail_open() does to a stream it is reopening elsewhere, and to one
      * whose socket is gone.
      */
-    private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, string $prefix, bool $readOnly, int $retries): FolderState|false
+    private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, string $prefix, Credentials $credentials, bool $readOnly, int $retries): FolderState|false
     {
-        $user = $this->connection->user();
         $backend = $isPop3
-            ? self::connectPop3($spec, $mailbox, $user, $this->connection->password(), $retries)
-            : self::connectImap($spec, $user, $this->connection->password(), $retries);
+            ? self::connectPop3($spec, $mailbox, $credentials, $retries)
+            : self::connectImap($spec, $credentials, $retries);
 
         if ($backend === false) {
             return false;
         }
 
-        $this->connection->reconnect($backend, $prefix, $user, $spec->folder, $readOnly);
+        $this->connection->reconnect($backend, $prefix, $credentials->user, $spec->folder, $readOnly, $credentials->anonymous);
 
         try {
             return $this->connection->selectOrExamine();

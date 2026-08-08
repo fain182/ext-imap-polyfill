@@ -68,6 +68,11 @@ final class Connection
          * imap_open() stored for the request.
          */
         private string $password = '',
+        /**
+         * Mirrors c-client's stream->anonymous: an anonymous session has no
+         * user name to report, and says so in place of one.
+         */
+        private bool $anonymous = false,
     ) {
         $this->backend = $backend;
         $this->folder = $folder;
@@ -94,7 +99,7 @@ final class Connection
      * spec names another server. The old one is closed first: c-client
      * reuses the stream, so only one connection is ever live.
      */
-    public function reconnect(ConnectionBackend $backend, string $mailboxPrefix, string $user, string $folder, bool $readOnly): void
+    public function reconnect(ConnectionBackend $backend, string $mailboxPrefix, string $user, string $folder, bool $readOnly, bool $anonymous = false): void
     {
         try {
             $this->backend->disconnect();
@@ -107,6 +112,7 @@ final class Connection
         $this->user = $user;
         $this->folder = $folder;
         $this->readOnly = $readOnly;
+        $this->anonymous = $anonymous;
         $this->halfOpen = false;
         $this->userFlags = [];
     }
@@ -122,8 +128,8 @@ final class Connection
     {
         return $this->mailboxPrefix
             .($this->readOnly ? '/readonly' : '')
-            .'/user="'.$this->user.'"}'
-            .($this->halfOpen ? '<no_mailbox>' : $this->folder);
+            .($this->anonymous ? '/anonymous' : '/user="'.$this->user.'"')
+            .'}'.($this->halfOpen ? '<no_mailbox>' : $this->folder);
     }
 
     /**

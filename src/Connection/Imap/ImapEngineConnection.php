@@ -12,6 +12,7 @@ use DirectoryTree\ImapEngine\Connection\Responses\Response;
 use DirectoryTree\ImapEngine\Connection\Responses\TaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Responses\UntaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
+use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\CommandFailedException;
 use ImapPolyfill\Support\ErrorStack;
 
@@ -29,6 +30,9 @@ final class ImapEngineConnection extends ImapConnection
     private ?int $exists = null;
 
     private ?int $recent = null;
+
+    /** @var list<string>|null */
+    private ?array $capabilities = null;
 
     /**
      * Response text arrives as the server wrote it, 8-bit bytes included;
@@ -51,6 +55,43 @@ final class ImapEngineConnection extends ImapConnection
         $this->assertTaggedResponse($tag);
 
         return $this->result->responses()->untagged();
+    }
+
+    /**
+     * What CAPABILITY last reported, cached like c-client's stream->cap: the
+     * command goes out once and its answer is read by everything that gates
+     * on it.
+     *
+     * @return list<string>
+     */
+    public function capabilities(): array
+    {
+        return $this->capabilities ??= array_values(
+            array_map('strval', $this->capability()->tokensAfter(2))
+        );
+    }
+
+    /**
+     * Called where c-client clears LOCAL->gotcapability — around STARTTLS and
+     * authentication, after which a server may well advertise more than it
+     * did to a stranger.
+     */
+    public function forgetCapabilities(): void
+    {
+        $this->capabilities = null;
+    }
+
+    /**
+     * c-client's imap_anon(): the anonymous convention wants a contact
+     * address, and what it offers is the client's own host name.
+     *
+     * Divergence: imap_anon() prefers AUTHENTICATE ANONYMOUS wherever the
+     * server advertises it, and falls back to this LOGIN only otherwise.
+     * This package speaks no SASL, so the fallback is the only form it has.
+     */
+    public function loginAnonymous(string $localHost): void
+    {
+        $this->sendAndCollect('LOGIN ANONYMOUS', [Str::literal($localHost)]);
     }
 
     /**

@@ -19,9 +19,6 @@ use ImapPolyfill\Connection\Imap\ImapEngineConnection;
  */
 final class Protocol
 {
-    /** @var string[]|null */
-    private ?array $capabilities = null;
-
     /** @var array<int, int>|null msgno => uid for the folder $uidTableFor describes */
     private ?array $uidTable = null;
 
@@ -465,11 +462,7 @@ final class Protocol
 
     public function hasCapability(string $capability): bool
     {
-        // Cached like c-client's stream->cap: CAPABILITY goes out once per
-        // connection, not once per gated command.
-        $this->capabilities ??= array_map('strval', $this->connection->capability()->tokensAfter(2));
-
-        return in_array($capability, $this->capabilities, true);
+        return in_array($capability, $this->connection->capabilities(), true);
     }
 
     /**
