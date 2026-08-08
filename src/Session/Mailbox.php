@@ -173,7 +173,7 @@ final class Mailbox
             $message['INTERNALDATE'],
             $message['RFC822.SIZE'],
             $messageNum,
-            $this->connection->host(),
+            $this->connection->backend()->host(),
             $fromLength,
             $subjectLength,
         );
@@ -240,7 +240,7 @@ final class Mailbox
                 (int) $message['RFC822.SIZE'],
                 $uid,
                 $msgno,
-                $this->connection->host(),
+                $this->connection->backend()->host(),
             );
         }
 
@@ -262,7 +262,7 @@ final class Mailbox
         }
 
         try {
-            $parsed = $this->connection->fetchBodyStructure($messageNum, (bool) ($flags & FT_UID));
+            $parsed = $this->connection->backend()->fetchBodyStructure($messageNum, (bool) ($flags & FT_UID));
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -305,7 +305,7 @@ final class Mailbox
         // section every caller reaches for first.
         if ($wireSection !== '1' && preg_match('/^\d+(?:\.\d+)*$/', $wireSection) === 1) {
             try {
-                $structure = $this->connection->fetchBodyStructure($messageNum, $uidMode === UidMode::UID);
+                $structure = $this->connection->backend()->fetchBodyStructure($messageNum, $uidMode === UidMode::UID);
             } catch (\Throwable $e) {
                 ErrorStack::push($e->getMessage());
 
@@ -374,7 +374,7 @@ final class Mailbox
             // section, unlike imap_fetchbody(): there is no msgno/uid
             // equivalent of BODYSTRUCTURE for one section, so this is always
             // a msgno, never a uid (no FT_UID here, unlike imap_fetchbody()).
-            $parsed = $this->connection->fetchBodyStructure($messageNum, false);
+            $parsed = $this->connection->backend()->fetchBodyStructure($messageNum, false);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -610,7 +610,7 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $this->connection->expunge();
+            $this->connection->backend()->expunge();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
         }
@@ -626,7 +626,7 @@ final class Mailbox
         $flags = $options !== null ? (preg_split('/\s+/', trim($options)) ?: []) : null;
 
         try {
-            $this->connection->appendMessage($folderName, $message, $flags, $internalDate);
+            $this->connection->backend()->appendMessage($folderName, $message, $flags, $internalDate);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -677,7 +677,7 @@ final class Mailbox
                 $message['INTERNALDATE'],
                 (int) $message['RFC822.SIZE'],
                 $msgno,
-                $this->connection->host(),
+                $this->connection->backend()->host(),
                 $this->connection->userFlags(),
             );
         }
@@ -753,7 +753,7 @@ final class Mailbox
             return [];
         }
 
-        $host = $this->connection->host();
+        $host = $this->connection->backend()->host();
         $entries = [];
         foreach ($ids as $msgno) {
             if (!isset($data[$msgno])) {

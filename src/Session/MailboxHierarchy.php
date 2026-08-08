@@ -277,7 +277,7 @@ final class MailboxHierarchy
         $folderName = MailboxReference::parse($mailbox)->bareReference;
 
         try {
-            $this->connection->createFolder($folderName);
+            $this->connection->backend()->createFolder($folderName);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -294,7 +294,7 @@ final class MailboxHierarchy
         $folderName = MailboxReference::parse($mailbox)->bareReference;
 
         try {
-            $this->connection->deleteFolder($folderName);
+            $this->connection->backend()->deleteFolder($folderName);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -312,7 +312,7 @@ final class MailboxHierarchy
         $toName = MailboxReference::parse($to)->bareReference;
 
         try {
-            $this->connection->renameFolder($fromName, $toName);
+            $this->connection->backend()->renameFolder($fromName, $toName);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -329,7 +329,7 @@ final class MailboxHierarchy
         $folderName = MailboxReference::parse($mailbox)->bareReference;
 
         try {
-            $this->connection->subscribeFolder($folderName);
+            $this->connection->backend()->subscribeFolder($folderName);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -346,7 +346,7 @@ final class MailboxHierarchy
         $folderName = MailboxReference::parse($mailbox)->bareReference;
 
         try {
-            $this->connection->unsubscribeFolder($folderName);
+            $this->connection->backend()->unsubscribeFolder($folderName);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 

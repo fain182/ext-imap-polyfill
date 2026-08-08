@@ -219,7 +219,7 @@ final class Pop3Backend implements ConnectionBackend
             // fetchBodyStructure(), which POP3 does implement, sat unused.
             default => throw new \LogicException(
                 "Pop3Backend was asked for the FETCH item {$item}, which it does not answer. "
-                .'Reach it through the named operation on IMAP\Connection instead.'
+                .'Reach it through the named operation on ConnectionBackend instead.'
             ),
         };
     }

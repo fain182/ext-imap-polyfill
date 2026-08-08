@@ -165,10 +165,10 @@ final class Session
             : $this->connection->expungeOnClose();
 
         if ($shouldExpunge) {
-            $this->connection->expunge();
+            $this->connection->backend()->expunge();
         }
 
-        $this->connection->disconnect();
+        $this->connection->backend()->disconnect();
         $this->connection->close();
 
         return true;
@@ -236,7 +236,7 @@ final class Session
 
         $result = new \stdClass();
         $result->Date = date('r');
-        $result->Driver = $this->connection->driverName();
+        $result->Driver = $this->connection->backend()->driverName();
         $result->Mailbox = $this->connection->mailboxString();
         $result->Nmsgs = $status->exists;
         $result->Recent = $status->recent;
@@ -290,7 +290,7 @@ final class Session
         $result->Deleted = $deleted;
         $result->Size = $size;
         $result->Date = date('r');
-        $result->Driver = $this->connection->driverName();
+        $result->Driver = $this->connection->backend()->driverName();
         $result->Mailbox = $this->connection->mailboxString();
         $result->Nmsgs = $exists;
         $result->Recent = $status->recent;

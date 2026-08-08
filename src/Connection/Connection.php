@@ -277,80 +277,19 @@ final class Connection
     }
 
     /**
-     * The backend, for the wire operations nothing about this connection's
-     * state changes: search, fetch, store, the folder commands.
+     * The protocol driver, reached directly for every wire operation: it is
+     * the whole of what this connection can say, the way c-client's callers
+     * go through stream->dtb.
      *
-     * The ones that *are* state-dependent have a method of their own here
-     * instead — check() and selectOrExamine() say nothing to a half-open
-     * connection — which is the whole of the split between the two routes
-     * to the wire. Reaching a named operation through this one bypasses
-     * that, and has: a raw fetch of BODYSTRUCTURE went out where
-     * fetchBodyStructure() was waiting, and POP3, which answers the named
-     * operation and not the raw item, quietly got nothing.
+     * A method exists on this class instead only when it reads or writes
+     * this connection's own state — check() and selectOrExamine() say
+     * nothing to a half-open connection, selectOrExamineFolder() registers
+     * the keywords the SELECT reported. Anything that would just forward
+     * to the driver unchanged belongs on the driver, where the callers can
+     * see the one contract that governs it.
      */
     public function backend(): ConnectionBackend
     {
         return $this->backend;
-    }
-
-    public function host(): string
-    {
-        return $this->backend->host();
-    }
-
-    public function driverName(): string
-    {
-        return $this->backend->driverName();
-    }
-
-    public function expunge(): void
-    {
-        $this->backend->expunge();
-    }
-
-    public function disconnect(): void
-    {
-        $this->backend->disconnect();
-    }
-
-    public function createFolder(string $name): void
-    {
-        $this->backend->createFolder($name);
-    }
-
-    public function deleteFolder(string $name): void
-    {
-        $this->backend->deleteFolder($name);
-    }
-
-    public function renameFolder(string $from, string $to): void
-    {
-        $this->backend->renameFolder($from, $to);
-    }
-
-    public function subscribeFolder(string $name): void
-    {
-        $this->backend->subscribeFolder($name);
-    }
-
-    public function unsubscribeFolder(string $name): void
-    {
-        $this->backend->unsubscribeFolder($name);
-    }
-
-    /**
-     * @param string[]|null $flags
-     */
-    public function appendMessage(string $folder, string $message, ?array $flags, ?string $internalDate): void
-    {
-        $this->backend->appendMessage($folder, $message, $flags, $internalDate);
-    }
-
-    /**
-     * @return array<int, mixed>
-     */
-    public function fetchBodyStructure(int $messageNum, bool $byUid): array
-    {
-        return $this->backend->fetchBodyStructure($messageNum, $byUid);
     }
 }
