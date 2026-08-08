@@ -14,7 +14,7 @@ final class ImapBackend implements ConnectionBackend
 {
     private readonly Protocol $protocol;
 
-    public function __construct(ImapEngineConnection $connection, private readonly string $host)
+    public function __construct(private readonly ImapEngineConnection $connection, private readonly string $host)
     {
         $this->protocol = new Protocol($connection);
     }
@@ -32,6 +32,11 @@ final class ImapBackend implements ConnectionBackend
     public function host(): string
     {
         return $this->host;
+    }
+
+    public function upgradedToTls(): bool
+    {
+        return $this->connection->upgradedToTls();
     }
 
     public function expunge(): void

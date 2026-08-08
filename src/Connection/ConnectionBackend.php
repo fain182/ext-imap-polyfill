@@ -18,6 +18,14 @@ interface ConnectionBackend
 
     public function host(): string;
 
+    /**
+     * Whether the connection reached TLS by upgrading a cleartext one
+     * (STARTTLS/STLS) rather than being encrypted from its first byte.
+     * c-client reports the upgrade it negotiated in stream->mailbox, so a
+     * spec carrying no TLS switch at all can still answer "/tls".
+     */
+    public function upgradedToTls(): bool;
+
     public function expunge(): void;
 
     public function disconnect(): void;

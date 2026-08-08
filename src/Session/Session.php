@@ -79,7 +79,7 @@ final class Session
         $connection = new \IMAP\Connection(
             $backend,
             $spec->folder,
-            $spec->normalizedPrefixBase($credentials->secure, $spec->switches->tls),
+            $spec->normalizedPrefixBase($credentials->secure, $backend->upgradedToTls()),
             $credentials->user,
             $readOnly,
             $credentials->password,
@@ -113,10 +113,18 @@ final class Session
 
             try {
                 $connection->connect($spec->host, $spec->port, [
-                    'encryption' => $spec->encryption(),
+                    // The upgrade is driven below, not here: handed
+                    // "starttls", ImapEngine issues STARTTLS blind, without
+                    // asking whether the server offers it and without the
+                    // refusal c-client gives when it doesn't.
+                    'encryption' => $spec->encryption() === 'ssl' ? 'ssl' : '',
                     'validate_cert' => !$spec->switches->novalidate,
                     'timeout' => Timeouts::seconds(IMAP_OPENTIMEOUT),
                 ]);
+
+                if ($spec->encryption() !== 'ssl') {
+                    $connection->upgradeToTls($spec->switches->tls, $spec->switches->notls);
+                }
 
                 if ($credentials->anonymous) {
                     // c-client offers the client's own host name as the
@@ -167,6 +175,7 @@ final class Session
                     $spec->host,
                     $spec->port,
                     $spec->encryption(),
+                    $spec->switches->notls,
                     !$spec->switches->novalidate,
                     (float) Timeouts::seconds(IMAP_OPENTIMEOUT),
                     (float) Timeouts::seconds(IMAP_READTIMEOUT),
@@ -417,12 +426,15 @@ final class Session
             $spec->switches->anonymous || (bool) ($flags & OP_ANONYMOUS),
             $spec->switches->secure,
         );
-        $prefix = $spec->normalizedPrefixBase($credentials->secure, $spec->switches->tls);
+        // Compared against what this connection negotiated, not against what
+        // the spec asked for: reopening the same host would upgrade the same
+        // way, and reading /tls as a difference would redial every time.
+        $prefix = $spec->normalizedPrefixBase($credentials->secure, $this->connection->backend()->upgradedToTls());
 
         // A different login is a different session, whatever the host:
         // mail_usable_network_stream() will not recycle a stream across one.
         if ($prefix !== $this->connection->mailboxPrefix() || $credentials->user !== $this->connection->user()) {
-            $status = $this->redial($spec, $mailbox, $isPop3, $prefix, $credentials, $readOnly, $retries);
+            $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $retries);
 
             if ($status === false) {
                 return false;
@@ -444,7 +456,7 @@ final class Session
             // dials the host again and logs back in rather than reporting
             // a dead stream, which is what makes a session survive a server
             // that hangs up on it. Same host as before — the prefix matched.
-            $status = $this->redial($spec, $mailbox, $isPop3, $prefix, $credentials, $readOnly, $retries);
+            $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $retries);
 
             if ($status === false) {
                 return false;
@@ -475,7 +487,7 @@ final class Session
      * mail_open() does to a stream it is reopening elsewhere, and to one
      * whose socket is gone.
      */
-    private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, string $prefix, Credentials $credentials, bool $readOnly, int $retries): FolderState|false
+    private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, Credentials $credentials, bool $readOnly, int $retries): FolderState|false
     {
         $backend = $isPop3
             ? self::connectPop3($spec, $mailbox, $credentials, $retries)
@@ -485,7 +497,14 @@ final class Session
             return false;
         }
 
-        $this->connection->reconnect($backend, $prefix, $credentials->user, $spec->folder, $readOnly, $credentials->anonymous);
+        $this->connection->reconnect(
+            $backend,
+            $spec->normalizedPrefixBase($credentials->secure, $backend->upgradedToTls()),
+            $credentials->user,
+            $spec->folder,
+            $readOnly,
+            $credentials->anonymous,
+        );
 
         try {
             return $this->connection->selectOrExamine();

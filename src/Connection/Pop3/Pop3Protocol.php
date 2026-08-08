@@ -13,10 +13,13 @@ final class Pop3Protocol
     /** @var resource */
     private $stream;
 
+    private bool $upgraded = false;
+
     public function connect(
         string $host,
         int $port,
         string $encryption,
+        bool $notls,
         bool $validateCert,
         float $timeout = 30.0,
         ?float $readTimeout = null,
@@ -54,14 +57,37 @@ final class Pop3Protocol
 
         $this->readSingleLine();
 
-        if ($encryption === 'starttls') {
-            $this->startTls();
+        if ($encryption !== 'ssl') {
+            $this->upgrade($encryption === 'starttls', $notls);
         }
     }
 
     /**
-     * RFC 2595 STLS. Throws rather than carrying on unencrypted: /tls is a
-     * requirement, not a preference.
+     * c-client upgrades whenever it can (pop3.c): STLS goes out on any
+     * connection not already encrypted and not forbidden by /notls, and a
+     * spec that asked for /tls and found no server to negotiate with fails
+     * rather than continuing in the clear.
+     */
+    private function upgrade(bool $required, bool $forbidden): void
+    {
+        if ($forbidden) {
+            return;
+        }
+
+        if (in_array('STLS', $this->capa(), true)) {
+            $this->startTls();
+
+            return;
+        }
+
+        if ($required) {
+            throw new \RuntimeException('Unable to negotiate TLS with this server');
+        }
+    }
+
+    /**
+     * RFC 2595 STLS. Throws rather than carrying on unencrypted: an upgrade
+     * that failed halfway is the one outcome the switch exists to prevent.
      */
     private function startTls(): void
     {
@@ -72,6 +98,56 @@ final class Pop3Protocol
         if ($crypto !== true) {
             throw new \RuntimeException('Unable to negotiate TLS with this server');
         }
+
+        $this->upgraded = true;
+    }
+
+    /**
+     * Whether this connection reached TLS through STLS rather than having
+     * been encrypted from its first byte — what the reported Mailbox string
+     * spells "/tls".
+     */
+    public function upgradedToTls(): bool
+    {
+        return $this->upgraded;
+    }
+
+    /**
+     * RFC 2449 CAPA, read for STLS alone.
+     *
+     * A -ERR is a complete answer, not a failure: the command postdates POP3
+     * by fifteen years, and a server without it advertises nothing — which
+     * is how c-client's pop3_capa() reads the same reply.
+     *
+     * @return list<string>
+     */
+    private function capa(): array
+    {
+        fwrite($this->stream, "CAPA\r\n");
+
+        $status = fgets($this->stream);
+
+        if ($status === false) {
+            throw new \RuntimeException('POP3 connection closed unexpectedly');
+        }
+
+        if (!str_starts_with($status, '+OK')) {
+            return [];
+        }
+
+        $capabilities = [];
+
+        while (($raw = fgets($this->stream)) !== false) {
+            $line = rtrim($raw, "\r\n");
+
+            if ($line === '.') {
+                break;
+            }
+
+            $capabilities[] = strtoupper(explode(' ', $line)[0]);
+        }
+
+        return $capabilities;
     }
 
     public function login(string $user, string $password): void

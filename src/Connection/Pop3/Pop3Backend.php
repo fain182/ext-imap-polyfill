@@ -57,6 +57,11 @@ final class Pop3Backend implements ConnectionBackend
         return 'pop3';
     }
 
+    public function upgradedToTls(): bool
+    {
+        return $this->protocol->upgradedToTls();
+    }
+
     public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState
     {
         if ($readOnly) {

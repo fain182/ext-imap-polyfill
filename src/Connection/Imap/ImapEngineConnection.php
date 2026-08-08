@@ -34,6 +34,8 @@ final class ImapEngineConnection extends ImapConnection
     /** @var list<string>|null */
     private ?array $capabilities = null;
 
+    private bool $upgraded = false;
+
     /**
      * Response text arrives as the server wrote it, 8-bit bytes included;
      * see EightBitTokenizer for why ImapEngine's own would refuse it.
@@ -55,6 +57,90 @@ final class ImapEngineConnection extends ImapConnection
         $this->assertTaggedResponse($tag);
 
         return $this->result->responses()->untagged();
+    }
+
+    /**
+     * c-client upgrades whenever it can (imap4r1.c): STARTTLS goes out on
+     * any connection the spec doesn't forbid it on, and a spec that asked
+     * for /tls and found no server to negotiate with fails rather than
+     * carrying on in the clear.
+     *
+     * @param bool $required  the spec said /tls
+     * @param bool $forbidden the spec said /notls
+     */
+    public function upgradeToTls(bool $required, bool $forbidden): void
+    {
+        if ($forbidden) {
+            return;
+        }
+
+        if (in_array('STARTTLS', $this->capabilities(), true)) {
+            $this->startTls();
+
+            return;
+        }
+
+        if ($required) {
+            throw new \RuntimeException('Unable to negotiate TLS with this server');
+        }
+    }
+
+    /**
+     * ImapEngine's own STARTTLS, with the handshake's answer read.
+     *
+     * It sends the command, asserts the tagged response, and then throws away
+     * what stream_socket_enable_crypto() returned — so a certificate the
+     * client rejects leaves a connection that carries on in cleartext, which
+     * is the one outcome /tls exists to prevent.
+     */
+    public function startTls(): void
+    {
+        $this->send('STARTTLS', tag: $tag);
+
+        $this->assertTaggedResponse($tag);
+
+        if ($this->stream->setSocketSetCrypto(true, STREAM_CRYPTO_METHOD_TLS_CLIENT) !== true) {
+            throw new \RuntimeException('Unable to negotiate TLS with this server');
+        }
+
+        $this->upgraded = true;
+
+        // The server answers a logged-out stranger and an encrypted client
+        // differently; c-client re-reads CAPABILITY here for that reason.
+        $this->forgetCapabilities();
+    }
+
+    /**
+     * Whether this connection reached TLS through STARTTLS rather than
+     * having been encrypted from its first byte — c-client's LOCAL->tlsflag,
+     * which is what the reported Mailbox string spells "/tls".
+     */
+    public function upgradedToTls(): bool
+    {
+        return $this->upgraded;
+    }
+
+    /**
+     * Certificate validation has to be in the context from the start: the
+     * socket is opened in cleartext and only meets a certificate later, at
+     * the STARTTLS upgrade, by which time the context is fixed. ImapEngine
+     * sets these for implicitly encrypted transports only, so
+     * /novalidate-cert would go missing on exactly the upgraded connections.
+     *
+     * @param array<string, mixed> $proxy
+     *
+     * @return array<string, mixed>
+     */
+    protected function getDefaultSocketOptions(string $transport, array $proxy = [], bool $validateCert = true): array
+    {
+        $options = parent::getDefaultSocketOptions($transport, $proxy, $validateCert);
+
+        $options['ssl'] = [
+            'verify_peer' => $validateCert,
+            'verify_peer_name' => $validateCert,
+        ] + ($options['ssl'] ?? []);
+
+        return $options;
     }
 
     /**
