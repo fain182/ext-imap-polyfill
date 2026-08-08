@@ -1,0 +1,32 @@
+version: 2
+
+updates:
+  # Actions used by .github/workflows/tests.yml (actions/checkout,
+  # shivammathur/setup-php).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # composer.json / composer.lock. This is a library, so the lock file never
+  # reaches consumers: what matters here is the dev toolchain (phpunit,
+  # phpstan, phpdotenv) and the version constraint on directorytree/imapengine,
+  # which is the actual backend the polyfill is built on.
+  - package-ecosystem: "composer"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Docker images in docker-compose.yml (the Greenmail and Dovecot test
+  # fixtures) and in Dockerfile.parity.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # Dockerfile.parity is pinned to php:8.3-cli-bookworm on purpose and must
+      # not be bumped: 8.3 is the last PHP release that ships ext-imap in core
+      # (the whole point of the parity job is running against the genuine
+      # extension), and bookworm is the last Debian release that still packages
+      # libc-client, which ext-imap wraps.
+      - dependency-name: "php"

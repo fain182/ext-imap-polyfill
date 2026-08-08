@@ -38,6 +38,37 @@ jobs:
       - name: Integration tests
         run: make test-integration
 
+  # The matrix above installs from composer.lock, so every one of its legs gets
+  # the same pinned dependency set: the top of each constraint, and only that.
+  # This job re-resolves to the oldest releases composer.json allows, which is
+  # the only place `^1.25` on imapengine is tested as the promise it is. PHP 8.1
+  # because it is the floor we claim, and composer's platform config resolves
+  # for 8.1 regardless.
+  lowest-deps:
+    name: "Oldest allowed dependencies (PHP 8.1)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.1
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: ':imap'
+          coverage: none
+
+      # Rewrites composer.lock to the oldest set; the test targets below run
+      # `composer install` underneath, which reads that rewritten lock rather
+      # than the committed one, so the downgrade survives into the runs.
+      - name: Composer install (oldest allowed)
+        run: make install-lowest
+
+      - name: Unit tests
+        run: make test-unit
+
+      - name: Integration tests
+        run: make test-integration
+
   phpstan:
     name: "PHPStan"
     runs-on: ubuntu-latest
