@@ -17,7 +17,7 @@ final class DovecotAnonymousTest extends DovecotTestCase
     public function test_anonymous_opens_a_connection_without_credentials(): void
     {
         $connection = imap_open(
-            sprintf('{%s:%d/imap/anonymous}INBOX', self::host(), self::port()),
+            sprintf('{%s:%d/imap/anonymous/tls-sslv23/novalidate-cert}INBOX', self::host(), self::port()),
             'nobody-by-this-name',
             'not-a-password',
         );
@@ -54,14 +54,16 @@ final class DovecotAnonymousTest extends DovecotTestCase
     public function test_the_reported_mailbox_says_anonymous_instead_of_a_user(): void
     {
         $connection = imap_open(
-            sprintf('{%s:%d/imap/anonymous}INBOX', self::host(), self::port()),
+            sprintf('{%s:%d/imap/anonymous/tls-sslv23/novalidate-cert}INBOX', self::host(), self::port()),
             self::user(),
             self::password(),
         );
 
         $mailbox = imap_check($connection)->Mailbox;
 
-        $this->assertStringEndsWith('/imap/anonymous}INBOX', $mailbox);
+        // The connection upgraded on the way in, so the reported string
+        // carries the /tls it negotiated as well as the switches asked for.
+        $this->assertStringEndsWith('/tls/tls-sslv23/novalidate-cert/anonymous}INBOX', $mailbox);
         $this->assertStringNotContainsString('/user=', $mailbox);
 
         imap_close($connection);

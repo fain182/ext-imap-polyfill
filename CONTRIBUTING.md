@@ -23,6 +23,10 @@ Almost every test runs against **Greenmail** (IMAP on 127.0.0.1:13143, POP3 on 1
 
 Bring one up on its own with `make greenmail-up` / `make dovecot-up` (and the matching `-down`). Tests needing Dovecot **skip themselves when it isn't running**, so check the skip count before reading a run as green.
 
+Dovecot is also the fixture that **advertises STARTTLS**, so the upgrade both implementations perform on their own has somewhere to be checked; Greenmail announces nothing on its cleartext port. `make dovecot-up` generates the self-signed certificate it presents (`tests/fixtures/dovecot-ssl/`, gitignored), which is why every spec in `DovecotTestCase` carries `/novalidate-cert` — and why one test opens without it, to prove the certificate is being validated at all.
+
+Those specs also carry **`/tls-sslv23`**, which is not decoration. c-client builds its STARTTLS context with `TLSv1_client_method()` — TLS 1.0 and nothing else (`ssl_unix.c`) — and no current server completes that handshake; `/tls-sslv23` is the switch that makes it negotiate a version instead. Without it every Dovecot test would pass locally and fail under `make parity`, for a reason having nothing to do with what it tests. The fixture meets it halfway with `ssl_min_protocol = TLSv1` and `@SECLEVEL=0`: on a loopback container, that is the price of being able to compare the two implementations at all.
+
 ## Pointing the suite elsewhere
 
 Every host, port, credential and connection flag is settable: copy `.env.example` to `.env`, which the test bootstrap loads, or export the same names (an exported variable wins over the file).

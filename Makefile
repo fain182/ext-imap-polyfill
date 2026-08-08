@@ -13,6 +13,7 @@ DOVECOT_IMAGE := docker.io/dovecot/dovecot:latest
 DOVECOT_NAME := ext-imap-polyfill-dovecot
 DOVECOT_PORT := 13144
 DOVECOT_POP3_PORT := 13111
+DOVECOT_SSL_DIR := $(CURDIR)/tests/fixtures/dovecot-ssl
 NETWORK_NAME := ext-imap-polyfill-net
 PARITY_IMAGE := ext-imap-polyfill-parity
 
@@ -70,7 +71,21 @@ greenmail-down:
 ## THREAD and ACL (tests/Integration/DovecotTestCase). Its unprivileged IMAP
 ## listener is on 31143, not 143. Tests skip themselves when it isn't up, so
 ## this is only needed for the Dovecot-specific classes.
-dovecot-up:
+## The certificate the fixture presents at STARTTLS. Generated rather than
+## committed, and self-signed on purpose: every spec in the suite carries
+## /novalidate-cert, so a certificate that validates would prove nothing —
+## and one test opens without the switch to check it is refused.
+## The file names are the image's own: its /etc/dovecot/conf.d/ssl.conf
+## points cert_file and key_file at this directory, and Dovecot refuses to
+## start when they aren't there.
+$(DOVECOT_SSL_DIR)/tls.crt:
+	@mkdir -p $(DOVECOT_SSL_DIR)
+	openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+		-subj '/CN=dovecot' -addext 'subjectAltName=DNS:dovecot,DNS:localhost,IP:127.0.0.1' \
+		-keyout $(DOVECOT_SSL_DIR)/tls.key -out $(DOVECOT_SSL_DIR)/tls.crt 2>/dev/null
+	@chmod 644 $(DOVECOT_SSL_DIR)/tls.key
+
+dovecot-up: $(DOVECOT_SSL_DIR)/tls.crt
 	$(CONTAINER_RUNTIME) network create $(NETWORK_NAME) >/dev/null 2>&1 || true
 	$(CONTAINER_RUNTIME) rm -f $(DOVECOT_NAME) >/dev/null 2>&1 || true
 	$(CONTAINER_RUNTIME) run -d --name $(DOVECOT_NAME) \
@@ -79,6 +94,7 @@ dovecot-up:
 		-p $(DOVECOT_POP3_PORT):31110 \
 		-e USER_PASSWORD=testpass \
 		-v $(CURDIR)/tests/fixtures/dovecot.conf:/etc/dovecot/conf.d/10-test.conf:ro,Z \
+		-v $(DOVECOT_SSL_DIR):/etc/dovecot/ssl:ro,Z \
 		$(DOVECOT_IMAGE)
 	@echo "Waiting for Dovecot to greet IMAP clients on port $(DOVECOT_PORT)..."
 	@until exec 5<>/dev/tcp/127.0.0.1/$(DOVECOT_PORT) && read -r -t 2 greeting <&5 && [[ "$$greeting" == '* OK'* ]]; do \
@@ -128,6 +144,7 @@ parity: parity-build greenmail-up dovecot-up
 		-e IMAP_POLYFILL_TEST_POP3S_PORT=3995 \
 		-e IMAP_POLYFILL_DOVECOT_HOST=dovecot \
 		-e IMAP_POLYFILL_DOVECOT_PORT=31143 \
+		-e IMAP_POLYFILL_DOVECOT_POP3_PORT=31110 \
 		-v $(CURDIR):/app:Z \
 		$(PARITY_IMAGE) \
 		sh -c 'composer install --quiet && php -m | grep -q imap && vendor/bin/phpunit --testsuite integration'; \

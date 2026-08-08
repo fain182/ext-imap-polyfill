@@ -56,9 +56,27 @@ abstract class DovecotTestCase extends TestCase
         return (int) (getenv('IMAP_POLYFILL_DOVECOT_PORT') ?: 13144);
     }
 
+    protected static function pop3Port(): int
+    {
+        return (int) (getenv('IMAP_POLYFILL_DOVECOT_POP3_PORT') ?: 13111);
+    }
+
+    /**
+     * Every spec here carries /tls-sslv23, and it is not decoration.
+     *
+     * This fixture advertises STARTTLS, so both implementations upgrade on
+     * the way in. c-client's plain /tls builds its context with
+     * TLSv1_client_method() — TLS 1.0 and nothing else (ssl_unix.c) — which
+     * no current server completes, and /tls-sslv23 is the switch that makes
+     * it negotiate a version instead. Without it every test in this
+     * directory would pass here and fail under `make parity`, for a reason
+     * that has nothing to do with what it is testing.
+     *
+     * /novalidate-cert for the fixture's self-signed certificate.
+     */
     protected static function mailboxSpec(string $folder = 'INBOX'): string
     {
-        return sprintf('{%s:%d/imap/novalidate-cert}%s', self::host(), self::port(), $folder);
+        return sprintf('{%s:%d/imap/tls-sslv23/novalidate-cert}%s', self::host(), self::port(), $folder);
     }
 
     /**

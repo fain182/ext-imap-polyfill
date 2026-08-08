@@ -28,6 +28,23 @@ abstract class GreenmailTestCase extends TestCase
         return getenv('IMAP_POLYFILL_TEST_FLAGS') ?: '/imap/novalidate-cert';
     }
 
+    /**
+     * flags() as a regex fragment for the prefix these connections report,
+     * with room for a "/tls" the spec never asked for: both implementations
+     * upgrade whenever the server advertises STARTTLS, and c-client writes
+     * the upgrade it negotiated straight after the service name. One fixture
+     * announces it and the other doesn't, so the segment is optional rather
+     * than expected either way.
+     */
+    protected static function flagsPattern(): string
+    {
+        $segments = array_values(array_filter(explode('/', self::flags()), static fn (string $s): bool => $s !== ''));
+        $service = array_shift($segments) ?? '';
+        $rest = $segments === [] ? '' : '/'.implode('/', $segments);
+
+        return preg_quote('/'.$service, '/').'(?:'.preg_quote('/tls', '/').')?'.preg_quote($rest, '/');
+    }
+
     /** What the seeding client has to speak to reach the same server. */
     protected static function encryption(): string
     {

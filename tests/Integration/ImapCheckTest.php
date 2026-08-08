@@ -33,7 +33,7 @@ class ImapCheckTest extends GreenmailTestCase
             sprintf(
                 '/^\{[^:}]+:%d%s\/user="%s"\}%s$/',
                 self::port(),
-                preg_quote(self::flags(), '/'),
+                self::flagsPattern(),
                 self::user(),
                 preg_quote($folderName, '/')
             ),
@@ -51,7 +51,7 @@ class ImapCheckTest extends GreenmailTestCase
             sprintf(
                 '/^\{[^:}]+:%d%s\/readonly\/user="%s"\}%s$/',
                 self::port(),
-                preg_quote(self::flags(), '/'),
+                self::flagsPattern(),
                 self::user(),
                 preg_quote($folderName, '/')
             ),
