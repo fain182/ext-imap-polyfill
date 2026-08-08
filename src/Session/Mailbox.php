@@ -150,7 +150,7 @@ final class Mailbox
 
         try {
             $data = $this->connection->protocol()->fetch(
-                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
+                HeaderInfo::FETCH_ITEMS,
                 [$messageNum],
                 null,
                 UidMode::MSGNO,
@@ -653,7 +653,7 @@ final class Mailbox
 
             $ids = range(1, $exists);
             $data = $this->connection->protocol()->fetch(
-                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
+                HeaderInfo::FETCH_ITEMS,
                 $ids,
                 null,
                 UidMode::MSGNO,

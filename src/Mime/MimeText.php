@@ -2,8 +2,25 @@
 
 namespace ImapPolyfill\Mime;
 
+use ImapPolyfill\Support\ErrorStack;
+
 final class MimeText
 {
+    /**
+     * quoted-printable, decoded the way c-client's rfc822_qprint() does:
+     * a "=" that starts neither a hex pair nor a line break is reported,
+     * and the text is handed back all the same, quoted from that "="
+     * onwards.
+     */
+    public static function fromQuotedPrintable(string $string): string
+    {
+        if (preg_match('/=(?![0-9A-Fa-f]{2}|\r?\n)/', $string, $match, PREG_OFFSET_CAPTURE) === 1) {
+            ErrorStack::push('Invalid quoted-printable sequence: '.substr($string, $match[0][1]));
+        }
+
+        return quoted_printable_decode($string);
+    }
+
     /**
      * Decodes RFC 2047 encoded-words in a header value to UTF-8.
      *

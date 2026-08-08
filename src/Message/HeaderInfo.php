@@ -18,6 +18,16 @@ final class HeaderInfo
     ];
 
     /**
+     * The FETCH items build() needs, in one place because two callers ask
+     * for them — imap_headerinfo() for one message, imap_sort()'s local
+     * fallback for the whole folder — and a field added here has to be
+     * added to the request or it will not be there to read.
+     *
+     * @var list<string>
+     */
+    public const FETCH_ITEMS = ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'];
+
+    /**
      * @param string[] $flags
      */
     public static function build(

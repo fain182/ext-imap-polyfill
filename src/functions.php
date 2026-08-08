@@ -375,15 +375,7 @@ if (!function_exists('imap_base64')) {
 if (!function_exists('imap_qprint')) {
     function imap_qprint(string $string): string|false
     {
-        // c-client's rfc822_qprint() reports a bad "=" sequence and still
-        // hands back the text, quoting the input from that "=" onwards.
-        if (preg_match('/=(?![0-9A-Fa-f]{2}|\r?\n)/', $string, $match, PREG_OFFSET_CAPTURE) === 1) {
-            \ImapPolyfill\Support\ErrorStack::push(
-                'Invalid quoted-printable sequence: '.substr($string, $match[0][1])
-            );
-        }
-
-        return quoted_printable_decode($string);
+        return \ImapPolyfill\Mime\MimeText::fromQuotedPrintable($string);
     }
 }
 
