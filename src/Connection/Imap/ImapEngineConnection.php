@@ -6,6 +6,7 @@ use DirectoryTree\ImapEngine\Collections\ResponseCollection;
 use DirectoryTree\ImapEngine\Connection\ImapConnection;
 use DirectoryTree\ImapEngine\Connection\ImapTokenizer;
 use DirectoryTree\ImapEngine\Connection\Streams\StreamInterface;
+use DirectoryTree\ImapEngine\Connection\Responses\ContinuationResponse;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\Data;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\ResponseCodeData;
 use DirectoryTree\ImapEngine\Connection\Responses\Response;
@@ -168,16 +169,47 @@ final class ImapEngineConnection extends ImapConnection
     }
 
     /**
-     * c-client's imap_anon(): the anonymous convention wants a contact
-     * address, and what it offers is the client's own host name.
-     *
-     * Divergence: imap_anon() prefers AUTHENTICATE ANONYMOUS wherever the
-     * server advertises it, and falls back to this LOGIN only otherwise.
-     * This package speaks no SASL, so the fallback is the only form it has.
+     * c-client's imap_anon(): SASL where the server advertises it, and the
+     * older LOGIN form otherwise. The anonymous convention wants a contact
+     * address, and what c-client offers either way is the client's own host
+     * name (net_localhost).
      */
     public function loginAnonymous(string $localHost): void
     {
+        if (in_array('AUTH=ANONYMOUS', $this->capabilities(), true)) {
+            $this->authenticateAnonymous($localHost);
+
+            return;
+        }
+
         $this->sendAndCollect('LOGIN ANONYMOUS', [Str::literal($localHost)]);
+    }
+
+    /**
+     * RFC 4505 in the two-step form c-client uses: the mechanism goes out on
+     * its own and the trace token answers the challenge, rather than riding
+     * along in the command as SASL-IR would allow.
+     */
+    private function authenticateAnonymous(string $localHost): void
+    {
+        $this->send('AUTHENTICATE', ['ANONYMOUS'], $tag);
+
+        // A server that advertised the mechanism and then refuses it answers
+        // the tagged line straight away, with no challenge. Waiting only for
+        // a continuation would read past it and time out, so both shapes are
+        // let through and the refusal is reported as the server wrote it.
+        $this->assertNextResponse(
+            static fn (Response $response) => $response instanceof ContinuationResponse || $response instanceof TaggedResponse,
+            static fn (Response $response) => $response instanceof ContinuationResponse,
+            static fn (TaggedResponse $response) => new CommandFailedException(
+                (string) ($response->tokenAt(1) ?? ''),
+                implode(' ', array_map('strval', $response->tokensAfter(2))),
+            ),
+        );
+
+        $this->write(base64_encode($localHost));
+
+        $this->assertTaggedResponse($tag);
     }
 
     /**
