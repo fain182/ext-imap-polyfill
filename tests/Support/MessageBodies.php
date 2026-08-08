@@ -110,7 +110,11 @@ final class MessageBodies
      */
     public static function read(string $raw, string $host, int $port, string $user, string $password): array
     {
-        $spec = static fn (string $folder = '') => sprintf('{%s:%d/imap/novalidate-cert}%s', $host, $port, $folder);
+        // The same flags GreenmailTestCase::flags() honours, so pointing
+        // the suite at a server with a real certificate does not fail
+        // here alone.
+        $flags = getenv('IMAP_POLYFILL_TEST_FLAGS') ?: '/imap/novalidate-cert';
+        $spec = static fn (string $folder = '') => sprintf('{%s:%d%s}%s', $host, $port, $flags, $folder);
         $folder = 'Bodies'.bin2hex(random_bytes(4));
 
         $admin = imap_open($spec(), $user, $password);

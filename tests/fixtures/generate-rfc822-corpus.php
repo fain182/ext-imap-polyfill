@@ -17,6 +17,10 @@
  * part company. Add to $addressLists/$mimeHeaders and rerun; never edit
  * the generated file by hand.
  */
+require __DIR__.'/../../vendor/autoload.php';
+
+use ImapPolyfill\Tests\Support\FixtureExport;
+
 if (!extension_loaded('imap')) {
     fwrite(STDERR, "Refusing to generate: ext-imap is not loaded, so these would be the polyfill's own answers.\n");
 
@@ -133,42 +137,7 @@ foreach ($mimeHeaders as $label => $input) {
     ];
 }
 
-/**
- * var_export() would write decoded ISO-8859-1 payloads as raw bytes,
- * leaving a checked-in file that is not valid UTF-8 and that no editor or
- * diff renders honestly. Everything outside printable ASCII is escaped
- * instead, so the fixture stays readable as the specification it is.
- */
-$render = static function (mixed $value, int $depth = 0) use (&$render): string {
-    $pad = str_repeat('    ', $depth + 1);
-
-    if (is_array($value)) {
-        if ($value === []) {
-            return '[]';
-        }
-
-        $lines = [];
-        foreach ($value as $key => $item) {
-            $lines[] = $pad.$render($key, $depth + 1).' => '.$render($item, $depth + 1).',';
-        }
-
-        return "[\n".implode("\n", $lines)."\n".str_repeat('    ', $depth).']';
-    }
-
-    if (is_string($value)) {
-        $escaped = preg_replace_callback(
-            '/[^\x20-\x7E]|["$\\\\]/',
-            static fn (array $m): string => sprintf('\x%02X', ord($m[0])),
-            $value
-        );
-
-        return '"'.$escaped.'"';
-    }
-
-    return var_export($value, true);
-};
-
-$export = $render(['adrlist' => $addresses, 'mime_header_decode' => $mime]);
+$export = FixtureExport::render(['adrlist' => $addresses, 'mime_header_decode' => $mime]);
 $header = <<<'PHP'
 <?php
 

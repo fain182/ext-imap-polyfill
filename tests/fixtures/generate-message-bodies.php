@@ -11,11 +11,11 @@
  *         -v "$PWD":/app:Z ext-imap-polyfill-parity \
  *         php tests/fixtures/generate-message-bodies.php
  *
- * Measured against both fixtures, keeping only what they answer alike, so
- * how a particular server chose to store the message stays out of it.
+ * Only the reads both fixtures answer alike are kept; see AgreedMatrix.
  */
 require __DIR__.'/../../vendor/autoload.php';
 
+use ImapPolyfill\Tests\Support\AgreedMatrix;
 use ImapPolyfill\Tests\Support\FixtureExport;
 use ImapPolyfill\Tests\Support\MessageBodies;
 
@@ -28,43 +28,20 @@ if (!extension_loaded('imap')) {
 $user = getenv('IMAP_POLYFILL_TEST_USER') ?: 'testuser';
 $password = getenv('IMAP_POLYFILL_TEST_PASSWORD') ?: 'testpass';
 
-$measure = static function (string $host, int $port) use ($user, $password): array {
-    $matrix = [];
+[$matrix, $excluded] = AgreedMatrix::of(
+    static function (string $host, int $port) use ($user, $password): array {
+        $matrix = [];
 
-    foreach (MessageBodies::messages() as $label => $raw) {
-        $matrix[$label] = MessageBodies::read($raw, $host, $port, $user, $password);
-    }
-
-    return $matrix;
-};
-
-$primary = $measure(
-    getenv('IMAP_POLYFILL_TEST_HOST') ?: '127.0.0.1',
-    (int) (getenv('IMAP_POLYFILL_TEST_PORT') ?: 13143),
-);
-$second = $measure(
-    getenv('IMAP_POLYFILL_DOVECOT_HOST') ?: '127.0.0.1',
-    (int) (getenv('IMAP_POLYFILL_DOVECOT_PORT') ?: 13144),
-);
-
-$matrix = [];
-$excluded = [];
-
-foreach ($primary as $label => $reads) {
-    foreach ($reads as $call => $outcome) {
-        if ($outcome === ($second[$label][$call] ?? null)) {
-            $matrix[$label][$call] = $outcome;
-
-            continue;
+        foreach (MessageBodies::messages() as $label => $raw) {
+            $matrix[$label] = MessageBodies::read($raw, $host, $port, $user, $password);
         }
 
-        $excluded[] = "{$call} for {$label}";
-    }
-}
+        return $matrix;
+    },
+    '%s for %s',
+);
 
-$omitted = $excluded === []
-    ? ' * The two servers agreed on every read.'
-    : " * Left out, because the two servers disagree and the answer is\n * therefore theirs rather than ext-imap's:\n *\n *   - ".implode("\n *   - ", $excluded);
+$omitted = AgreedMatrix::omissionNote($excluded);
 
 $header = <<<PHP
 <?php

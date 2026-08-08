@@ -4,10 +4,9 @@
  * GENERATED FILE — do not edit by hand.
  *
  * How the genuine ext-imap carries a folder name through create, list,
- * status, append, open, rename and delete. Only steps both fixtures
- * answer alike are kept.
+ * status, append, open, rename and delete.
  *
- * The two servers agreed on every step.
+ * The two servers agreed on every cell.
  *
  * generate-folder-names.php is how to regenerate it; FolderNamesTest
  * asserts both engines against it.

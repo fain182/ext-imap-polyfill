@@ -19,6 +19,8 @@
  */
 require __DIR__.'/../../vendor/autoload.php';
 
+use ImapPolyfill\Tests\Support\AgreedMatrix;
+use ImapPolyfill\Tests\Support\FixtureExport;
 use ImapPolyfill\Tests\Support\UnhappyPaths;
 
 if (!extension_loaded('imap')) {
@@ -30,80 +32,32 @@ if (!extension_loaded('imap')) {
 $user = getenv('IMAP_POLYFILL_TEST_USER') ?: 'testuser';
 $password = getenv('IMAP_POLYFILL_TEST_PASSWORD') ?: 'testpass';
 
-$servers = [
-    'primary' => [
-        getenv('IMAP_POLYFILL_TEST_HOST') ?: '127.0.0.1',
-        (int) (getenv('IMAP_POLYFILL_TEST_PORT') ?: 13143),
-    ],
-    'second' => [
-        getenv('IMAP_POLYFILL_DOVECOT_HOST') ?: '127.0.0.1',
-        (int) (getenv('IMAP_POLYFILL_DOVECOT_PORT') ?: 13144),
-    ],
-];
+[$matrix, $excluded] = AgreedMatrix::of(
+    static function (string $host, int $port) use ($user, $password): array {
+        $matrix = [];
 
-$measure = static function (string $host, int $port) use ($user, $password): array {
-    $matrix = [];
+        foreach (UnhappyPaths::scenarios() as $scenario => $build) {
+            foreach (UnhappyPaths::probes() as $call => $probe) {
+                // A connection per cell: several of these calls change the
+                // state the next one would be reading.
+                $connection = $build($host, $port, $user, $password);
 
-    foreach (UnhappyPaths::scenarios() as $scenario => $build) {
-        foreach (UnhappyPaths::probes() as $call => $probe) {
-            // A connection per cell: several of these calls change the
-            // state the next one would be reading.
-            $connection = $build($host, $port, $user, $password);
+                if ($connection === false) {
+                    fwrite(STDERR, "Could not build the '{$scenario}' connection on {$host}:{$port}.\n");
 
-            if ($connection === false) {
-                fwrite(STDERR, "Could not build the '{$scenario}' connection on {$host}:{$port}.\n");
+                    exit(1);
+                }
 
-                exit(1);
+                $matrix[$scenario][$call] = UnhappyPaths::outcome($probe, $connection);
             }
-
-            $matrix[$scenario][$call] = UnhappyPaths::outcome($probe, $connection);
-        }
-    }
-
-    return $matrix;
-};
-
-$primary = $measure(...$servers['primary']);
-$second = $measure(...$servers['second']);
-
-// Only what both servers answer the same way is contract. Where they
-// differ, the cell is the server's behaviour rather than ext-imap's — a
-// STORE against a message set the folder cannot have is refused by one
-// and shrugged off by the other — and recording either would pin this
-// suite to one fixture.
-$matrix = [];
-$excluded = [];
-
-foreach ($primary as $scenario => $calls) {
-    foreach ($calls as $call => $outcome) {
-        if ($outcome === ($second[$scenario][$call] ?? null)) {
-            $matrix[$scenario][$call] = $outcome;
-
-            continue;
         }
 
-        $excluded[] = "{$call} on a {$scenario}";
-    }
-}
+        return $matrix;
+    },
+    '%s on a %s',
+);
 
-$render = static function (mixed $value, int $depth = 0) use (&$render): string {
-    $pad = str_repeat('    ', $depth + 1);
-
-    if (is_array($value)) {
-        $lines = [];
-        foreach ($value as $key => $item) {
-            $lines[] = $pad.var_export($key, true).' => '.$render($item, $depth + 1).',';
-        }
-
-        return "[\n".implode("\n", $lines)."\n".str_repeat('    ', $depth).']';
-    }
-
-    return var_export($value, true);
-};
-
-$omitted = $excluded === []
-    ? ' * The two servers agreed on every cell.'
-    : " * Left out, because the two servers disagree and the answer is\n * therefore theirs rather than ext-imap's:\n *\n *   - ".implode("\n *   - ", $excluded);
+$omitted = AgreedMatrix::omissionNote($excluded);
 
 $header = <<<PHP
 <?php
@@ -125,6 +79,6 @@ $header = <<<PHP
 return
 PHP;
 
-file_put_contents(__DIR__.'/unhappy-paths.php', $header.' '.$render($matrix).";\n");
+file_put_contents(__DIR__.'/unhappy-paths.php', $header.' '.FixtureExport::render($matrix).";\n");
 
 printf("Wrote %d cells, left out %d the two servers disagree on.\n", array_sum(array_map('count', $matrix)), count($excluded));

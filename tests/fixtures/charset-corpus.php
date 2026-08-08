@@ -4,8 +4,8 @@
  * GENERATED FILE — do not edit by hand.
  *
  * What the genuine ext-imap answers for each call in
- * generate-charset-corpus.php, which is also how to regenerate it.
- * CharsetCorpusTest asserts both engines against it.
+ * tests/Support/CharsetCalls.php. generate-charset-corpus.php is how to
+ * regenerate it; CharsetCorpusTest asserts both engines against it.
  *
  * Byte values are escaped rather than written raw: several of these
  * answers are not valid UTF-8, and some are not meant to be.
@@ -16,14 +16,9 @@
  *
  *   - imap_utf8(UTF-8 word, accented latin)
  *   - imap_utf8(ISO-8859-1 word, accented latin)
- *   - imap_utf8(Windows-1251 word, accented latin)
  *   - imap_utf8(Q encoded, accented latin)
- *   - imap_utf8(raw 8-bit, accented latin)
  *   - imap_utf8(UTF-8 word, mixed latin)
  *   - imap_utf8(ISO-8859-1 word, mixed latin)
- *   - imap_utf8(Windows-1251 word, mixed latin)
- *   - imap_utf8(Q encoded, mixed latin)
- *   - imap_utf8(raw 8-bit, mixed latin)
  */
 
 return [
@@ -87,6 +82,14 @@ return [
         "returns" => "string",
         "value" => "caff&6A-",
     ],
+    "imap_utf8(Windows-1251 word, accented latin)" => [
+        "returns" => "string",
+        "value" => "",
+    ],
+    "imap_utf8(raw 8-bit, accented latin)" => [
+        "returns" => "string",
+        "value" => "caff\xC3\xA8",
+    ],
     "imap_8bit(accented latin)" => [
         "returns" => "string",
         "value" => "caff=C3=A8",
@@ -114,6 +117,18 @@ return [
     "imap_utf7_encode(latin1 mixed latin)" => [
         "returns" => "string",
         "value" => "Zo&6w- Doe",
+    ],
+    "imap_utf8(Windows-1251 word, mixed latin)" => [
+        "returns" => "string",
+        "value" => "",
+    ],
+    "imap_utf8(Q encoded, mixed latin)" => [
+        "returns" => "string",
+        "value" => "=?UTF-8?Q?Zo=C3=AB Doe?=",
+    ],
+    "imap_utf8(raw 8-bit, mixed latin)" => [
+        "returns" => "string",
+        "value" => "Zo\xC3\xAB Doe",
     ],
     "imap_8bit(mixed latin)" => [
         "returns" => "string",

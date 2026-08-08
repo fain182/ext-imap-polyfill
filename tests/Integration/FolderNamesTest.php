@@ -28,9 +28,11 @@ final class FolderNamesTest extends GreenmailTestCase
     {
         $matrix = require __DIR__.'/../fixtures/folder-names.php';
 
+        $names = FolderNameRoundTrip::names();
+
         $cases = [];
         foreach ($matrix as $label => $steps) {
-            $cases[$label] = [FolderNameRoundTrip::names()[$label], $steps];
+            $cases[$label] = [$names[$label], $steps];
         }
 
         return $cases;

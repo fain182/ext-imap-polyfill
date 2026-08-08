@@ -11,12 +11,11 @@
  *         -v "$PWD":/app:Z ext-imap-polyfill-parity \
  *         php tests/fixtures/generate-folder-names.php
  *
- * Both fixtures are measured and only the steps they answer alike are
- * kept, so what is recorded is ext-imap's behaviour rather than one
- * server's idea of what a folder may be called.
+ * Only the steps both fixtures answer alike are kept; see AgreedMatrix.
  */
 require __DIR__.'/../../vendor/autoload.php';
 
+use ImapPolyfill\Tests\Support\AgreedMatrix;
 use ImapPolyfill\Tests\Support\FixtureExport;
 use ImapPolyfill\Tests\Support\FolderNameRoundTrip;
 
@@ -29,43 +28,20 @@ if (!extension_loaded('imap')) {
 $user = getenv('IMAP_POLYFILL_TEST_USER') ?: 'testuser';
 $password = getenv('IMAP_POLYFILL_TEST_PASSWORD') ?: 'testpass';
 
-$measure = static function (string $host, int $port) use ($user, $password): array {
-    $matrix = [];
+[$matrix, $excluded] = AgreedMatrix::of(
+    static function (string $host, int $port) use ($user, $password): array {
+        $matrix = [];
 
-    foreach (FolderNameRoundTrip::names() as $label => $name) {
-        $matrix[$label] = FolderNameRoundTrip::carry($name, $host, $port, $user, $password);
-    }
-
-    return $matrix;
-};
-
-$primary = $measure(
-    getenv('IMAP_POLYFILL_TEST_HOST') ?: '127.0.0.1',
-    (int) (getenv('IMAP_POLYFILL_TEST_PORT') ?: 13143),
-);
-$second = $measure(
-    getenv('IMAP_POLYFILL_DOVECOT_HOST') ?: '127.0.0.1',
-    (int) (getenv('IMAP_POLYFILL_DOVECOT_PORT') ?: 13144),
-);
-
-$matrix = [];
-$excluded = [];
-
-foreach ($primary as $label => $steps) {
-    foreach ($steps as $step => $outcome) {
-        if ($outcome === ($second[$label][$step] ?? null)) {
-            $matrix[$label][$step] = $outcome;
-
-            continue;
+        foreach (FolderNameRoundTrip::names() as $label => $name) {
+            $matrix[$label] = FolderNameRoundTrip::carry($name, $host, $port, $user, $password);
         }
 
-        $excluded[] = "{$step} for {$label}";
-    }
-}
+        return $matrix;
+    },
+    '%s for %s',
+);
 
-$omitted = $excluded === []
-    ? ' * The two servers agreed on every step.'
-    : " * Left out, because the two servers disagree and the answer is\n * therefore theirs rather than ext-imap's:\n *\n *   - ".implode("\n *   - ", $excluded);
+$omitted = AgreedMatrix::omissionNote($excluded);
 
 $header = <<<PHP
 <?php
@@ -74,8 +50,7 @@ $header = <<<PHP
  * GENERATED FILE — do not edit by hand.
  *
  * How the genuine ext-imap carries a folder name through create, list,
- * status, append, open, rename and delete. Only steps both fixtures
- * answer alike are kept.
+ * status, append, open, rename and delete.
  *
 {$omitted}
  *

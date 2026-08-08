@@ -108,7 +108,7 @@ final class UnhappyPaths
         imap_alerts();
 
         try {
-            $returned = self::describe(@$probe($connection));
+            $returned = FixtureExport::shape(@$probe($connection));
         } catch (\Throwable $e) {
             return ['throws' => $e::class, 'message' => $e->getMessage()];
         }
@@ -121,18 +121,6 @@ final class UnhappyPaths
      * or a status object carries the server's own wording and the folder's
      * generated name, neither of which is the point here.
      */
-    private static function describe(mixed $value): string
-    {
-        return match (true) {
-            is_bool($value) => $value ? 'true' : 'false',
-            is_int($value) => 'int:'.$value,
-            is_string($value) => $value === '' ? 'string:empty' : 'string:'.strlen($value).' bytes',
-            is_array($value) => 'array:'.count($value),
-            is_object($value) => 'object:'.$value::class,
-            $value === null => 'null',
-            default => get_debug_type($value),
-        };
-    }
 
     private static function spec(string $host, int $port): string
     {

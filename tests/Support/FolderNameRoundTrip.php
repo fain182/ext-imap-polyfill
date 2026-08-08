@@ -44,7 +44,11 @@ final class FolderNameRoundTrip
      */
     public static function carry(string $name, string $host, int $port, string $user, string $password): array
     {
-        $spec = static fn (string $folder = '') => sprintf('{%s:%d/imap/novalidate-cert}%s', $host, $port, $folder);
+        // The same flags GreenmailTestCase::flags() honours, so pointing
+        // the suite at a server with a real certificate does not fail
+        // here alone.
+        $flags = getenv('IMAP_POLYFILL_TEST_FLAGS') ?: '/imap/novalidate-cert';
+        $spec = static fn (string $folder = '') => sprintf('{%s:%d%s}%s', $host, $port, $flags, $folder);
         $encode = static fn (string $utf8): string => (string) mb_convert_encoding($utf8, 'UTF7-IMAP', 'UTF-8');
 
         $suffix = bin2hex(random_bytes(4));
@@ -56,46 +60,36 @@ final class FolderNameRoundTrip
 
         $steps = [];
 
-        $steps['create'] = self::describe(imap_createmailbox($connection, $spec($created)));
+        $steps['create'] = FixtureExport::shape(imap_createmailbox($connection, $spec($created)));
 
         // The name as the server hands it back: byte-identical to what was
         // asked for, or the caller cannot ask for it again.
         $listed = imap_list($connection, $spec(), '*') ?: [];
-        $steps['listed as given'] = self::describe(in_array($spec($created), $listed, true));
+        $steps['listed as given'] = FixtureExport::shape(in_array($spec($created), $listed, true));
 
         $mailboxes = imap_getmailboxes($connection, $spec(), '*') ?: [];
         $names = array_map(static fn (\stdClass $box): string => $box->name, $mailboxes);
-        $steps['getmailboxes as given'] = self::describe(in_array($spec($created), $names, true));
+        $steps['getmailboxes as given'] = FixtureExport::shape(in_array($spec($created), $names, true));
 
         $status = imap_status($connection, $spec($created), SA_MESSAGES);
-        $steps['status'] = self::describe($status !== false ? ($status->messages ?? null) : false);
+        $steps['status'] = FixtureExport::shape($status !== false ? ($status->messages ?? null) : false);
 
-        $steps['append'] = self::describe(
+        $steps['append'] = FixtureExport::shape(
             imap_append($connection, $spec($created), "Subject: Carried\r\nFrom: joe@example.com\r\n\r\nBody")
         );
 
         $opened = imap_open($spec($created), $user, $password);
-        $steps['open'] = self::describe($opened !== false);
-        $steps['num_msg'] = self::describe($opened !== false ? imap_num_msg($opened) : false);
+        $steps['open'] = FixtureExport::shape($opened !== false);
+        $steps['num_msg'] = FixtureExport::shape($opened !== false ? imap_num_msg($opened) : false);
 
-        $steps['rename'] = self::describe(imap_renamemailbox($connection, $spec($created), $spec($renamed)));
+        $steps['rename'] = FixtureExport::shape(imap_renamemailbox($connection, $spec($created), $spec($renamed)));
 
         $listed = imap_list($connection, $spec(), '*') ?: [];
-        $steps['listed under the new name'] = self::describe(in_array($spec($renamed), $listed, true));
+        $steps['listed under the new name'] = FixtureExport::shape(in_array($spec($renamed), $listed, true));
 
-        $steps['delete'] = self::describe(imap_deletemailbox($connection, $spec($renamed)));
+        $steps['delete'] = FixtureExport::shape(imap_deletemailbox($connection, $spec($renamed)));
 
         return $steps;
     }
 
-    private static function describe(mixed $value): string
-    {
-        return match (true) {
-            is_bool($value) => $value ? 'true' : 'false',
-            is_int($value) => 'int:'.$value,
-            is_string($value) => 'string:'.strlen($value).' bytes',
-            $value === null => 'null',
-            default => get_debug_type($value),
-        };
-    }
 }

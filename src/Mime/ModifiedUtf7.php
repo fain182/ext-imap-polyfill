@@ -30,38 +30,11 @@ final class ModifiedUtf7
      */
     public static function fromBytes(string $string): string
     {
-        $result = '';
-        $length = strlen($string);
-        $index = 0;
-
-        while ($index < $length) {
-            $char = $string[$index];
-
-            if (self::isPrintableAscii($char)) {
-                $result .= $char === '&' ? '&-' : $char;
-                ++$index;
-
-                continue;
-            }
-
-            $run = '';
-
-            while ($index < $length && !self::isPrintableAscii($string[$index])) {
-                $run .= $string[$index];
-                ++$index;
-            }
-
-            $result .= '&'.strtr(rtrim(base64_encode($run), '='), '/', ',').'-';
-        }
-
-        return $result;
-    }
-
-    private static function isPrintableAscii(string $char): bool
-    {
-        $code = ord($char);
-
-        return $code >= 0x20 && $code <= 0x7E;
+        return (string) preg_replace_callback(
+            '/[^\x20-\x7E]+/',
+            static fn (array $m): string => '&'.strtr(rtrim(base64_encode($m[0]), '='), '/', ',').'-',
+            str_replace('&', '&-', $string)
+        );
     }
 
     /**
@@ -89,11 +62,6 @@ final class ModifiedUtf7
     public static function toUtf8(string $string): string|false
     {
         return self::convert($string, 'UTF-8');
-    }
-
-    public static function toIso88591(string $string): string|false
-    {
-        return self::convert($string, 'ISO-8859-1');
     }
 
     private static function convert(string $string, string $to): string|false

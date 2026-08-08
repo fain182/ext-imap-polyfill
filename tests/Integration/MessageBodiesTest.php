@@ -28,9 +28,11 @@ final class MessageBodiesTest extends GreenmailTestCase
     {
         $matrix = require __DIR__.'/../fixtures/message-bodies.php';
 
+        $messages = MessageBodies::messages();
+
         $cases = [];
         foreach ($matrix as $label => $reads) {
-            $cases[$label] = [MessageBodies::messages()[$label], $reads];
+            $cases[$label] = [$messages[$label], $reads];
         }
 
         return $cases;
