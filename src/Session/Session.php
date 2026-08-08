@@ -43,7 +43,13 @@ final class Session
         try {
             $spec = MailboxSpec::parse($mailbox);
         } catch (\ValueError $e) {
-            ErrorStack::push($e->getMessage());
+            // OP_SILENT reaches mail_valid() as a null purpose string, and a
+            // null purpose is what suppresses the message. Only this one:
+            // the errors the driver logs once it is dialing are unaffected,
+            // and so is the false return.
+            if (!($flags & OP_SILENT)) {
+                ErrorStack::push($e->getMessage());
+            }
 
             return false;
         }
