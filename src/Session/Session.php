@@ -255,7 +255,7 @@ final class Session
             $deleted = 0;
             $size = 0;
             if ($exists > 0) {
-                $data = $this->connection->protocol()->fetch(
+                $data = $this->connection->backend()->fetch(
                     ['FLAGS', 'RFC822.SIZE'],
                     range(1, $exists),
                     null,
@@ -319,7 +319,7 @@ final class Session
         $this->connection->ensureOpen();
 
         try {
-            $this->connection->protocol()->noop();
+            $this->connection->backend()->noop();
         } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException) {
             // Reporting a dead stream is what this function is for, so
             // finding one is an answer rather than a failure: c-client

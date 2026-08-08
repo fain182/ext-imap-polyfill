@@ -112,8 +112,8 @@ final class MailboxHierarchy
     {
         try {
             return $subscribedOnly
-                ? $this->connection->protocol()->subscribedFolders($ref->bareReference, $pattern)
-                : $this->connection->protocol()->folders($ref->bareReference, $pattern);
+                ? $this->connection->backend()->subscribedFolders($ref->bareReference, $pattern)
+                : $this->connection->backend()->folders($ref->bareReference, $pattern);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -141,7 +141,7 @@ final class MailboxHierarchy
         $folderName = MailboxReference::parse($mailbox)->bareReference;
 
         try {
-            $status = $this->connection->protocol()->folderStatus($folderName, $items);
+            $status = $this->connection->backend()->folderStatus($folderName, $items);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -169,7 +169,7 @@ final class MailboxHierarchy
         $this->connection->ensureOpen();
 
         try {
-            return $this->connection->protocol()->getAcl($mailbox);
+            return $this->connection->backend()->getAcl($mailbox);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -182,7 +182,7 @@ final class MailboxHierarchy
         $this->connection->ensureOpen();
 
         try {
-            $this->connection->protocol()->setAcl($mailbox, $id, $rights);
+            $this->connection->backend()->setAcl($mailbox, $id, $rights);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -204,7 +204,7 @@ final class MailboxHierarchy
         $this->connection->ensureOpen();
 
         try {
-            $resources = $this->connection->protocol()->getQuota($quotaRoot);
+            $resources = $this->connection->backend()->getQuota($quotaRoot);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -222,7 +222,7 @@ final class MailboxHierarchy
         $this->connection->ensureOpen();
 
         try {
-            $resources = $this->connection->protocol()->getQuotaRoot($mailbox);
+            $resources = $this->connection->backend()->getQuotaRoot($mailbox);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -237,7 +237,7 @@ final class MailboxHierarchy
         $this->connection->ensureOpen();
 
         try {
-            $this->connection->protocol()->setQuota($quotaRoot, $mailboxSize);
+            $this->connection->backend()->setQuota($quotaRoot, $mailboxSize);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 

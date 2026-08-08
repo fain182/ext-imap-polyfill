@@ -284,12 +284,18 @@ final class Connection
     }
 
     /**
-     * Exposes the message/folder wire operations (search, fetch, store,
-     * folders, ...) of the current backend; named protocol() for historical
-     * reasons — it returns the whole ConnectionBackend, not just the subset
-     * that used to live on the (now-removed) Protocol-only accessor.
+     * The backend, for the wire operations nothing about this connection's
+     * state changes: search, fetch, store, the folder commands.
+     *
+     * The ones that *are* state-dependent have a method of their own here
+     * instead — check() and selectOrExamine() say nothing to a half-open
+     * connection — which is the whole of the split between the two routes
+     * to the wire. Reaching a named operation through this one bypasses
+     * that, and has: a raw fetch of BODYSTRUCTURE went out where
+     * fetchBodyStructure() was waiting, and POP3, which answers the named
+     * operation and not the raw item, quietly got nothing.
      */
-    public function protocol(): ConnectionBackend
+    public function backend(): ConnectionBackend
     {
         return $this->backend;
     }

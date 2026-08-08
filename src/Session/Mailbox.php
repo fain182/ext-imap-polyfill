@@ -45,7 +45,7 @@ final class Mailbox
         }
 
         try {
-            $ids = $this->connection->protocol()->search($tokens, $uidMode, $charset);
+            $ids = $this->connection->backend()->search($tokens, $uidMode, $charset);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -105,7 +105,7 @@ final class Mailbox
         }
 
         try {
-            $headers = $this->connection->protocol()->headers([$messageNum], 'RFC822', $uidMode);
+            $headers = $this->connection->backend()->headers([$messageNum], 'RFC822', $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -149,7 +149,7 @@ final class Mailbox
         }
 
         try {
-            $data = $this->connection->protocol()->fetch(
+            $data = $this->connection->backend()->fetch(
                 HeaderInfo::FETCH_ITEMS,
                 [$messageNum],
                 null,
@@ -210,7 +210,7 @@ final class Mailbox
                 return [];
             }
 
-            $protocol = $this->connection->protocol();
+            $protocol = $this->connection->backend();
             $data = $protocol->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -318,7 +318,7 @@ final class Mailbox
         }
 
         try {
-            $data = $this->connection->protocol()->fetch([$item], [$messageNum], null, $uidMode);
+            $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -350,7 +350,7 @@ final class Mailbox
         }
 
         try {
-            $data = $this->connection->protocol()->fetch([$item], [$messageNum], null, $uidMode);
+            $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -451,7 +451,7 @@ final class Mailbox
         }
 
         try {
-            $data = $this->connection->protocol()->fetch([$item], [$messageNum], null, $uidMode);
+            $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -494,14 +494,14 @@ final class Mailbox
             // Unlike APPEND and STATUS, c-client's COPY sends the mailbox
             // argument verbatim on the wire — a "{host}folder" spec is not
             // unwrapped and simply names a nonexistent folder server-side.
-            $this->connection->protocol()->copy($sequence, $folder, $uidMode);
+            $this->connection->backend()->copy($sequence, $folder, $uidMode);
 
             // c-client's CP_MOVE predates the IMAP MOVE extension: it marks
             // the source messages \Deleted after copying and leaves the
             // expunge to the caller.
             if ($options & CP_MOVE) {
                 $command = ($options & CP_UID) ? 'UID STORE' : 'STORE';
-                $this->connection->protocol()->store($command, [$sequence, '+FLAGS.SILENT', '(\\Deleted)']);
+                $this->connection->backend()->store($command, [$sequence, '+FLAGS.SILENT', '(\\Deleted)']);
             }
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -529,7 +529,7 @@ final class Mailbox
                 return false;
             }
 
-            $uids = $this->connection->protocol()->getUid();
+            $uids = $this->connection->backend()->getUid();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -552,7 +552,7 @@ final class Mailbox
         }
 
         try {
-            return (int) $this->connection->protocol()->getMessageNumber((string) $messageUid);
+            return (int) $this->connection->backend()->getMessageNumber((string) $messageUid);
         } catch (MessageNotFoundException) {
             return 0;
         } catch (\Throwable $e) {
@@ -575,7 +575,7 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $this->connection->protocol()->store($command, [$sequence, '+FLAGS.SILENT', $flagsAtom]);
+            $this->connection->backend()->store($command, [$sequence, '+FLAGS.SILENT', $flagsAtom]);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
         }
@@ -596,7 +596,7 @@ final class Mailbox
 
         try {
             $this->connection->selectOrExamine();
-            $this->connection->protocol()->store($command, [$sequence, '-FLAGS.SILENT', $flagsAtom]);
+            $this->connection->backend()->store($command, [$sequence, '-FLAGS.SILENT', $flagsAtom]);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
         }
@@ -652,7 +652,7 @@ final class Mailbox
             }
 
             $ids = range(1, $exists);
-            $data = $this->connection->protocol()->fetch(
+            $data = $this->connection->backend()->fetch(
                 HeaderInfo::FETCH_ITEMS,
                 $ids,
                 null,
@@ -709,8 +709,8 @@ final class Mailbox
             // the server has none or rejects the command (imap4r1.c
             // imap_sort). An absent search program is the empty SEARCHPGM,
             // which serializes to ALL.
-            if ($this->connection->protocol()->hasCapability('SORT')) {
-                $sorted = $this->connection->protocol()->sort(
+            if ($this->connection->backend()->hasCapability('SORT')) {
+                $sorted = $this->connection->backend()->sort(
                     ($reverse ? 'REVERSE ' : '').SortKey::wireName($criteria),
                     $charset ?? 'US-ASCII',
                     $searchCriteria !== null ? (preg_split('/\s+/', trim($searchCriteria)) ?: []) : ['ALL'],
@@ -731,7 +731,7 @@ final class Mailbox
 
             if ($searchCriteria !== null) {
                 $tokens = preg_split('/\s+/', trim($searchCriteria)) ?: [];
-                $ids = $this->connection->protocol()->search($tokens, UidMode::MSGNO);
+                $ids = $this->connection->backend()->search($tokens, UidMode::MSGNO);
 
                 if ($ids === []) {
                     return [];
@@ -740,7 +740,7 @@ final class Mailbox
                 $ids = range(1, $exists);
             }
 
-            $data = $this->connection->protocol()->fetch(
+            $data = $this->connection->backend()->fetch(
                 ['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
                 $ids,
                 null,
@@ -802,9 +802,9 @@ final class Mailbox
             // algorithm asked for, and only falls back to its own REFERENCES
             // implementation otherwise (imap4r1.c imap_thread). php_imap.c
             // always asks for REFERENCES over the whole mailbox ("ALL").
-            if ($this->connection->protocol()->hasCapability('THREAD=REFERENCES')) {
+            if ($this->connection->backend()->hasCapability('THREAD=REFERENCES')) {
                 $byUid = (bool) ($flags & SE_UID);
-                $groups = $this->connection->protocol()->thread(
+                $groups = $this->connection->backend()->thread(
                     'REFERENCES',
                     'US-ASCII',
                     ['ALL'],
@@ -819,7 +819,7 @@ final class Mailbox
             }
 
             $ids = range(1, $exists);
-            $data = $this->connection->protocol()->fetch(
+            $data = $this->connection->backend()->fetch(
                 ['UID', 'INTERNALDATE', 'RFC822.HEADER'],
                 $ids,
                 null,
