@@ -11,6 +11,7 @@ use ImapPolyfill\Message\HeaderInfo;
 use ImapPolyfill\Message\HeadersLine;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\Overview;
+use ImapPolyfill\Message\SortCriterion;
 use ImapPolyfill\Message\SortKey;
 use ImapPolyfill\Message\ThreadBuilder;
 use ImapPolyfill\Support\ErrorStack;
@@ -691,9 +692,8 @@ final class Mailbox
     {
         $this->connection->ensureOpen();
 
-        if (!in_array($criteria, [SORTDATE, SORTARRIVAL, SORTFROM, SORTSUBJECT, SORTTO, SORTCC, SORTSIZE], true)) {
-            throw new \ValueError('imap_sort(): Argument #2 ($criteria) must be one of the SORT* constants');
-        }
+        $criterion = SortCriterion::tryFromConstant($criteria)
+            ?? throw new \ValueError('imap_sort(): Argument #2 ($criteria) must be one of the SORT* constants');
 
         if ($flags && ($flags & ~(SE_UID | SE_NOPREFETCH)) !== 0) {
             throw new \ValueError('imap_sort(): Argument #4 ($flags) must be a bitmask of SE_UID, and SE_NOPREFETCH');
@@ -710,7 +710,7 @@ final class Mailbox
             // which serializes to ALL.
             if ($this->connection->backend()->hasCapability('SORT')) {
                 $sorted = $this->connection->backend()->sort(
-                    ($reverse ? 'REVERSE ' : '').SortKey::wireName($criteria),
+                    ($reverse ? 'REVERSE ' : '').SortKey::wireName($criterion),
                     $charset ?? 'US-ASCII',
                     $searchCriteria !== null ? (preg_split('/\s+/', trim($searchCriteria)) ?: []) : ['ALL'],
                     ($flags & SE_UID) ? UidMode::UID : UidMode::MSGNO,
@@ -764,7 +764,7 @@ final class Mailbox
             $entries[] = [
                 'msgno' => $msgno,
                 'uid' => (int) $message['UID'],
-                'key' => SortKey::resolve($criteria, $message, $host),
+                'key' => SortKey::resolve($criterion, $message, $host),
             ];
         }
 

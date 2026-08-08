@@ -15,36 +15,35 @@ final class SortKey
     /**
      * @param array<string, mixed> $message RFC822.HEADER/INTERNALDATE/RFC822.SIZE keyed wire fetch data
      */
-    public static function resolve(int $criteria, array $message, string $defaultHost): int|string
+    public static function resolve(SortCriterion $criteria, array $message, string $defaultHost): int|string
     {
         $fields = RawHeaderFields::parse($message['RFC822.HEADER']);
 
         return match ($criteria) {
-            SORTDATE => strtotime($fields['date'] ?? '') ?: 0,
-            SORTARRIVAL => strtotime($message['INTERNALDATE']) ?: 0,
-            SORTSIZE => (int) $message['RFC822.SIZE'],
-            SORTFROM => self::mailboxKey($fields['from'] ?? null, $defaultHost),
-            SORTTO => self::mailboxKey($fields['to'] ?? null, $defaultHost),
-            SORTCC => self::mailboxKey($fields['cc'] ?? null, $defaultHost),
-            SORTSUBJECT => BaseSubject::of($fields['subject'] ?? ''),
-            default => 0,
+            SortCriterion::Date => strtotime($fields['date'] ?? '') ?: 0,
+            SortCriterion::Arrival => strtotime($message['INTERNALDATE']) ?: 0,
+            SortCriterion::Size => (int) $message['RFC822.SIZE'],
+            SortCriterion::From => self::mailboxKey($fields['from'] ?? null, $defaultHost),
+            SortCriterion::To => self::mailboxKey($fields['to'] ?? null, $defaultHost),
+            SortCriterion::Cc => self::mailboxKey($fields['cc'] ?? null, $defaultHost),
+            SortCriterion::Subject => BaseSubject::of($fields['subject'] ?? ''),
         };
     }
 
     /**
-     * The RFC 5256 sort-key name a SORT* criterion becomes on the wire, for
-     * servers that advertise the SORT capability.
+     * The RFC 5256 sort-key name a criterion becomes on the wire, for servers
+     * that advertise the SORT capability.
      */
-    public static function wireName(int $criteria): string
+    public static function wireName(SortCriterion $criteria): string
     {
         return match ($criteria) {
-            SORTARRIVAL => 'ARRIVAL',
-            SORTSIZE => 'SIZE',
-            SORTFROM => 'FROM',
-            SORTTO => 'TO',
-            SORTCC => 'CC',
-            SORTSUBJECT => 'SUBJECT',
-            default => 'DATE',
+            SortCriterion::Date => 'DATE',
+            SortCriterion::Arrival => 'ARRIVAL',
+            SortCriterion::Size => 'SIZE',
+            SortCriterion::From => 'FROM',
+            SortCriterion::To => 'TO',
+            SortCriterion::Cc => 'CC',
+            SortCriterion::Subject => 'SUBJECT',
         };
     }
 
