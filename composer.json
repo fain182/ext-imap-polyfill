@@ -12,7 +12,8 @@
     ],
     "require": {
         "php": "^8.1",
-        "directorytree/imapengine": "^1.25"
+        "directorytree/imapengine": "^1.25",
+        "illuminate/collections": ">=9.5"
     },
     "require-dev": {
         "phpstan/phpstan": "^2.2",

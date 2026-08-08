@@ -15,6 +15,8 @@ Docker or Podman is required from `test-integration` onwards; `docker-compose.ym
 
 `make install-lowest` exists because `composer.lock` is committed: every other command installs that one pinned set, so nothing would otherwise test the *bottom* of a constraint. It rewrites the lock to the oldest releases allowed — imapengine 1.25.0 rather than 1.25.4 — and the test targets pick those up, which is how CI checks that `^1.25` means what it claims. It is the one command here that leaves the tree dirty: `git checkout composer.lock && make install` puts it back.
 
+It earned its keep immediately, which is also why `illuminate/collections` sits in `require` despite no code here calling it. ImapEngine asks for `>=9.0`, but its `status()` passes a closure to `Collection::firstWhere()`, and the callable branch only landed in 9.5.0 — before that the closure is read as a data key, nothing matches, and `imap_status()` quietly returns `false` for every folder. The floor is ours to declare: our `composer.json` is what decides which versions a user's install may pick.
+
 ## The two fixtures
 
 Almost every test runs against **Greenmail** (IMAP on 127.0.0.1:13143, POP3 on 13110, plus imaps and pop3s). A second **Dovecot** fixture (IMAP on 13144, POP3 on 13111) exists for the two commands Greenmail answers `BAD Invalid command` to — THREAD and ACL — and doubles as the second server for `make cross-check`. Its config lives in `tests/fixtures/dovecot.conf`; note the image is rootless, so inside the container it listens on 31143, not 143.
