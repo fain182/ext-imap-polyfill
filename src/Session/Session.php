@@ -5,6 +5,7 @@ namespace ImapPolyfill\Session;
 use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Mailbox\MailboxSpec;
+use ImapPolyfill\Mailbox\Service;
 use ImapPolyfill\Support\ErrorStack;
 use ImapPolyfill\Support\Timeouts;
 
@@ -48,11 +49,11 @@ final class Session
 
         // Refused rather than quietly opened over IMAP, which is what
         // happened before and is worse than any error.
-        if ($spec->hasFlag('nntp')) {
+        if ($spec->service === Service::Nntp) {
             throw \ImapPolyfill\Support\UnsupportedFeature::nntp($mailbox);
         }
 
-        $isPop3 = $spec->hasFlag('pop3');
+        $isPop3 = $spec->service === Service::Pop3;
         $backend = $isPop3
             ? self::connectPop3($spec, $mailbox, $user, $password, $retries)
             : self::connectImap($spec, $user, $password, $retries);
@@ -63,12 +64,12 @@ final class Session
 
         // c-client treats a /readonly flag in the spec the same as passing
         // OP_READONLY (mail_valid_net_parse sets the stream read-only bit).
-        $readOnly = (bool) ($flags & OP_READONLY) || $spec->hasFlag('readonly');
-        $secure = $spec->hasFlag('secure') || (bool) ($flags & OP_SECURE);
+        $readOnly = (bool) ($flags & OP_READONLY) || $spec->switches->readOnly;
+        $secure = $spec->switches->secure || (bool) ($flags & OP_SECURE);
         $connection = new \IMAP\Connection(
             $backend,
             $spec->folder,
-            $spec->normalizedPrefixBase($isPop3 ? 'pop3' : 'imap', $secure),
+            $spec->normalizedPrefixBase($secure, $spec->switches->tls),
             $user,
             $readOnly,
             $password,
@@ -102,7 +103,7 @@ final class Session
             try {
                 $connection->connect($spec->host, $spec->port, [
                     'encryption' => $spec->encryption(),
-                    'validate_cert' => !$spec->hasFlag('novalidate-cert'),
+                    'validate_cert' => !$spec->switches->novalidate,
                     'timeout' => Timeouts::seconds(IMAP_OPENTIMEOUT),
                 ]);
                 $connection->login($user, $password);
@@ -133,7 +134,7 @@ final class Session
                     $spec->host,
                     $spec->port,
                     $spec->encryption(),
-                    !$spec->hasFlag('novalidate-cert'),
+                    !$spec->switches->novalidate,
                     (float) Timeouts::seconds(IMAP_OPENTIMEOUT),
                     (float) Timeouts::seconds(IMAP_READTIMEOUT),
                 );
@@ -361,18 +362,17 @@ final class Session
         }
 
         // Like imap_open(): a /readonly flag in the spec counts as OP_READONLY.
-        $readOnly = (bool) ($flags & OP_READONLY) || $spec->hasFlag('readonly');
-        $isPop3 = $spec->hasFlag('pop3');
+        $readOnly = (bool) ($flags & OP_READONLY) || $spec->switches->readOnly;
+        $isPop3 = $spec->service === Service::Pop3;
 
-        if ($spec->hasFlag('nntp')) {
+        if ($spec->service === Service::Nntp) {
             throw \ImapPolyfill\Support\UnsupportedFeature::nntp($mailbox);
         }
 
         // Naming another server reopens against it, the way c-client's
         // mail_open() does on an existing stream; the credentials come from
         // the ones imap_open() kept, as php_imap.c answers mm_login() with.
-        $secure = $spec->hasFlag('secure');
-        $prefix = $spec->normalizedPrefixBase($isPop3 ? 'pop3' : 'imap', $secure);
+        $prefix = $spec->normalizedPrefixBase($spec->switches->secure, $spec->switches->tls);
 
         if ($prefix !== $this->connection->mailboxPrefix()) {
             $status = $this->redial($spec, $mailbox, $isPop3, $prefix, $readOnly, $retries);

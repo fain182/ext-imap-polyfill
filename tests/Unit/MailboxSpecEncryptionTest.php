@@ -29,12 +29,22 @@ class MailboxSpecEncryptionTest extends TestCase
     }
 
     /**
-     * c-client checks /ssl first, so a spec carrying both connects
-     * encrypted from the start rather than negotiating.
+     * Neither one wins: /ssl records that TLS is already up, which is what
+     * /tls asks to start, and c-client answers a spec asking for both with
+     * the same refusal it gives a misspelled switch. Either order.
      */
-    public function test_ssl_wins_over_tls(): void
+    public function test_ssl_and_tls_together_are_refused(): void
     {
-        $this->assertSame('ssl', MailboxSpec::parse('{imap.example.com:993/imap/ssl/tls}INBOX')->encryption());
+        $this->expectException(\ValueError::class);
+
+        MailboxSpec::parse('{imap.example.com:993/imap/ssl/tls}INBOX');
+    }
+
+    public function test_tls_and_ssl_together_are_refused(): void
+    {
+        $this->expectException(\ValueError::class);
+
+        MailboxSpec::parse('{imap.example.com:993/imap/tls/ssl}INBOX');
     }
 
     public function test_the_flag_is_read_the_same_way_for_pop3(): void
