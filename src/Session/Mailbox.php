@@ -292,6 +292,31 @@ final class Mailbox
             return false;
         }
 
+        // A numbered section may not be there at all, and c-client answers
+        // that from the structure rather than from the server: asking for
+        // part 2 of a message that has one part is an empty string, not
+        // the body over again. It has to be settled before the body is
+        // asked for, not after — a server that cannot read the message at
+        // all still owes the same empty string, and one of the fixtures
+        // refuses the FETCH outright when the charset means nothing to it.
+        // $wireSection, not $section: "0" was already turned into HEADER
+        // above and is not a part number at all.
+        if (preg_match('/^\d+(?:\.\d+)*$/', $wireSection) === 1) {
+            try {
+                $structures = $this->connection->protocol()->fetch(['BODYSTRUCTURE'], [$messageNum], null, $uidMode);
+            } catch (\Throwable $e) {
+                ErrorStack::push($e->getMessage());
+
+                return false;
+            }
+
+            $structure = $structures[$messageNum] ?? reset($structures);
+
+            if (is_array($structure) && !in_array($section, self::sectionPaths($structure), true)) {
+                return '';
+            }
+        }
+
         try {
             $data = $this->connection->protocol()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
@@ -301,6 +326,39 @@ final class Mailbox
         }
 
         return $data[$messageNum] ?? reset($data);
+    }
+
+    /**
+     * Every section number a structure actually has. A multipart opens
+     * with its parts, one nested list each; anything else is a single part
+     * and answers to "1" alone.
+     *
+     * @param array<int|string, mixed> $structure
+     *
+     * @return list<string>
+     */
+    private static function sectionPaths(array $structure, string $prefix = ''): array
+    {
+        if (!is_array($structure[0] ?? null)) {
+            return $prefix === '' ? ['1'] : [];
+        }
+
+        $paths = [];
+
+        foreach ($structure as $index => $part) {
+            if (!is_array($part)) {
+                break;
+            }
+
+            $path = ($prefix === '' ? '' : $prefix.'.').((int) $index + 1);
+            $paths[] = $path;
+
+            foreach (self::sectionPaths($part, $path) as $nested) {
+                $paths[] = $nested;
+            }
+        }
+
+        return $paths;
     }
 
     public function fetchMime(int $messageNum, string $section, int $flags): string|false
