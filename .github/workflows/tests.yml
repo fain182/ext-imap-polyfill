@@ -14,7 +14,7 @@ jobs:
       matrix:
         php: ['8.1', '8.2', '8.3', '8.4', '8.5']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The runner's base PHP install can have ext-imap already enabled as a
       # shared extension. This "test" job exists to exercise the polyfill
@@ -48,7 +48,7 @@ jobs:
     name: "Oldest allowed dependencies (PHP 8.1)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up PHP 8.1
         uses: shivammathur/setup-php@v2
@@ -73,7 +73,7 @@ jobs:
     name: "PHPStan"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -92,6 +92,6 @@ jobs:
     name: "Parity vs real ext-imap (PHP 8.3)"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Run parity suite
         run: make parity
