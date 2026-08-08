@@ -91,6 +91,17 @@ final class Protocol
             }
         }
 
+        // An untagged EXISTS is required of a SELECT/EXAMINE response by both
+        // IMAP4rev1 and IMAP4rev2, so its absence is a parse that went wrong,
+        // not a server being terse. Every caller reads the count as
+        // `$status['exists'] ?? 0`, and a mailbox reporting zero messages
+        // reads as a working polyfill on an empty folder rather than as a
+        // failure. RECENT gets no such check: IMAP4rev2 deprecated \Recent,
+        // and a server that omits it is within its rights.
+        if (!isset($result['exists'])) {
+            throw new \RuntimeException('no EXISTS in '.($readOnly ? 'EXAMINE' : 'SELECT').' response');
+        }
+
         $this->selectedFolder = $folder;
         $this->selectedReadOnly = $readOnly;
         $this->selectedFlags = $result['flags'] ?? [];
@@ -98,7 +109,7 @@ final class Protocol
         // A real SELECT is the one moment the uid table can be trusted to
         // describe these messages; from here the count tracked on the
         // connection decides when it stops.
-        $fingerprint = sprintf('%s/%d/%d', $folder, $result['uidvalidity'] ?? 0, $result['exists'] ?? 0);
+        $fingerprint = sprintf('%s/%d/%d', $folder, $result['uidvalidity'] ?? 0, $result['exists']);
         if ($fingerprint !== $this->uidTableFor) {
             $this->uidTable = null;
             $this->uidTableFor = $fingerprint;
