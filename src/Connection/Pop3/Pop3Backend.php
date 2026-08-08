@@ -211,7 +211,15 @@ final class Pop3Backend implements ConnectionBackend
             $item === 'RFC822.HEADER' => $message->getRawHeader()."\r\n",
             $item === 'UID' => $this->uidByMsgno[$msgno] ?? '',
             str_starts_with($item, 'BODY.PEEK[') || str_starts_with($item, 'BODY[') => $this->fetchSection($item, $message),
-            default => '',
+            // Not a condition a caller can be in: every item the polyfill
+            // asks for has an arm above. Answering '' for the rest would
+            // make a new one look answered — which is how a raw
+            // BODYSTRUCTURE fetch went out and came back empty here while
+            // fetchBodyStructure(), which POP3 does implement, sat unused.
+            default => throw new \LogicException(
+                "Pop3Backend was asked for the FETCH item {$item}, which it does not answer. "
+                .'Reach it through the named operation on IMAP\Connection instead.'
+            ),
         };
     }
 
