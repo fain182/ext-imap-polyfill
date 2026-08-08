@@ -222,4 +222,31 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
         imap_close($connection);
     }
+
+    public function test_status_answers_from_the_message_count(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Status Me\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $status = imap_status($connection, self::pop3MailboxSpec(), SA_ALL);
+
+        $this->assertNotFalse($status);
+        $this->assertSame(SA_ALL, $status->flags);
+        $this->assertSame($count, $status->messages);
+
+        // POP3 carries no flags of its own, so every message a session finds
+        // is new to it and none of them is read.
+        $this->assertSame($count, $status->recent);
+        $this->assertSame($count, $status->unseen);
+
+        $this->assertSame($count + 1, $status->uidnext);
+
+        // The value is invented by the driver rather than reported by the
+        // server, so only its presence is the contract.
+        $this->assertIsInt($status->uidvalidity);
+
+        imap_close($connection);
+    }
 }
