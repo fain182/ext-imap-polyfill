@@ -182,28 +182,6 @@ final class Rfc822Cursor
         // trailing one, and cannot stand in as a personal name.
         $this->lastComment = null;
 
-        if ($this->source[$this->position] === '"') {
-            ++$this->position;
-
-            while ($this->position < $length) {
-                $char = $this->source[$this->position];
-
-                if ($char === '\\') {
-                    $this->position += 2;
-
-                    continue;
-                }
-
-                ++$this->position;
-
-                if ($char === '"') {
-                    return $this->position;
-                }
-            }
-
-            return null;
-        }
-
         $start = $this->position;
 
         while ($this->position < $length) {
@@ -215,6 +193,29 @@ final class Rfc822Cursor
             // parses it anyway.
             if ($char === '\\' && $this->position + 1 < $length) {
                 $this->position += 2;
+
+                continue;
+            }
+
+            // A quoted string is part of the word rather than the whole of
+            // it: rfc822_parse_word() resumes its scan after the closing
+            // quote, so `"a"b` is one word and a quote that never closes
+            // leaves no word at all.
+            if ($char === '"') {
+                ++$this->position;
+
+                while (true) {
+                    if ($this->position >= $length) {
+                        return null;
+                    }
+
+                    $quoted = $this->source[$this->position];
+                    $this->position += $quoted === '\\' ? 2 : 1;
+
+                    if ($quoted === '"') {
+                        break;
+                    }
+                }
 
                 continue;
             }
