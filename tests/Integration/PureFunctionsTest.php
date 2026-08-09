@@ -262,6 +262,21 @@ final class PureFunctionsTest extends TestCase
             // The standalone function used to quote on a comma alone, so a
             // double quote came through unescaped and broke the header.
             'personal holding a quote' => ['m', 'h', 'a"b', '"a\\"b" <m@h>'],
+            // A mailbox and a host go by rfc822_output_cat()'s rule, not the
+            // personal name's: a dot is ordinary in the middle and forces
+            // quoting at either end or doubled, and a space always does.
+            'host with a dot at each end' => ['a', '.SYNTAX-ERROR.', '', 'a@".SYNTAX-ERROR."'],
+            'host with two dots running' => ['a', 'x..y', '', 'a@"x..y"'],
+            'dotted mailbox is left alone' => ['a.b', 'h', '', 'a.b@h'],
+            'space in the host' => ['a', 'h b', '', 'a@"h b"'],
+            'space in the mailbox' => ['a b', 'h', '', '"a b"@h'],
+            // The empty string is written as a pair of quotes rather than as
+            // nothing at all, which would read as a different address.
+            'empty mailbox' => ['', 'h', '', '""@h'],
+            'empty host' => ['a', '', '', 'a@""'],
+            // "A null host (HIGHLY discouraged!)": c-client writes the
+            // mailbox and stops.
+            'host that is a route' => ['a', '@x', '', 'a'],
         ];
     }
 
