@@ -38,7 +38,10 @@ final class AddressList
         $groupClosed = false;
 
         foreach (self::tokenize($addresses) as [$part, $delimiter, $delimiterAt]) {
-            $part = trim($part);
+            // Only the leading whitespace goes: what trails an address is
+            // quoted back to the user when the parse fails, and c-client
+            // quotes it as it was written.
+            $part = ltrim($part);
 
             // Whitespace where the last comma promised an address. c-client
             // consumes the comma but does not skip what follows it before
@@ -176,10 +179,10 @@ final class AddressList
         for ($index = 0; $index < $length; ++$index) {
             $char = $addresses[$index];
 
-            // Inside a quoted string a backslash escapes what follows, so an
-            // escaped quote does not close the string and the delimiters it
-            // hides stay hidden. Unescaping is Address::parse's job.
-            if ($inQuotes && $char === '\\' && $index + 1 < $length) {
+            // A backslash escapes what follows it wherever it stands, so an
+            // escaped quote does not close a string and an escaped comma
+            // separates nothing. Unescaping is Address::parse's job.
+            if ($char === '\\' && $index + 1 < $length) {
                 $current .= $char.$addresses[++$index];
 
                 continue;
