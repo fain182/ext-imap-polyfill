@@ -89,6 +89,58 @@ class ImapBodystructTest extends GreenmailTestCase
         $this->assertSame('HTML', $htmlAlt->subtype);
     }
 
+    /**
+     * The parts of an embedded message/rfc822 are numbered as if the
+     * enclosed message were the body part itself: "2.1" is the first part
+     * *inside* the attached message, not the attached message over again.
+     */
+    public function test_returns_structure_of_a_part_inside_an_embedded_message(): void
+    {
+        $folderName = 'BodystructBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $message = "Subject: Carrier\r\n"
+            ."MIME-Version: 1.0\r\n"
+            ."Content-Type: multipart/mixed; boundary=\"B1\"\r\n"
+            ."\r\n"
+            ."--B1\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."Covering note\r\n"
+            ."--B1\r\n"
+            ."Content-Type: message/rfc822\r\n"
+            ."Content-Disposition: attachment; filename=\"forwarded.eml\"\r\n"
+            ."\r\n"
+            ."Subject: Forwarded\r\n"
+            ."MIME-Version: 1.0\r\n"
+            ."Content-Type: multipart/mixed; boundary=\"B2\"\r\n"
+            ."\r\n"
+            ."--B2\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."Enclosed text\r\n"
+            ."--B2\r\n"
+            ."Content-Type: text/html\r\n"
+            ."\r\n"
+            ."<b>Enclosed html</b>\r\n"
+            ."--B2--\r\n"
+            ."--B1--\r\n";
+        $seedClient->getFolder($folderName)->appendMessage($message);
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $embedded = imap_bodystruct($connection, 1, '2');
+        $enclosedText = imap_bodystruct($connection, 1, '2.1');
+        $enclosedAttachment = imap_bodystruct($connection, 1, '2.2');
+
+        $this->assertSame(2, $embedded->type); // TYPEMESSAGE
+        $this->assertSame('RFC822', $embedded->subtype);
+        $this->assertSame(0, $enclosedText->type); // TYPETEXT
+        $this->assertSame('PLAIN', $enclosedText->subtype);
+        $this->assertSame(0, $enclosedAttachment->type); // TYPETEXT
+        $this->assertSame('HTML', $enclosedAttachment->subtype);
+        $this->assertFalse(imap_bodystruct($connection, 1, '2.3'));
+    }
+
     public function test_matches_the_corresponding_part_of_fetchstructure(): void
     {
         $folderName = 'BodystructBox'.uniqid();

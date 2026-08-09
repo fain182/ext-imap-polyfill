@@ -78,11 +78,9 @@ final class BodyStructure
                 return null;
             }
 
-            return self::descend($children[$index - 1], $segments);
-        }
-
-        // Singlepart: index 1 names the part itself; anything else is invalid.
-        if ($index !== 1) {
+            $node = $children[$index - 1];
+        } elseif ($index !== 1) {
+            // Singlepart: index 1 names the part itself; anything else is invalid.
             return null;
         }
 
@@ -90,9 +88,16 @@ final class BodyStructure
             return $node;
         }
 
+        if (is_array($node[0])) {
+            return self::descend($node, $segments);
+        }
+
         // Only a message/rfc822 part carries a further nested body to
-        // navigate into; layout is [type, subtype, params, id, description,
-        // encoding, size, envelope, body, ...].
+        // navigate into, and its parts are numbered as if the enclosed
+        // message were the body part itself (RFC 3501 §6.4.5): the next
+        // segment indexes the enclosed body, with no segment of its own for
+        // the step inwards. Layout is [type, subtype, params, id,
+        // description, encoding, size, envelope, body, ...].
         $type = strtolower((string) $node[0]);
         $subtype = strtolower((string) ($node[1] ?? ''));
         if ($type !== 'message' || $subtype !== 'rfc822' || !is_array($node[8] ?? null)) {
