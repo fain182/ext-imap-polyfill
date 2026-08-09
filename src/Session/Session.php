@@ -456,7 +456,7 @@ final class Session
         }
 
         try {
-            $status = $this->connection->selectOrExamineFolder($spec->folder, $readOnly);
+            $status = $this->connection->reselectFolder($spec->folder, $readOnly);
         } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException) {
             // Losing the socket is not losing the connection: c-client
             // dials the host again and logs back in rather than reporting

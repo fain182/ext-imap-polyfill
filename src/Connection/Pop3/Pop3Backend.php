@@ -63,6 +63,15 @@ final class Pop3Backend implements ConnectionBackend
         return $this->protocol->upgradedToTls();
     }
 
+    /**
+     * POP3 has one mailbox and no SELECT, so there is no cached selection
+     * to bypass: re-opening it is opening it.
+     */
+    public function reselectFolder(string $folder, bool $readOnly): FolderState
+    {
+        return $this->selectOrExamineFolder($folder, $readOnly);
+    }
+
     public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState
     {
         if ($readOnly) {

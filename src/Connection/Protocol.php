@@ -35,6 +35,19 @@ final class Protocol
     {
     }
 
+    /**
+     * Selects the folder again whatever is already selected, which is what
+     * imap_reopen() does even when it names the folder already open:
+     * c-client sends the second SELECT (seen on the wire), and the server
+     * clears \Recent for the session as RFC 3501 says a SELECT does.
+     */
+    public function reselect(string $folder, bool $readOnly): FolderState
+    {
+        $this->selectedFolder = null;
+
+        return $this->selectOrExamine($folder, $readOnly);
+    }
+
     public function selectOrExamine(string $folder, bool $readOnly): FolderState
     {
         // c-client selects a mailbox once and keeps it: the counts it reports

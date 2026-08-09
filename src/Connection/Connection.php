@@ -263,6 +263,20 @@ final class Connection
     }
 
     /**
+     * As above, but the selection is made again rather than answered from
+     * what is already selected — imap_reopen()'s, where the second SELECT
+     * is itself the point.
+     */
+    public function reselectFolder(string $folder, bool $readOnly): FolderState
+    {
+        $state = $this->backend->reselectFolder($folder, $readOnly);
+
+        $this->registerUserFlags($state->flags);
+
+        return $state;
+    }
+
+    /**
      * @param string[] $flags system flags are ignored, keywords registered
      */
     public function registerUserFlags(array $flags): void

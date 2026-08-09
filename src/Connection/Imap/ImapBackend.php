@@ -30,6 +30,11 @@ final class ImapBackend implements ConnectionBackend
         return $this->protocol->selectOrExamine($folder, $readOnly);
     }
 
+    public function reselectFolder(string $folder, bool $readOnly): FolderState
+    {
+        return $this->protocol->reselect($folder, $readOnly);
+    }
+
     public function host(): string
     {
         return $this->host;

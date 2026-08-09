@@ -18,6 +18,13 @@ interface ConnectionBackend
 
     public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState;
 
+    /**
+     * The same selection, made again rather than remembered. Only
+     * imap_reopen() asks for this: everything else is happy with whatever
+     * is already selected.
+     */
+    public function reselectFolder(string $folder, bool $readOnly): FolderState;
+
     public function host(): string;
 
     /**
