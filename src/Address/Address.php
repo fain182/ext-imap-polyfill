@@ -98,9 +98,11 @@ final class Address
 
         $cursor->skipWhitespaceAndComments();
 
-        // "joe@example.com (Joe Doe)" — RFC 822's other way of writing a name.
-        if (!$angleAddress) {
-            $personal ??= $cursor->lastComment();
+        // "joe@example.com (Joe Doe)" — RFC 822's other way of writing a
+        // name. An empty comment is not one: rfc822_parse_addrspec() asks
+        // for strlen() before it takes the comment as a personal name.
+        if (!$angleAddress && $personal === null && ($comment = $cursor->lastComment()) !== null && $comment !== '') {
+            $personal = $comment;
         }
 
         $trailingData = $cursor->atEnd() ? null : $cursor->rest();
