@@ -265,6 +265,33 @@ class ImapHeaderinfoTest extends GreenmailTestCase
     }
 
     /**
+     * The envelope behind imap_headerinfo() is parsed by the same
+     * rfc822_parse_msg_full() as imap_rfc822_parse_headers(), whose header
+     * dispatch has no Return-Path arm — so a message carrying that header
+     * gets no return_path property here either, and the two the polyfill
+     * used to add sat in the middle of an order that is observable.
+     */
+    public function test_a_return_path_header_sets_no_property(): void
+    {
+        $folderName = 'HeaderinfoReturnPathBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage(
+            "Return-Path: <bounce@example.com>\r\n"
+            ."From: joe@example.com\r\n"
+            ."To: jane@example.com\r\n"
+            ."Subject: Bounced\r\n"
+            ."\r\n"
+            ."Body"
+        );
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $properties = array_keys(get_object_vars(imap_headerinfo($connection, 1)));
+
+        $this->assertNotContains('return_path', $properties);
+        $this->assertNotContains('return_pathaddress', $properties);
+    }
+
+    /**
      * c-client answers a message number past the end of the folder from the
      * count it already holds: a warning, false, and nothing said to the
      * server or left on the error stack.

@@ -6,7 +6,16 @@ use ImapPolyfill\Address\AddressList;
 
 final class HeaderInfo
 {
-    /** In the order php_imap.c writes them into the envelope object. */
+    /**
+     * In the order php_imap.c writes them into the envelope object.
+     *
+     * Return-Path is deliberately not one of them: _php_make_header_object()
+     * would write the property, but rfc822_parse_msg_full()'s header dispatch
+     * has no case for that header — its 'R' arm knows Reply-To and References
+     * and nothing else — so env->return_path is left NIL for anything parsed
+     * out of header text. The only place c-client ever fills it is an envelope
+     * built by imap_mail_compose(), which is not this one.
+     */
     private const ADDRESS_HEADERS = [
         'to' => 'to',
         'from' => 'from',
@@ -14,7 +23,6 @@ final class HeaderInfo
         'bcc' => 'bcc',
         'reply-to' => 'reply_to',
         'sender' => 'sender',
-        'return-path' => 'return_path',
     ];
 
     /**

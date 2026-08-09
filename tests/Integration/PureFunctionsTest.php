@@ -170,6 +170,23 @@ final class PureFunctionsTest extends TestCase
         );
     }
 
+    /**
+     * Return-Path is not one of the headers rfc822_parse_msg_full() knows:
+     * its dispatch on "R" reads Reply-To and References and stops there, so
+     * env->return_path stays NIL no matter what the header says. The property
+     * exists in the extension, but only imap_mail_compose() ever fills the
+     * field behind it.
+     */
+    public function test_a_return_path_header_sets_no_property(): void
+    {
+        $properties = array_keys(get_object_vars(imap_rfc822_parse_headers(
+            "Return-Path: <bounce@x.com>\r\nFrom: a@b.com\r\nSubject: Ciao\r\n\r\n"
+        )));
+
+        $this->assertNotContains('return_path', $properties);
+        $this->assertNotContains('return_pathaddress', $properties);
+    }
+
     public function test_qprint_reports_a_bad_sequence_without_refusing_the_text(): void
     {
         $this->assertSame('a=ZZb', imap_qprint('a=ZZb'));
