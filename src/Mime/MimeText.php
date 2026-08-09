@@ -197,74 +197,100 @@ final class MimeText
      */
     public static function decodeSegments(string $text): array|false
     {
-        // c-client accepts any single character as the encoding and only
-        // acts on B and Q; anything else leaves the data untouched but still
-        // produces a segment carrying the charset.
-        //
-        // The charset may hold a space here, where decode() — imap_utf8()'s
-        // side — will not touch such a word at all. The two functions really
-        // do differ on this in the real extension.
-        $pattern = '/=\?(?P<charset>[^?]+)\?(?P<encoding>[^?])\?(?P<data>[^?]*)\?=/';
-
         $segments = [];
-        $cursor = 0;
+        $offset = 0;
+        $length = strlen($text);
 
-        if (preg_match_all($pattern, $text, $matches, PREG_OFFSET_CAPTURE)) {
-            foreach ($matches[0] as $index => [$fullMatch, $offset]) {
-                if ($offset > $cursor) {
-                    $gap = substr($text, $cursor, $offset - $cursor);
+        // php_imap.c scans for the three separators in turn rather than
+        // matching a shape, and where it looks for each of them is what
+        // decides the parts. The encoding is whatever single byte follows
+        // the second "?", and the text begins three past it whether or not
+        // anything else stood in between — so "=?UTF-8?\B?Y?=" is a word
+        // encoded with "\", whose text is "?Y".
+        while ($offset < $length) {
+            $start = strpos($text, '=?', $offset);
 
-                    // Whitespace between two encoded words is folding, not
-                    // content (RFC 2047 6.2), and belongs to neither. Only
-                    // there: the spaces bordering ordinary text survive, and
-                    // so does a leading or a trailing run.
-                    if ($index === 0 || trim($gap, " \t\r\n") !== '') {
-                        $segments[] = self::segment('default', $gap);
-                    }
+            if ($start !== false) {
+                if ($start !== $offset) {
+                    $segments[] = self::segment('default', substr($text, $offset, $start - $offset));
                 }
 
-                $charset = $matches['charset'][$index][0];
-                $encoding = $matches['encoding'][$index][0];
-                $data = $matches['data'][$index][0];
+                $encodingAt = strpos($text, '?', $start + 2);
+                $endAt = $encodingAt !== false && $encodingAt + 3 <= $length
+                    ? strpos($text, '?=', $encodingAt + 3)
+                    : false;
 
-                if (strcasecmp($encoding, 'B') === 0) {
-                    // php_imap.c hands rfc822_base64() the word's data alone,
-                    // so that is what a warning from it quotes.
-                    $bytes = self::fromBase64($data);
+                if ($endAt !== false) {
+                    $bytes = self::decodeWord(
+                        $encoding = $text[$encodingAt + 1] ?? '',
+                        $data = substr($text, $encodingAt + 3, $endAt - ($encodingAt + 3)),
+                    );
 
-                    // One undecodable segment fails the whole call, as in
-                    // php_imap.c where rfc822_base64() returning NIL aborts.
                     if ($bytes === false) {
                         return false;
                     }
-                } elseif (strcasecmp($encoding, 'Q') === 0) {
-                    // rfc822_qprint(), not the stricter reader inside an
-                    // encoded word that decode() uses: a "=" with no hex pair
-                    // behind it is reported and read past, not refused. The
-                    // underscores become spaces first, in php_imap.c and so
-                    // in what the report quotes.
-                    $bytes = self::fromQuotedPrintable(str_replace('_', ' ', $data));
-                } else {
-                    $bytes = $data;
+
+                    $segments[] = self::segment(
+                        substr($text, $start + 2, $encodingAt - ($start + 2)),
+                        $bytes,
+                    );
+
+                    $offset = $endAt + 2;
+
+                    // Whitespace between two encoded words is folding, not
+                    // content (RFC 2047 6.2), and belongs to neither — but
+                    // only between two of them: the spaces bordering
+                    // ordinary text survive.
+                    $skipped = strspn($text, " \t\r\n", $offset);
+
+                    if (substr($text, $offset + $skipped, 2) === '=?') {
+                        $offset += $skipped;
+                    }
+
+                    continue;
                 }
-
-                $segments[] = self::segment($charset, $bytes);
-                $cursor = $offset + strlen($fullMatch);
+            } else {
+                // Nothing encoded is left; the rest is text, from here.
+                $start = $offset;
             }
+
+            // Either no separator at all or one of the three missing, which
+            // leaves the remainder undecodable: it comes back as it stands.
+            $segments[] = self::segment('default', substr($text, $start));
+            $offset = $length;
         }
 
-        if ($cursor < strlen($text)) {
-            $segments[] = self::segment('default', substr($text, $cursor));
-        }
-
-        // Empty in, empty out: c-client's rfc822_parse_mime_header walks the
-        // text and emits a part per run it finds, so no text is no parts —
-        // not one part holding nothing.
+        // Empty in, empty out: the scan runs while there is text to read, so
+        // no text is no parts — not one part holding nothing.
         return $segments;
     }
 
     /**
-     * c-client's rfc822_base64(): the alphabet, plus the whitespace it skips,
+     * @return string|false
+     */
+    private static function decodeWord(string $encoding, string $data)
+    {
+        if (strcasecmp($encoding, 'B') === 0) {
+            // php_imap.c hands rfc822_base64() the word's data alone, so that
+            // is what a warning from it quotes; NIL from it fails the call.
+            return self::fromBase64($data);
+        }
+
+        if (strcasecmp($encoding, 'Q') === 0) {
+            // rfc822_qprint(), not the stricter reader inside an encoded word
+            // that decode() uses: a "=" with no hex pair behind it is
+            // reported and read past, not refused. The underscores become
+            // spaces first, in php_imap.c and so in what the report quotes.
+            return self::fromQuotedPrintable(str_replace('_', ' ', $data));
+        }
+
+        // Any other encoding leaves the data untouched, and still produces a
+        // part carrying the charset it was labelled with.
+        return $data;
+    }
+
+    /**
+     *      * c-client's rfc822_base64(): the alphabet, plus the whitespace it skips,
      * and nothing else — any other byte refuses the whole string. A "=" is
      * padding only at the end of a quantum: one is enough in the fourth
      * position, in the third it has to be followed immediately by a second,

@@ -76,6 +76,21 @@ final class PureFunctionsTest extends TestCase
             // and finds none here, where a part carrying the empty string
             // would say the header held something.
             'nothing decodes to nothing' => ['', []],
+            // php_imap.c scans for the three separators in turn rather than
+            // matching a shape: the encoding is whatever byte follows the
+            // second "?", and the text begins three past it whether or not
+            // anything else stood in between.
+            'encoding two characters wide' => ['=?UTF-8?\\B?Y?=', [['UTF-8', '?Y']]],
+            // A run of "=" before one is not part of it, and the "=?" that
+            // opens nothing is text.
+            'equals signs before the opening' => ['===?', [['default', '=='], ['default', '=?']]],
+            // One separator missing leaves the rest undecodable, and it
+            // comes back as it stands rather than being dropped.
+            'no encoding separator' => ['=?x?', [['default', '=?x?']]],
+            'no closing separator' => ['=?x?y?', [['default', '=?x?y?']]],
+            // Unlike imap_utf8()'s reader, this one has no opinion about
+            // what follows the word.
+            'followed by a bracket' => ['=?UTF-8?B?YQ==?=]', [['UTF-8', 'a'], ['default', ']']]],
         ];
     }
 
