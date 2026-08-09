@@ -132,8 +132,21 @@ final class HeaderInfo
                 continue;
             }
 
-            $result->{$property.'address'} = $fields[$header];
-            $result->$property = AddressList::parse($fields[$header], $defaultHost)->toLegacyArray();
+            $addresses = AddressList::parse($fields[$header], $defaultHost);
+
+            // Both properties are guarded on the parsed list, not on the
+            // header being there: php_imap.c's UPDATE_PROPERTY_PARSED_ADDRESS
+            // tests en->to and friends, which a header holding nothing an
+            // address parser can use leaves NIL.
+            if ($addresses->isEmpty()) {
+                continue;
+            }
+
+            // Not the header text: the "*address" string is written back out
+            // of what was parsed, so it carries the default host, the markers
+            // and the quoting c-client put there rather than what was read.
+            $result->{$property.'address'} = $addresses->write();
+            $result->$property = $addresses->toLegacyArray();
         }
 
         // RFC 5322: Reply-To and Sender default to From when not explicitly set.

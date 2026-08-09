@@ -189,6 +189,62 @@ final class AddressList
         return $this->addresses[0] ?? null;
     }
 
+    public function isEmpty(): bool
+    {
+        return $this->addresses === [];
+    }
+
+    /**
+     * The list written back out, c-client's rfc822_output_address_list()
+     * with php_imap.c's arguments: no pretty-printing, so no folding, and
+     * the personal name quoted against rspecials.
+     *
+     * This is where the "*address" properties of an envelope come from —
+     * they are *written*, not the header text they were read from. The two
+     * agree while the header is well formed and part company the moment it
+     * is not: a mailbox with no host reads back with the default host in it,
+     * and an address c-client could not parse reads back as the marker it
+     * put in its place.
+     */
+    public function write(): string
+    {
+        $written = '';
+        $depth = 0;
+
+        foreach ($this->addresses as $index => $address) {
+            $next = $this->addresses[$index + 1] ?? null;
+
+            if ($address->host !== null) {
+                // Inside a group only the group's own name is written; the
+                // members are already in it.
+                $written .= $address->writeWithPersonal();
+
+                if ($next?->mailbox !== null) {
+                    $written .= ', ';
+                }
+
+                continue;
+            }
+
+            if ($address->mailbox !== null) {
+                $written .= Rfc822Address::quote($address->mailbox, Rfc822Address::SPECIALS).': ';
+                $depth++;
+
+                continue;
+            }
+
+            if ($depth > 0) {
+                $written .= ';';
+
+                if (--$depth === 0 && $next?->mailbox !== null) {
+                    $written .= ', ';
+                }
+            }
+        }
+
+        return $written;
+    }
+
     public function firstAsString(): ?string
     {
         return $this->first()?->format();

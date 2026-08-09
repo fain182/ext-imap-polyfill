@@ -309,6 +309,55 @@ final class PureFunctionsTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, string|null}>
+     */
+    public static function writtenAddressFields(): array
+    {
+        return [
+            // Well formed, and the two agree — which is why copying the
+            // header text passed for so long.
+            'plain' => ['a@b.com', 'a@b.com'],
+            'two addresses' => ['a@b.com, c@d.com', 'a@b.com, c@d.com'],
+            // From here on the header text is not the answer. The default
+            // host is in the written form and not in what was read.
+            'no host' => ['a', 'a@UNKNOWN'],
+            // The quoting is c-client's, not the sender's.
+            'quoted personal' => ['"A B" <a@b.com>', 'A B <a@b.com>'],
+            // A name written as a comment moves in front of the address.
+            'personal in a comment' => ['a@b.com (X)', 'X <a@b.com>'],
+            // A name that was there but empty is no name at all.
+            'empty personal' => ['"" <a@b.com>', 'a@b.com'],
+            // The route is dropped: c-client's A-D-L output is behind an #if
+            // that php_imap.c's build leaves off.
+            'source route' => ['<@r.com:a@b.com>', 'a@b.com'],
+            // A group reads back with the spacing c-client writes, not the
+            // spacing it was given.
+            'empty group' => ['Undisclosed:;', 'Undisclosed: ;'],
+            'group with members' => ['G: a@b.com, c@d.com;', 'G: a@b.com, c@d.com;'],
+            // Nothing an address parser can use means no property at all,
+            // not an empty one: php_imap.c guards on the parsed list.
+            'nothing to parse' => ['', null],
+        ];
+    }
+
+    /**
+     * The "*address" strings are written out of the parsed list by
+     * rfc822_output_address_list(), not copied from the header they were
+     * read from.
+     */
+    #[DataProvider('writtenAddressFields')]
+    public function test_the_address_string_is_written_not_copied(string $header, ?string $expected): void
+    {
+        $parsed = @imap_rfc822_parse_headers("From: {$header}\r\n\r\n");
+
+        $this->assertSame($expected, $parsed->fromaddress ?? null);
+
+        if ($expected === null) {
+            $this->assertObjectNotHasProperty('from', $parsed);
+        }
+    }
+
+    /**
      * Return-Path is not one of the headers rfc822_parse_msg_full() knows:
      * its dispatch on "R" reads Reply-To and References and stops there, so
      * env->return_path stays NIL no matter what the header says. The property

@@ -311,6 +311,19 @@ final class Address
     /**
      * Formats as "Personal <mailbox@host>", matching ext-imap's overview shape.
      */
+    /**
+     * This one address as rfc822_output_address_list() writes it: the
+     * personal name in front of the angle brackets when there is one, and
+     * the address alone when there is not. A source route is not written —
+     * the A-D-L support in c-client is behind an #if that php_imap.c's
+     * build leaves off, so an address parsed out of one reads back without
+     * it.
+     */
+    public function writeWithPersonal(): string
+    {
+        return Rfc822Address::write($this->mailbox ?? '', $this->host ?? '', $this->personal ?? '');
+    }
+
     public function format(): string
     {
         $mailAtHost = $this->host !== null ? "{$this->mailbox}@{$this->host}" : (string) $this->mailbox;
