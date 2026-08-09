@@ -101,7 +101,10 @@ final class Address
             return null;
         }
 
-        if ($cursor->peek() === '>') {
+        // Only the bracket that closes a route-address is part of it. One
+        // that never opened anything is data trailing the address, and
+        // c-client marks it as such.
+        if ($angleAddress && $cursor->peek() === '>') {
             $cursor->skip();
         }
 
@@ -111,7 +114,9 @@ final class Address
         // name. An empty comment is not one: rfc822_parse_addrspec() asks
         // for strlen() before it takes the comment as a personal name.
         if (!$angleAddress && $personal === null && ($comment = $cursor->lastComment()) !== null && $comment !== '') {
-            $personal = $comment;
+            // rfc822_cpy() again: what a comment holds is quoted text like
+            // anything else, and the backslashes in it are quoting.
+            $personal = Rfc822Cursor::unquote($comment);
         }
 
         $trailingData = $cursor->atEnd() ? null : $cursor->rest();
