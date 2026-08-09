@@ -72,6 +72,10 @@ final class PureFunctionsTest extends TestCase
                 "=?UTF-8?B?YQ==?=\t =?UTF-8?B?Yg==?=",
                 [['UTF-8', 'a'], ['UTF-8', 'b']],
             ],
+            // No text is no parts. c-client emits one part per run it finds
+            // and finds none here, where a part carrying the empty string
+            // would say the header held something.
+            'nothing decodes to nothing' => ['', []],
         ];
     }
 

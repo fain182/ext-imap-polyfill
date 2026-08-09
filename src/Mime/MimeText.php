@@ -121,7 +121,10 @@ final class MimeText
             $segments[] = self::segment('default', substr($text, $cursor));
         }
 
-        return $segments === [] ? [self::segment('default', $text)] : $segments;
+        // Empty in, empty out: c-client's rfc822_parse_mime_header walks the
+        // text and emits a part per run it finds, so no text is no parts —
+        // not one part holding nothing.
+        return $segments;
     }
 
     private static function segment(string $charset, string $text): \stdClass
