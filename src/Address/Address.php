@@ -49,22 +49,31 @@ final class Address
                 return null;
             }
 
-            // The phrase is the source text from its first word to its
-            // last, so a comment *between* two words is part of it, while
-            // one before or after was skipped as whitespace and is gone.
-            $phrase = Rfc822Cursor::unquote($cursor->slice($start, $phraseEnd));
+            $address = null;
 
             if ($cursor->peek() === '<') {
                 $cursor->skip();
-                $angleAddress = true;
-                $personal = $phrase;
                 $address = self::parseAddrSpec($cursor, $defaultHostname, $adl);
-            } elseif ($cursor->peek() === '@') {
-                $cursor->skip();
-                $host = self::readDotAtom($cursor);
-                $address = [$phrase, $host !== '' ? $host : $defaultHostname];
-            } else {
-                $address = [$phrase, $defaultHostname];
+
+                if ($address !== null) {
+                    // The phrase is the source text from its first word to
+                    // its last, so a comment *between* two words is part of
+                    // it, while one before or after was skipped as
+                    // whitespace and is gone.
+                    $angleAddress = true;
+                    $personal = Rfc822Cursor::unquote($cursor->slice($start, $phraseEnd));
+                }
+            }
+
+            if ($address === null) {
+                // rfc822_parse_mailbox(): a phrase the route-address behind it
+                // will not back up is no name at all. The parse starts over
+                // from the beginning of the string as a plain addr-spec —
+                // which reads one word where the phrase read several, and
+                // leaves the rest for the caller to complain about.
+                $cursor = new Rfc822Cursor($part);
+                $adl = null;
+                $address = self::parseAddrSpec($cursor, $defaultHostname, $adl);
             }
         }
 
@@ -142,14 +151,11 @@ final class Address
         $cursor->skipWhitespaceAndComments();
         $adl = self::readRoute($cursor);
         $cursor->skipWhitespaceAndComments();
-        $start = $cursor->position();
-        $localEnd = self::readPhrase($cursor);
+        $mailbox = self::readLocalPart($cursor);
 
-        if ($localEnd === null) {
+        if ($mailbox === null) {
             return null;
         }
-
-        $mailbox = Rfc822Cursor::unquote($cursor->slice($start, $localEnd));
 
         if ($cursor->peek() !== '@') {
             return [$mailbox, $defaultHostname];
@@ -159,6 +165,45 @@ final class Address
         $host = self::readDotAtom($cursor);
 
         return [$mailbox, $host !== '' ? $host : $defaultHostname];
+    }
+
+    /**
+     * The mailbox rfc822_parse_addrspec() reads: one word, and then the
+     * dot-separated words after it — joined with dots, and with whatever
+     * whitespace was written around those dots dropped. A second *word*, with
+     * no dot between, is not part of the mailbox: that is where the address
+     * ends and the caller's complaint about the rest begins.
+     */
+    private static function readLocalPart(Rfc822Cursor $cursor): ?string
+    {
+        $start = $cursor->position();
+        $end = $cursor->readWord();
+
+        if ($end === null) {
+            return null;
+        }
+
+        $mailbox = Rfc822Cursor::unquote($cursor->slice($start, $end));
+
+        while (true) {
+            $cursor->skipWhitespaceAndComments();
+
+            if ($cursor->peek() !== '.') {
+                return $mailbox;
+            }
+
+            $cursor->skip();
+            $cursor->skipWhitespaceAndComments();
+            $start = $cursor->position();
+            $end = $cursor->readWord();
+            $mailbox .= '.';
+
+            if ($end === null) {
+                return $mailbox;
+            }
+
+            $mailbox .= Rfc822Cursor::unquote($cursor->slice($start, $end));
+        }
     }
 
     /**

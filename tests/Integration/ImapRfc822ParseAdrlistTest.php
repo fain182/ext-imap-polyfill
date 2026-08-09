@@ -92,6 +92,95 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, array<int, array<string, string>>}>
+     */
+    public static function phrasesWithoutAnAddress(): array
+    {
+        $unexpected = ['mailbox' => 'UNEXPECTED_DATA_AFTER_ADDRESS', 'host' => '.SYNTAX-ERROR.'];
+
+        return [
+            // The quoted string is one word, so all of it becomes the mailbox.
+            'quoted phrase before empty brackets' => [
+                '"Undisclosed Recipients" <>',
+                [['mailbox' => 'Undisclosed Recipients', 'host' => 'default.host'], $unexpected],
+            ],
+            // Unquoted, the phrase is several words and only the first is
+            // read: an addr-spec has no way to spend the second.
+            'bare phrase before empty brackets' => [
+                'Undisclosed Recipients <>',
+                [['mailbox' => 'Undisclosed', 'host' => 'default.host'], $unexpected],
+            ],
+            'brackets holding only an at sign' => [
+                '"a b" <@>',
+                [['mailbox' => 'a b', 'host' => 'default.host'], $unexpected],
+            ],
+            // The addresses after it are lost either way — c-client punts the
+            // rest of the list once it has marked one — but which entry comes
+            // back first is not the same.
+            'more addresses after the empty brackets' => [
+                '"A" <>, b@c.com',
+                [['mailbox' => 'A', 'host' => 'default.host'], $unexpected],
+            ],
+            // No brackets in sight: two words with nothing between them end
+            // the address at the first, wherever the "@" happens to be.
+            'two words and an address' => [
+                'foo bar@x.com',
+                [['mailbox' => 'foo', 'host' => 'default.host'], $unexpected],
+            ],
+            // Dots are the one thing that continues a mailbox, and the
+            // whitespace written around them is not part of it.
+            'dots continue the mailbox' => [
+                'a . b@x.com',
+                [['mailbox' => 'a.b', 'host' => 'x.com']],
+            ],
+            // Nothing to fall back to: an empty route-addr with no phrase in
+            // front of it is the malformed-list marker, not a mailbox.
+            'empty brackets on their own' => [
+                '<>',
+                [['mailbox' => 'INVALID_ADDRESS', 'host' => '.SYNTAX-ERROR.']],
+            ],
+        ];
+    }
+
+    /**
+     * A phrase followed by angle brackets that hold no address at all.
+     * c-client does not give up there: rfc822_parse_mailbox() starts the
+     * parse again from the top as a plain addr-spec, so the phrase becomes
+     * the mailbox — one word of it — and the brackets become trailing data.
+     * Reading the whole thing as one failed address instead loses the name
+     * *and* every address written after it.
+     *
+     * @param array<int, array<string, string>> $expected
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('phrasesWithoutAnAddress')]
+    public function test_a_phrase_falls_back_to_being_the_mailbox(string $list, array $expected): void
+    {
+        $parsed = @imap_rfc822_parse_adrlist($list, 'default.host');
+
+        $this->assertCount(count($expected), $parsed);
+
+        foreach ($expected as $index => $fields) {
+            $this->assertSame($fields, get_object_vars($parsed[$index]), "entry {$index}");
+        }
+    }
+
+    /**
+     * Which complaint c-client makes about what it could not use depends on
+     * the first character of it: something alphanumeric reads as an address
+     * missing its comma, anything else as debris.
+     */
+    public function test_the_complaint_depends_on_what_was_left_over(): void
+    {
+        imap_errors();
+
+        @imap_rfc822_parse_adrlist('"Undisclosed Recipients" <>', 'default.host');
+        $this->assertSame(['Unexpected characters at end of address: <>'], imap_errors());
+
+        @imap_rfc822_parse_adrlist('Undisclosed Recipients <>', 'default.host');
+        $this->assertSame(['Must use comma to separate addresses: Recipients <>'], imap_errors());
+    }
+
+    /**
      * Nothing has to separate an unquoted personal name from the address
      * it belongs to: the angle bracket ends it by itself. Mail in the wild
      * is written this way — an encoded word butted straight against the

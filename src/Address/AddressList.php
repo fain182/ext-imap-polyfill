@@ -61,7 +61,15 @@ final class AddressList
                 // a new one ("a@b@c.com"): c-client keeps what it read and
                 // marks the rest, the same way it marks a second group.
                 if ($trailingData !== null) {
-                    ErrorStack::push('Unexpected characters at end of address: '.substr($trailingData, 0, 80));
+                    // c-client picks its wording off the first character it
+                    // could not use: a letter or a digit there reads as an
+                    // address someone forgot to separate, anything else as
+                    // debris.
+                    $complaint = ctype_alnum($trailingData[0])
+                        ? 'Must use comma to separate addresses: '
+                        : 'Unexpected characters at end of address: ';
+
+                    ErrorStack::push($complaint.substr($trailingData, 0, 80));
                     $result[] = Address::syntaxError('UNEXPECTED_DATA_AFTER_ADDRESS');
 
                     return new self($result);
