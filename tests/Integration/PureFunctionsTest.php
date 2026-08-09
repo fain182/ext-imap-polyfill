@@ -181,6 +181,44 @@ final class PureFunctionsTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, string}>
+     */
+    public static function wordsThatAreNotWords(): array
+    {
+        return [
+            'on its own' => ['=?UTF-8?B?YQ==?=', 'a'],
+            'between spaces' => ['x =?UTF-8?B?YQ==?= y', 'x a y'],
+            // A word has to be a whitespace-delimited token. One that merely
+            // starts inside another is ordinary text, and c-client skips to
+            // the next space rather than looking again.
+            'starting inside a token' => ['x=?UTF-8?B?YQ==?=', 'x=?UTF-8?B?YQ==?='],
+            'in brackets' => ['(=?UTF-8?B?YQ==?=)', '(=?UTF-8?B?YQ==?=)'],
+            // And it has to end one: mime2_text() requires whitespace or the
+            // end of the text behind the "?=".
+            'followed by a bracket' => ['=?UTF-8?B?YQ==?=]', '=?UTF-8?B?YQ==?=]'],
+            'followed by a comma' => ['=?UTF-8?B?YQ==?=,', '=?UTF-8?B?YQ==?=,'],
+            'followed by an address' => ['=?UTF-8?B?YQ==?=<a@b>', '=?UTF-8?B?YQ==?=<a@b>'],
+            // The charset is a mime2_token(): none of RFC 822's specials, and
+            // "=" is one of them.
+            'charset holding an equals' => ['=?UTF-=8?B?YQ==?=', '=?UTF-=8?B?YQ==?='],
+            'charset holding a space' => ['=?a b?B?YQ==?=', '=?a b?B?YQ==?='],
+            'encoding two characters wide' => ['=?UTF-8?BB?YQ==?=', '=?UTF-8?BB?YQ==?='],
+            // An empty payload is still a word, and decodes to nothing.
+            'empty payload' => ['=?UTF-8?B??=', ''],
+            // MINENCWORD: fewer than ten characters from the word's start to
+            // the end of the text and c-client does not look.
+            'shorter than MINENCWORD' => ['=?a?B??=', '=?a?B??='],
+            'long enough' => ['=?a?B?eHk?=', 'xy'],
+        ];
+    }
+
+    #[DataProvider('wordsThatAreNotWords')]
+    public function test_what_counts_as_an_encoded_word(string $input, string $expected): void
+    {
+        $this->assertSame($expected, imap_utf8($input));
+    }
+
+    /**
      * utf8_mime2text() hands back src untouched the moment mime2_decode()
      * refuses a word — so a word that will not decode does not merely stay
      * as it is, it voids the whole call, including the words converted

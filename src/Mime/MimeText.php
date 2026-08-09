@@ -12,6 +12,13 @@ final class MimeText
     private const BASE64_WHITESPACE = "\0\t\n\f\r ";
 
     /**
+     * One character of a mime2_token(): printable, and none of the characters
+     * RFC 822 gives a meaning to — which is why a charset written "UTF-=8"
+     * makes the whole word ordinary text.
+     */
+    private const MIME2_TOKEN = '[^\x00-\x20\x7F()<>@,;:\\\\"\/\[\].=?]';
+
+    /**
      * quoted-printable, decoded the way c-client's rfc822_qprint() does:
      * a "=" that starts neither a hex pair nor a line break is reported,
      * and the text is handed back all the same, quoted from that "="
@@ -106,15 +113,33 @@ final class MimeText
         $failed = false;
 
         $decoded = preg_replace_callback(
-            // RFC 2047 lets no whitespace inside an encoded word, and
-            // c-client holds the line: a "word" with a space in its payload
-            // is left standing as the text it evidently is. The encoding is
-            // one character wide because utf8_mime2text() requires it to be
-            // (its "ee == e + 1"); which character it is decides below.
-            '/=\?(?P<charset>[^?\s]+)\?(?P<encoding>[^?\s])\?(?P<data>[^?\s]*)\?=(?:\s+(?==\?[^?\s]+\?[^?\s]\?))?/',
+            // What utf8_mime2text() will look at, and it is narrower than
+            // RFC 2047 on both sides. The word has to *be* a whitespace
+            // delimited token — one that merely starts inside another is
+            // ordinary text, and so is one with anything but whitespace
+            // behind its "?=" — which is mime2_text()'s closing test and the
+            // "skip to the next space" loop that follows a non-word.
+            // Charset and encoding are mime2_token()s: printable, and none of
+            // the characters RFC 822 gives a meaning to, "=" included. The
+            // encoding is one character wide ("ee == e + 1").
+            '/(?:^|(?<=\s))=\?(?P<charset>'.self::MIME2_TOKEN.'*)'
+                .'\?(?P<encoding>'.self::MIME2_TOKEN.')'
+                .'\?(?P<data>[^\x00-\x20\x7F?]*)\?=(?=\s|$)'
+                .'(?:\s+(?==\?))?/',
             static function (array $matches) use (&$failed, $text): string {
                 if ($failed) {
                     return '';
+                }
+
+                // Too short to be a word, or too long to be read as one:
+                // MINENCWORD and MAXENCWORD, measured as c-client measures
+                // them — from the word's start to the end of the text, and
+                // from its start to the "?" that closes it.
+                $remaining = strlen($text) - $matches[0][1];
+                $wordLength = strlen(rtrim($matches[0][0])) - 2;
+
+                if ($remaining <= 9 || $wordLength >= 75) {
+                    return $matches[0][0];
                 }
 
                 $charset = $matches['charset'][0];
