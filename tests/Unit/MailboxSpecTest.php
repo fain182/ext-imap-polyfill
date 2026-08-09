@@ -230,6 +230,18 @@ class MailboxSpecTest extends TestCase
         MailboxSpec::parse('{host/banana}INBOX');
     }
 
+    /**
+     * A name with no "{" never reached a remote driver to be invalid for.
+     * c-client hands it to the local ones, which report a mailbox file that
+     * isn't there — and none of them is here, so none of them ever is.
+     */
+    public function test_a_name_with_no_remote_spec_is_refused_as_a_missing_mailbox(): void
+    {
+        $this->expectExceptionMessage("Can't open mailbox plain-folder: no such mailbox");
+
+        MailboxSpec::parse('plain-folder');
+    }
+
     public function test_the_refusal_truncates_a_long_spec_at_eighty_characters(): void
     {
         $spec = '{host/banana}'.str_repeat('x', 200);
