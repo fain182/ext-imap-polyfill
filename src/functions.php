@@ -377,9 +377,12 @@ if (!function_exists('imap_append')) {
 if (!function_exists('imap_base64')) {
     function imap_base64(string $string): string|false
     {
-        // c-client's rfc822_base64() refuses input outside the alphabet
-        // rather than skipping it; whitespace stays legal either way.
-        return base64_decode($string, true);
+        // The same rfc822_base64() the encoded-word decoder goes through,
+        // which is not PHP's strict base64_decode(): a quantum left
+        // incomplete with no padding at all is legal and its spare bits are
+        // dropped ("a" decodes to ""), and data after complete padding is
+        // kept and reported rather than refused.
+        return \ImapPolyfill\Mime\MimeText::fromBase64($string);
     }
 }
 

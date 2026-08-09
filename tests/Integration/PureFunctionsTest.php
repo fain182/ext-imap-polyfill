@@ -101,6 +101,40 @@ final class PureFunctionsTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, string|false}>
+     */
+    public static function base64Payloads(): array
+    {
+        return [
+            'well formed' => ['Zm9v', 'foo'],
+            // Not PHP's strict base64_decode(): a quantum left incomplete
+            // with no padding is legal, and the bits that do not fill a byte
+            // are dropped rather than refusing the string.
+            'one character' => ['a', ''],
+            'two characters' => ['ab', 'i'],
+            'empty' => ['', ''],
+            'whitespace is skipped' => ["Zm9v\n", 'foo'],
+            'padding in the wrong place' => ['a=b', false],
+            'padding mid-quantum' => ['Zm=9v', false],
+            'character outside the alphabet' => ['~~', false],
+        ];
+    }
+
+    #[DataProvider('base64Payloads')]
+    public function test_base64_decodes_the_way_rfc822_base64_does(string $input, string|false $expected): void
+    {
+        $this->assertSame($expected, imap_base64($input));
+    }
+
+    public function test_base64_keeps_what_it_read_before_data_after_the_padding(): void
+    {
+        imap_errors();
+
+        $this->assertSame('foob', imap_base64('Zm9vYg==extra'));
+        $this->assertSame(['Possible data truncation in rfc822_base64(): extra'], imap_errors());
+    }
+
+    /**
      * The quoted-printable inside an encoded word is read by two different
      * decoders. imap_mime_header_decode() hands it to rfc822_qprint(), which
      * reports a "=" with no hex pair behind it and reads on — where the

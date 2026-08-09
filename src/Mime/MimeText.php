@@ -184,7 +184,7 @@ final class MimeText
      *                             imap_utf8(), the word's data on its own for
      *                             imap_mime_header_decode()
      */
-    private static function fromBase64(string $data, ?string $context = null): string|false
+    public static function fromBase64(string $data, ?string $context = null): string|false
     {
         $context ??= $data;
         $bytes = '';
