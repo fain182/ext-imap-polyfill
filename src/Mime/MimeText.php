@@ -16,7 +16,7 @@ final class MimeText
      * RFC 822 gives a meaning to — which is why a charset written "UTF-=8"
      * makes the whole word ordinary text.
      */
-    private const MIME2_TOKEN = '[^\x00-\x20\x7F()<>@,;:\\\\"\/\[\].=?]';
+    private const MIME2_TOKEN = '[^\x00-\x20\x7F-\xFF()<>@,;:\\\\"\/\[\].=?]';
 
     /**
      * quoted-printable, decoded the way c-client's rfc822_qprint() does:
@@ -124,7 +124,7 @@ final class MimeText
             // encoding is one character wide ("ee == e + 1").
             '/(?:^|(?<=\s))=\?(?P<charset>'.self::MIME2_TOKEN.'*)'
                 .'\?(?P<encoding>'.self::MIME2_TOKEN.')'
-                .'\?(?P<data>[^\x00-\x20\x7F?]*)\?=(?=\s|$)'
+                .'\?(?P<data>[^\x00-\x20\x7F-\xFF?]*[^?]?)\?=(?=\s|$)'
                 .'(?:\s+(?==\?))?/',
             static function (array $matches) use (&$failed, $text): string {
                 if ($failed) {
@@ -142,7 +142,11 @@ final class MimeText
                     return $matches[0][0];
                 }
 
-                $charset = $matches['charset'][0];
+                // RFC 2231 lets a charset carry the language it was written
+                // in — "UTF-8*en". c-client ties the name off at the "*"
+                // before it looks for a converter, and so must this, or the
+                // converter is asked for a charset nobody has.
+                $charset = strstr($matches['charset'][0], '*', true) ?: $matches['charset'][0];
                 $encoding = $matches['encoding'][0];
 
                 if (strcasecmp($encoding, 'B') === 0) {
