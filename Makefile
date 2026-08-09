@@ -17,7 +17,7 @@ DOVECOT_SSL_DIR := $(CURDIR)/tests/fixtures/dovecot-ssl
 NETWORK_NAME := ext-imap-polyfill-net
 PARITY_IMAGE := ext-imap-polyfill-parity
 
-.PHONY: install install-lowest test test-unit test-integration cross-check phpstan greenmail-up greenmail-down dovecot-up dovecot-down parity parity-build
+.PHONY: install install-lowest test test-unit test-integration cross-check phpstan phpt greenmail-up greenmail-down dovecot-up dovecot-down parity parity-build
 
 install:
 	composer install
@@ -134,6 +134,18 @@ parity-build:
 ## (the last version where it shipped in core), against the same Greenmail
 ## fixture, to check that tests/Integration's assumptions also hold true
 ## against the genuine extension and not just against this polyfill.
+## Runs the extension's own .phpt suite (tests/phpt, vendored from
+## php/pecl-mail-imap) against the polyfill. The tests are characterization
+## tests written by the people who wrote the extension, so a failure here is
+## a divergence from it — the nine that cannot be answered from userland
+## carry an --XFAIL-- saying why, and run-tests.php reports those apart.
+##
+## An XFAIL that starts passing is only a warning to run-tests, which would
+## leave the job green while a note in the tree went stale; the grep below
+## is what turns it into a failure.
+phpt: install dovecot-up
+	@set -o pipefail; 	REPORT_EXIT_STATUS=1 TEST_PHP_EXECUTABLE="$$(command -v php)" 		php tests/phpt/run-tests.php -q 			-d auto_prepend_file=$(CURDIR)/tests/bootstrap.php 			tests/phpt/tests | tee tests/phpt/run.log; 	status=$$?; 	if grep -q 'XFAIL section but test passes' tests/phpt/run.log; then 		echo 'An --XFAIL-- test passed: the reason it carries is out of date.'; 		status=1; 	fi; 	rm -f tests/phpt/run.log; 	$(MAKE) dovecot-down; 	exit $$status
+
 parity: parity-build greenmail-up dovecot-up
 	$(CONTAINER_RUNTIME) run --rm \
 		--network $(NETWORK_NAME) \

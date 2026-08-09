@@ -95,3 +95,28 @@ jobs:
       - uses: actions/checkout@v7
       - name: Run parity suite
         run: make parity
+
+  # The extension's own .phpt suite, vendored in tests/phpt. It is the one
+  # suite here nobody on this project wrote: a failure is a divergence from
+  # the extension as the people who wrote it characterised it. PHP 8.5
+  # because that is what a codebase reaching for this package is on — the
+  # ten it cannot answer say so in an --XFAIL--, and two of those are PHP
+  # 8.5's own wording rather than ours.
+  phpt:
+    name: "Extension's own .phpt suite (PHP 8.5)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP 8.5
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: ':imap'
+          coverage: none
+
+      - name: Composer install
+        run: make install
+
+      - name: Run the extension's own tests
+        run: make phpt

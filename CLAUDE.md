@@ -54,6 +54,14 @@ Integration tests are **characterization tests of the real extension** and must 
 - Tests reading the global error state use the `ResetsErrorStack` trait; "pristine stack" assertions must skip under real ext-imap (no reset hook exists).
 - One test class per function: `tests/Integration/Imap<Function>Test.php`.
 
+**The extension's own suite.** `tests/phpt` is the imap extension's `.phpt`
+suite, vendored and run by `make phpt` (see CONTRIBUTING.md). Nobody here wrote
+those tests, so they are the one place a divergence shows up that our own
+characterization tests cannot: they encode what the extension's authors thought
+it did. When one starts failing, the polyfill moved — and when one starts
+passing, an `--XFAIL--` reason in that directory is out of date and the target
+says so.
+
 **Capability-gated operations.** `imap_sort` and `imap_thread` hand the work to the server whenever CAPABILITY advertises `SORT` / `THREAD=REFERENCES`, and only fall back to the ported c-client algorithms otherwise — matching `imap_sort`/`imap_thread` in `imap4r1.c`, including the retry-locally-on-BAD path. So the same function takes different branches per fixture: server-side on both servers for SORT, server-side only on Dovecot for THREAD, local over POP3. `Protocol::sort()`/`thread()` answer `null` for a BAD rejection, which is what triggers the fallback; the local algorithms themselves are covered in `tests/Unit` (`BaseSubjectTest`) and over POP3.
 
 When implementing a new `imap_*` function, don't work from the manual alone: check `PHP_FUNCTION(...)` in `php_imap.c` (validation, exact ValueError messages, return-value quirks) and c-client sources for wire behavior (e.g. `CP_MOVE` = COPY + `\Deleted`, no expunge — c-client predates the MOVE extension). Constant values come from c-client's `mail.h`. Then update the README Compatibility section: add the function to the implemented-functions list, add a row to the divergences table only if behavior deliberately diverges, and bump the count in both places that carry it (the opening sentence and the "The N implemented functions" heading).

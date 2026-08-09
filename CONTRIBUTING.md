@@ -43,6 +43,25 @@ Runs the exact same integration suite a second time, in a PHP 8.3 container with
 
 **A new test is expected to pass here.** If it can't — because it asserts something only this polyfill exposes — it belongs in `tests/Unit` with an `extension_loaded('imap')` skip.
 
+## Running the extension's own tests
+
+```bash
+make phpt
+```
+
+The imap extension's `.phpt` suite, vendored in `tests/phpt` from
+php/pecl-mail-imap 1.0.3, run against the polyfill on the Dovecot fixture. It is
+the one suite here nobody on this project wrote, which is exactly what makes it
+worth keeping: a failure is a divergence from the extension as the people who
+wrote it characterised it, not from what we thought it did.
+
+Ten of the 89 cannot be answered from PHP and carry an `--XFAIL--` saying why —
+mostly things a userland function is not allowed to do, plus two that are PHP
+8.5's wording rather than the 8.3 these were written against. An `--XFAIL--`
+that starts *passing* fails the target: run-tests only warns, and a reason gone
+stale is worth catching. `tests/phpt/README.md` has the provenance and the three
+modifications made to the vendored copy.
+
 ## Auditing against a second server
 
 ```bash
