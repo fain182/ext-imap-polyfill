@@ -317,6 +317,59 @@ final class PureFunctionsTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, string, string|false}>
+     */
+    public static function quotedPrintablePayloads(): array
+    {
+        return [
+            'hex pair' => ['=41', 'A', false],
+            // A "=" with nothing behind it is a soft break at the end of a
+            // string that was cut, and goes quietly.
+            'trailing equals' => ['a=', 'a', false],
+            'equals alone' => ['=', '', false],
+            'soft line break' => ["a=\r\nb", 'ab', false],
+            // Neither refused nor decoded: what could not be a hex pair
+            // stands as the text it is, and the decode carries on past it.
+            'two equals' => ['==', '==', 'Invalid quoted-printable sequence: =='],
+            'one hex digit and a letter' => ['=Z', '=Z', 'Invalid quoted-printable sequence: =Z'],
+            // The second character is eaten once the first has proved itself
+            // a hex digit, which is why the report starts at the "o" and the
+            // "o" is gone from the text.
+            'hex digit then a letter' => ['x=Doe', 'x=De', 'Invalid quoted-printable sequence: =oe'],
+            'letter then hex digits' => ['a=ZZb', 'a=ZZb', 'Invalid quoted-printable sequence: =ZZb'],
+            // Spaces before a line break were put there by a mail system,
+            // not by anyone, and c-client drops them.
+            'trailing spaces before a break' => ["a  \r\nb", "a\r\nb", false],
+            'quoted space survives' => ['x =20y', 'x  y', false],
+        ];
+    }
+
+    #[DataProvider('quotedPrintablePayloads')]
+    public function test_qprint_decodes_the_way_rfc822_qprint_does(string $input, string $expected, string|false $error): void
+    {
+        imap_errors();
+
+        $this->assertSame($expected, imap_qprint($input));
+        $this->assertSame($error === false ? [] : [$error], imap_errors() ?: []);
+    }
+
+    /**
+     * Only the first fault in a string is reported, and only the eighty
+     * characters after the "=" of it.
+     */
+    public function test_qprint_reports_the_first_fault_only_and_at_eighty_characters(): void
+    {
+        imap_errors();
+
+        imap_qprint('=Z'.str_repeat('x', 100).'=Y');
+
+        $this->assertSame(
+            ['Invalid quoted-printable sequence: =Z'.str_repeat('x', 79)],
+            imap_errors(),
+        );
+    }
+
+    /**
      * c-client has no separate close timeout, so it never reports one.
      */
     public function test_close_timeout_is_zero(): void

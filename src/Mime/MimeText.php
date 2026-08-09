@@ -19,11 +19,76 @@ final class MimeText
      */
     public static function fromQuotedPrintable(string $string): string
     {
-        if (preg_match('/=(?![0-9A-Fa-f]{2}|\r?\n)/', $string, $match, PREG_OFFSET_CAPTURE) === 1) {
-            ErrorStack::push('Invalid quoted-printable sequence: '.substr($string, $match[0][1]));
+        $result = '';
+        $length = strlen($string);
+        $lastNonSpace = 0;
+        $reported = false;
+
+        for ($index = 0; $index < $length;) {
+            $char = $string[$index++];
+
+            if ($char === '=') {
+                // A "=" with nothing behind it is the soft line break of a
+                // string that was cut, and disappears with what it quoted.
+                if ($index >= $length) {
+                    break;
+                }
+
+                $quoted = $string[$index++];
+
+                if ($quoted === "\r" || $quoted === "\n") {
+                    if ($quoted === "\r" && ($string[$index] ?? '') === "\n") {
+                        $index++;
+                    }
+
+                    // A soft break takes the spaces before it with it, which
+                    // is what makes the ones after it worth keeping.
+                    $lastNonSpace = strlen($result);
+
+                    continue;
+                }
+
+                // The second digit is eaten whether or not it turns out to be
+                // one — but only once the first has proved itself, which is
+                // why "=Doe" reports from the "o" and "=ZZb" from the first
+                // "Z".
+                if (ctype_xdigit($quoted) && $index < $length && ctype_xdigit($second = $string[$index++])) {
+                    $result .= chr((int) hexdec($quoted.$second));
+                } else {
+                    if (!$reported) {
+                        // Once per string, however many faults it holds.
+                        $reported = true;
+                        ErrorStack::push('Invalid quoted-printable sequence: ='.substr($string, $index - 1, 80));
+                    }
+
+                    // Neither refused nor decoded: the "=" and what followed
+                    // it stand as the text they evidently are, and the decode
+                    // carries on from there.
+                    $result .= '='.$quoted;
+                }
+
+                $lastNonSpace = strlen($result);
+
+                continue;
+            }
+
+            if ($char === ' ') {
+                // Stashed, but it does not count as text: a space before the
+                // end of a line was put there by a mail system, not by anyone.
+                $result .= $char;
+
+                continue;
+            }
+
+            if ($char === "\r" || $char === "\n") {
+                $result = substr($result, 0, $lastNonSpace);
+            }
+
+            $result .= $char;
+            $lastNonSpace = strlen($result);
         }
 
-        return quoted_printable_decode($string);
+        return $result;
     }
 
     /**
