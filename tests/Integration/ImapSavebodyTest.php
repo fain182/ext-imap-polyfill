@@ -188,4 +188,31 @@ class ImapSavebodyTest extends GreenmailTestCase
         $this->assertFalse($result);
         $this->assertSame(['imap_savebody(): UID does not exist'], $warnings);
     }
+
+    /**
+     * The message is settled before the destination is touched: c-client
+     * answers "not there" from its own counts, so a file the caller named
+     * is not opened, let alone truncated, for a message that was never
+     * going to be written into it.
+     */
+    public function test_a_message_that_is_not_there_leaves_the_destination_alone(): void
+    {
+        $folderName = 'SavebodyKeepBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $target = tempnam(sys_get_temp_dir(), 'savebody');
+        file_put_contents($target, 'untouched');
+
+        [$result, $warnings] = $this->capturingWarnings(
+            fn () => imap_savebody($connection, $target, 255, '1')
+        );
+
+        $this->assertFalse($result);
+        $this->assertSame(['imap_savebody(): Bad message number'], $warnings);
+        $this->assertSame('untouched', file_get_contents($target));
+
+        unlink($target);
+    }
 }

@@ -1,8 +1,5 @@
 --TEST--
 imap_savebody() errors: ValueError and Warnings
---XFAIL--
-fopen('') raises 'Path must not be empty' on PHP 8.5 and 'Path cannot be
-empty' on 8.3. PHP core's wording, reached before any code of ours runs.
 --SKIPIF--
 <?php
 require_once(__DIR__.'/setup/skipif.inc');

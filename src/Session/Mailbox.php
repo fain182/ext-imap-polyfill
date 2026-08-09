@@ -525,6 +525,20 @@ final class Mailbox
             throw new \ValueError('imap_savebody(): Argument #5 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');
         }
 
+        $uidMode = ($flags & FT_UID) ? UidMode::UID : UidMode::MSGNO;
+
+        // Settled before the destination is touched, the way c-client
+        // settles it: from the counts and the uid table it already holds.
+        // Opening first would truncate a file the caller asked to fill with
+        // a message that was never there.
+        if ($this->selectionCovering($messageNum, $uidMode, 'imap_savebody') === false) {
+            return false;
+        }
+
+        if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
+            return $this->absent('imap_savebody', $uidMode);
+        }
+
         $isResource = is_resource($file);
         if ($isResource) {
             $handle = $file;
