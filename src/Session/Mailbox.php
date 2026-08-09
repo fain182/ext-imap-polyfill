@@ -11,6 +11,7 @@ use ImapPolyfill\Message\HeaderInfo;
 use ImapPolyfill\Message\HeadersLine;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\Overview;
+use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Message\SortCriterion;
 use ImapPolyfill\Message\SortKey;
 use ImapPolyfill\Message\ThreadBuilder;
@@ -37,7 +38,16 @@ final class Mailbox
 
         $this->connection->ensureOpen();
 
-        $tokens = preg_split('/\s+/', trim($criteria)) ?: [];
+        // c-client parses the criteria into a SEARCHPGM before anything goes
+        // out, and a keyword its struct has no field for fails the search
+        // rather than reaching a server that might have understood it.
+        try {
+            $program = SearchProgram::parse($criteria);
+        } catch (\RuntimeException $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
 
         // Nothing to look through: c-client answers from the count it
         // holds rather than asking, so no SEARCH goes out and a folder
@@ -47,7 +57,7 @@ final class Mailbox
         }
 
         try {
-            $ids = $this->connection->backend()->search($tokens, $uidMode, $charset);
+            $ids = $this->connection->backend()->search($program, $uidMode, $charset);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -699,6 +709,17 @@ final class Mailbox
             throw new \ValueError('imap_sort(): Argument #4 ($flags) must be a bitmask of SE_UID, and SE_NOPREFETCH');
         }
 
+        // The sort's own search criteria go through the same mail_criteria()
+        // as imap_search()'s, and a keyword it cannot build fails the sort
+        // outright rather than sorting the whole folder instead.
+        try {
+            $program = $searchCriteria !== null ? SearchProgram::parse($searchCriteria) : null;
+        } catch (\RuntimeException $e) {
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
         try {
             $status = $this->connection->selectOrExamine();
             $exists = $status->exists;
@@ -712,7 +733,7 @@ final class Mailbox
                 $sorted = $this->connection->backend()->sort(
                     ($reverse ? 'REVERSE ' : '').SortKey::wireName($criterion),
                     $charset ?? 'US-ASCII',
-                    $searchCriteria !== null ? (preg_split('/\s+/', trim($searchCriteria)) ?: []) : ['ALL'],
+                    $program === null ? ['ALL'] : $program->tokens,
                     ($flags & SE_UID) ? UidMode::UID : UidMode::MSGNO,
                 );
 
@@ -728,9 +749,8 @@ final class Mailbox
                 return [];
             }
 
-            if ($searchCriteria !== null) {
-                $tokens = preg_split('/\s+/', trim($searchCriteria)) ?: [];
-                $ids = $this->connection->backend()->search($tokens, UidMode::MSGNO);
+            if ($program !== null) {
+                $ids = $this->connection->backend()->search($program, UidMode::MSGNO);
 
                 if ($ids === []) {
                     return [];

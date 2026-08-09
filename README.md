@@ -118,7 +118,6 @@ POP3 is supported too, with the same reduced feature set it has under the real e
 | `imap_open` with `/tls` | negotiates the best TLS version both ends support. c-client asks for TLS 1.0 and nothing else, so against a server on the usual TLS 1.2 minimum its `/tls` fails outright and needs `/tls-sslv23` to work at all — the same is true of the upgrade it performs unasked |
 | `imap_open` with `/tryssl` | accepted and inert. It reorders c-client's connection attempts (implicit TLS first, then cleartext), and this package makes one attempt, to the port the spec resolves to |
 | `imap_open` with `/loser` | reaches the reported `Mailbox` string, but changes nothing about the commands sent; in c-client it also relaxes quoting for servers that need it |
-| `imap_search` | over POP3 only, the criteria grammar is a practical subset: `ALL`, the `SEEN`/`ANSWERED`/`DELETED`/`FLAGGED` pairs, substring `FROM`/`TO`/`SUBJECT`/`BODY`/`TEXT`, `SINCE`/`BEFORE`/`ON` |
 | `imap_timeout` | `IMAP_WRITETIMEOUT` is stored and read back, but not applied: a PHP socket has one timeout covering both directions, and the read timeout takes it |
 | `imap_utf8` | decodes an ISO-8859-1 segment to precomposed UTF-8 (`café`, U+00E9); c-client emits the decomposed form (`cafe` + U+0301) |
 
@@ -127,6 +126,8 @@ POP3 is supported too, with the same reduced feature set it has under the real e
 Two of them do nothing here, and nothing in the real extension either — `OP_DEBUG` and `/debug`, whose telemetry `php_imap.c` drops on the floor (`mm_dlog()` is an empty function), and `OP_SHORTCACHE`, which tunes a c-client message cache that has no counterpart here. The `$options` argument is still parsed and ignored.
 
 Connections upgrade themselves: `STARTTLS` (or POP3's `STLS`) goes out whenever the server advertises it and the spec didn't say `/ssl` or `/notls`, which is what c-client does, so a cleartext spec against a modern server ends up encrypted — and says so in the `Mailbox` string `imap_check()` reports.
+
+`imap_search()` and `imap_sort()` accept the criteria c-client can build a `SEARCHPGM` from, which is narrower than IMAP's own `SEARCH` grammar: `ALL`, `ANSWERED`, `BCC`, `BEFORE`, `BODY`, `CC`, `DELETED`, `FLAGGED`, `FROM`, `KEYWORD`, `NEW`, `OLD`, `ON`, `RECENT`, `SEEN`, `SINCE`, `SUBJECT`, `TEXT`, `TO`, `UNANSWERED`, `UNDELETED`, `UNFLAGGED`, `UNKEYWORD`, `UNSEEN`. There is no `HEADER`, `OR`, `NOT`, `LARGER`, `SMALLER`, `DRAFT` or `SENT*`, and naming one returns `false` with `Unknown search criterion: …` — the same answer the real extension gives, on IMAP as much as on POP3. Dates must be ones the program can hold, between 1970 and 2097.
 
 `imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` throw: they speak a command dropped from IMAP4rev1 that in practice only c-client's own UW-IMAP server ever implemented, so no server you can reach would answer them. Opening a `{host/nntp}` mailbox throws too — the real extension speaks NNTP, this doesn't.
 

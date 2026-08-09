@@ -6,6 +6,7 @@ use ImapPolyfill\Connection\ConnectionBackend;
 use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Message\MessageSequence;
+use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Connection\MessageNotFoundException;
 
 /**
@@ -138,11 +139,11 @@ final class Pop3Backend implements ConnectionBackend
         return Pop3MimeStructure::parse($this->rawMessage($msgno));
     }
 
-    public function search(array $tokens, int $uidMode, string $charset = ''): array
+    public function search(SearchProgram $program, int $uidMode, string $charset = ''): array
     {
         $ids = [];
         foreach ($this->uidByMsgno as $msgno => $uid) {
-            if (Pop3SearchEvaluator::matches($tokens, $this->rawMessage($msgno), $this->flags[$msgno] ?? [])) {
+            if (Pop3SearchEvaluator::matches($program, $this->rawMessage($msgno), $this->flags[$msgno] ?? [])) {
                 $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
         }

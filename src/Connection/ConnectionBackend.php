@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Connection;
 
+use ImapPolyfill\Message\SearchProgram;
+
 /**
  * The wire operations an \IMAP\Connection needs from whatever protocol it
  * actually speaks. IMAP\Connection owns connection-level state (selected
@@ -51,13 +53,14 @@ interface ConnectionBackend
     public function fetchBodyStructure(int $messageNum, bool $byUid): array;
 
     /**
-     * @param string[] $tokens
-     * @param string   $charset  how the server should read the criteria's
-     *                           bytes; empty when the caller named none
+     * @param SearchProgram $program the parsed criteria; the IMAP backend sends
+     *                               its tokens on, the POP3 one evaluates them
+     * @param string        $charset how the server should read the criteria's
+     *                               bytes; empty when the caller named none
      *
      * @return int[]
      */
-    public function search(array $tokens, int $uidMode, string $charset = ''): array;
+    public function search(SearchProgram $program, int $uidMode, string $charset = ''): array;
 
     public function hasCapability(string $capability): bool;
 

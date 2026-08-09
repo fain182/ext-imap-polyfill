@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use PHPUnit\Framework\Attributes\DataProvider;
+
 class ImapSearchTest extends GreenmailTestCase
 {
     public function test_returns_matching_message_numbers(): void
@@ -86,5 +88,81 @@ class ImapSearchTest extends GreenmailTestCase
         $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertSame([1], imap_search($connection, 'SUBJECT "Match Me"'));
+    }
+
+    /**
+     * The criteria string is parsed into c-client's SEARCHPGM before anything
+     * goes out, and that struct has no field for these — so they are refused
+     * here rather than handed to a server that would have understood them.
+     * IMAP's own SEARCH grammar is the wider one; imap_search()'s is this.
+     *
+     * @param non-empty-string $criteria
+     */
+    #[DataProvider('criteriaOutsideTheVocabulary')]
+    public function test_a_criterion_c_client_cannot_build_fails_the_search(string $criteria, string $reported): void
+    {
+        $folderName = 'SearchBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        // The folder is not empty, so false is the refusal and not an
+        // empty result set.
+        $this->assertFalse(imap_search($connection, $criteria));
+        $this->assertSame("Unknown search criterion: {$reported}", imap_last_error());
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function criteriaOutsideTheVocabulary(): iterable
+    {
+        yield 'HEADER' => ['HEADER Subject Present', 'HEADER'];
+        yield 'OR' => ['OR SEEN UNSEEN', 'OR'];
+        yield 'NOT' => ['NOT SEEN', 'NOT'];
+        yield 'LARGER' => ['LARGER 10', 'LARGER'];
+        yield 'SMALLER' => ['SMALLER 10', 'SMALLER'];
+        yield 'DRAFT' => ['DRAFT', 'DRAFT'];
+        yield 'UNDRAFT' => ['UNDRAFT', 'UNDRAFT'];
+        yield 'SENTSINCE' => ['SENTSINCE 1-Jan-2020', 'SENTSINCE'];
+        yield 'a misspelling' => ['SUBJEKT x', 'SUBJEKT'];
+
+        // Reported uppercased, however it was written.
+        yield 'lowercase' => ['header Subject Present', 'HEADER'];
+    }
+
+    /**
+     * A criterion that takes a value and was given none is the same failure:
+     * mail_criteria_string() answers NIL and the criterion is the one named.
+     */
+    public function test_a_criterion_missing_its_value_fails_the_search(): void
+    {
+        $folderName = 'SearchBox'.uniqid();
+        $this->makeFolder($folderName)->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->assertFalse(imap_search($connection, 'SUBJECT'));
+        $this->assertSame('Unknown search criterion: SUBJECT', imap_last_error());
+    }
+
+    /**
+     * imap_sort()'s search criteria go through the same parser, and a
+     * keyword it cannot build fails the sort rather than quietly sorting
+     * the whole folder.
+     */
+    public function test_the_same_vocabulary_gates_imap_sorts_search_criteria(): void
+    {
+        $folderName = 'SearchBox'.uniqid();
+        $this->makeFolder($folderName)->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->assertFalse(imap_sort($connection, SORTDATE, 0, 0, 'DRAFT'));
+        $this->assertSame('Unknown search criterion: DRAFT', imap_last_error());
+
+        // ...and a criterion it can build still sorts.
+        $this->assertSame([1], imap_sort($connection, SORTDATE, 0, 0, 'UNSEEN'));
     }
 }

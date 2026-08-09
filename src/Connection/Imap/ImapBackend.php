@@ -5,6 +5,7 @@ namespace ImapPolyfill\Connection\Imap;
 use ImapPolyfill\Connection\ConnectionBackend;
 use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\Protocol;
+use ImapPolyfill\Message\SearchProgram;
 
 /**
  * ConnectionBackend implementation backed by directorytree/imapengine. Sole
@@ -84,9 +85,11 @@ final class ImapBackend implements ConnectionBackend
         return $this->protocol->bodyStructure($messageNum, $byUid);
     }
 
-    public function search(array $tokens, int $uidMode, string $charset = ''): array
+    public function search(SearchProgram $program, int $uidMode, string $charset = ''): array
     {
-        return $this->protocol->search($tokens, $uidMode, $charset);
+        // The criteria go out as written: they have been checked against
+        // the vocabulary c-client would accept, and the server does the rest.
+        return $this->protocol->search($program->tokens, $uidMode, $charset);
     }
 
     public function hasCapability(string $capability): bool
