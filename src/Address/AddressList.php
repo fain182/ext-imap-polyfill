@@ -22,7 +22,14 @@ final class AddressList
 
     public static function parse(string $addresses, string $defaultHostname): self
     {
-        if (trim($addresses) === '') {
+        // rfc822_parse_adrlist() skips whitespace before it looks at
+        // anything, and comments are whitespace: a list holding nothing but
+        // a comment is an empty list, not a malformed one. An unterminated
+        // comment says so here, on the way past.
+        $leading = new Rfc822Cursor($addresses);
+        $leading->skipWhitespaceAndComments();
+
+        if ($leading->atEnd()) {
             return new self([]);
         }
 

@@ -176,6 +176,38 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     }
 
     /**
+     * A comment that never closes is reported, once, and takes the rest of
+     * the string with it: rfc822_skip_comment() writes a NUL over its "(" so
+     * that a second pass over the same text neither parses what was in it
+     * nor reports it again. A list holding nothing else is an empty list,
+     * not a malformed one — the address parser never gets that far, since
+     * comments are whitespace and whitespace is skipped before it looks.
+     */
+    public function test_an_unterminated_comment_is_reported_once(): void
+    {
+        imap_errors();
+
+        $parsed = @imap_rfc822_parse_adrlist('j(e', 'default.host');
+
+        $this->assertSame(
+            [['mailbox' => 'j', 'host' => 'default.host']],
+            array_map(get_object_vars(...), $parsed),
+        );
+        $this->assertSame(['Unterminated comment: (e'], imap_errors());
+    }
+
+    public function test_a_list_holding_only_a_comment_is_empty(): void
+    {
+        imap_errors();
+
+        $this->assertSame([], @imap_rfc822_parse_adrlist('(only a comment)', 'default.host'));
+        $this->assertSame([], imap_errors() ?: []);
+
+        $this->assertSame([], @imap_rfc822_parse_adrlist('(u', 'default.host'));
+        $this->assertSame(['Unterminated comment: (u'], imap_errors());
+    }
+
+    /**
      * Which complaint c-client makes about what it could not use depends on
      * the first character of it: something alphanumeric reads as an address
      * missing its comma, anything else as debris.

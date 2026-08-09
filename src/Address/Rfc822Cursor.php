@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Address;
 
+use ImapPolyfill\Support\ErrorStack;
+
 /**
  * A cursor over RFC 822 header text, moving the way c-client's rfc822.c
  * moves through it.
@@ -20,6 +22,8 @@ final class Rfc822Cursor
     private int $position = 0;
 
     private ?string $lastComment = null;
+
+    private ?int $unterminatedCommentAt = null;
 
     public function __construct(private readonly string $source)
     {
@@ -54,6 +58,20 @@ final class Rfc822Cursor
     public function skip(int $count = 1): void
     {
         $this->position += $count;
+    }
+
+    /**
+     * Where an unterminated comment began, if one was met.
+     *
+     * rfc822_skip_comment() reports one and then writes a NUL over the "("
+     * — "nuke duplicate messages in case reparse" — so the text stops there
+     * for everything that reads it afterwards, and the same comment is never
+     * reported twice. A caller that parses the same text a second time has
+     * to cut it here for that to hold.
+     */
+    public function unterminatedCommentAt(): ?int
+    {
+        return $this->unterminatedCommentAt;
     }
 
     /** Whatever is left unread, which is what c-client names in its complaint. */
@@ -119,6 +137,13 @@ final class Rfc822Cursor
             $this->lastComment = $closed
                 ? substr($this->source, $start + 1, $this->position - $start - 2)
                 : null;
+
+            if (!$closed) {
+                $this->unterminatedCommentAt = $start;
+                ErrorStack::push('Unterminated comment: '.substr($this->source, $start, 80));
+
+                return;
+            }
         }
     }
 

@@ -71,7 +71,13 @@ final class Address
                 // from the beginning of the string as a plain addr-spec —
                 // which reads one word where the phrase read several, and
                 // leaves the rest for the caller to complain about.
-                $cursor = new Rfc822Cursor($part);
+                //
+                // The text it starts over on stops at any unterminated
+                // comment the first pass found, which c-client arranges by
+                // writing a NUL there. Without that the second pass reports
+                // the same comment again.
+                $nuked = $cursor->unterminatedCommentAt();
+                $cursor = new Rfc822Cursor($nuked === null ? $part : substr($part, 0, $nuked));
                 $adl = null;
                 $address = self::parseAddrSpec($cursor, $defaultHostname, $adl);
             }
