@@ -55,11 +55,43 @@ final class Connection
      */
     private array $userFlags = [];
 
-    public function __construct(
+    /**
+     * Whether the constructor below was reached through the factory, which
+     * is the only way in: the real IMAP\Connection has no constructor a
+     * caller can reach, and refuses by name rather than by arity.
+     */
+    private static bool $opening = false;
+
+    /**
+     * The one way to build one. Everything the stream cannot describe
+     * itself without is required here, where the constructor cannot ask
+     * for it — a constructor that asked would refuse `new IMAP\Connection`
+     * with the wrong message, ArgumentCountError arriving before any body
+     * of ours runs.
+     */
+    public static function forSession(
         ConnectionBackend $backend,
         string $folder,
-        private string $mailboxPrefix,
-        private string $user,
+        string $mailboxPrefix,
+        string $user,
+        bool $readOnly = false,
+        string $password = '',
+        bool $anonymous = false,
+    ): self {
+        self::$opening = true;
+
+        try {
+            return new self($backend, $folder, $mailboxPrefix, $user, $readOnly, $password, $anonymous);
+        } finally {
+            self::$opening = false;
+        }
+    }
+
+    public function __construct(
+        ?ConnectionBackend $backend = null,
+        string $folder = '',
+        private string $mailboxPrefix = '',
+        private string $user = '',
         bool $readOnly = false,
         /**
          * Kept so imap_reopen() can reach a different server, which is what
@@ -74,6 +106,10 @@ final class Connection
          */
         private bool $anonymous = false,
     ) {
+        if (!self::$opening || $backend === null) {
+            throw new \Error('Cannot directly construct IMAP\Connection, use imap_open() instead');
+        }
+
         $this->backend = $backend;
         $this->folder = $folder;
         $this->readOnly = $readOnly;

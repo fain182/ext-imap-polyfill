@@ -23,7 +23,7 @@ class ImapOpenReadOnlyTest extends TestCase
             new \ImapPolyfill\Connection\Imap\ImapEngineConnection(new \DirectoryTree\ImapEngine\Connection\Streams\ImapStream()),
             'example.com',
         );
-        $connection = new \IMAP\Connection($backend, 'INBOX', '{example.com:143/imap', 'user', readOnly: true);
+        $connection = \IMAP\Connection::forSession($backend, 'INBOX', '{example.com:143/imap', 'user', readOnly: true);
 
         $this->assertTrue($connection->isReadOnly());
     }
@@ -38,7 +38,7 @@ class ImapOpenReadOnlyTest extends TestCase
             new \ImapPolyfill\Connection\Imap\ImapEngineConnection(new \DirectoryTree\ImapEngine\Connection\Streams\ImapStream()),
             'example.com',
         );
-        $connection = new \IMAP\Connection($backend, 'INBOX', '{example.com:143/imap', 'user');
+        $connection = \IMAP\Connection::forSession($backend, 'INBOX', '{example.com:143/imap', 'user');
 
         $this->assertFalse($connection->isReadOnly());
     }

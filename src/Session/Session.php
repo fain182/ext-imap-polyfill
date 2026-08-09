@@ -82,7 +82,7 @@ final class Session
         // c-client treats a /readonly flag in the spec the same as passing
         // OP_READONLY (mail_valid_net_parse sets the stream read-only bit).
         $readOnly = (bool) ($flags & OP_READONLY) || $spec->switches->readOnly;
-        $connection = new \IMAP\Connection(
+        $connection = \IMAP\Connection::forSession(
             $backend,
             $spec->folder,
             $spec->normalizedPrefixBase($credentials->secure, $backend->upgradedToTls()),

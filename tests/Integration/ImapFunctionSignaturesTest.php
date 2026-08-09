@@ -102,4 +102,23 @@ class ImapFunctionSignaturesTest extends TestCase
             $this->assertSame($expected, $actual, "{$function} signature diverges from php_imap.stub.php");
         }
     }
+
+    /**
+     * IMAP\Connection has no constructor a caller can reach, and refuses by
+     * name rather than by arity — a constructor with required arguments
+     * would raise ArgumentCountError before any code of the class ran, and
+     * user code catching Error would read a different message.
+     */
+    public function test_the_connection_class_cannot_be_constructed_directly(): void
+    {
+        $this->expectException(\Error::class);
+        $this->expectExceptionMessage('Cannot directly construct IMAP\Connection, use imap_open() instead');
+
+        new \IMAP\Connection();
+    }
+
+    public function test_the_connection_class_is_final(): void
+    {
+        $this->assertTrue((new \ReflectionClass(\IMAP\Connection::class))->isFinal());
+    }
 }
