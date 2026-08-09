@@ -110,7 +110,7 @@ POP3 is supported too, with the same reduced feature set it has under the real e
 
 | Function | Divergence |
 |---|---|
-| `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host stays as written in the spec; c-client resolves it to its canonical DNS name |
+| `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host stays as written in the spec; c-client reports the resolver's canonical name for it. PHP exposes no way to ask for that name — `gethostbyname()` returns only an address, and the reverse lookup answers a different question, and often a different name |
 | `imap_mail` | always delivers through the `sendmail_path` pipe, and returns false when that ini is empty |
 | `imap_open` | the warning on a failed open is `E_USER_WARNING` where c-client's is `E_WARNING`; the message text is identical, but `trigger_error()` cannot raise a non-user warning from PHP |
 | `imap_open` with `OP_HALFOPEN` | a call that still reaches the wire on a half-open connection (`imap_search`) leaves the server's refusal on the error stack; c-client answers those from the stream itself and records nothing. Return values match either way |
