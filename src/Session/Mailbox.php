@@ -135,6 +135,35 @@ final class Mailbox
         return false;
     }
 
+    /**
+     * Whether the folder has no message with this uid.
+     *
+     * c-client settles that from the uid cache it already holds, before it
+     * builds any command, so a uid that is not there is answered as absent
+     * however malformed the rest of the call was. This is the same question
+     * asked the other way round: only on the path where the fetch already
+     * failed, so the happy path stays one round trip.
+     */
+    private function uidIsAbsent(int $uid): bool
+    {
+        // An empty folder has no uids, and asking it for the ones it has is
+        // itself an error on some servers ("1:*" over nothing).
+        if ($this->connection->numMessages() < 1) {
+            return true;
+        }
+
+        try {
+            $this->connection->backend()->getMessageNumber((string) $uid);
+        } catch (MessageNotFoundException) {
+            return true;
+        } catch (\Throwable) {
+            // No answer either way: the failure that got us here stands.
+            return false;
+        }
+
+        return false;
+    }
+
     public function fetchHeader(int $messageNum, int $flags): string|false
     {
         $this->connection->ensureOpen();
@@ -158,6 +187,10 @@ final class Mailbox
         try {
             $headers = $this->connection->backend()->headers([$messageNum], 'RFC822', $uidMode);
         } catch (\Throwable $e) {
+            if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
+                return $this->absent('imap_fetchheader', $uidMode);
+            }
+
             ErrorStack::push($e->getMessage());
 
             return false;
@@ -387,6 +420,10 @@ final class Mailbox
         try {
             $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
+            if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
+                return $this->absent($function, $uidMode);
+            }
+
             ErrorStack::push($e->getMessage());
 
             return false;
@@ -423,6 +460,10 @@ final class Mailbox
         try {
             $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
+            if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
+                return $this->absent('imap_fetchmime', $uidMode);
+            }
+
             ErrorStack::push($e->getMessage());
 
             return false;
@@ -543,6 +584,10 @@ final class Mailbox
         try {
             $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
+            if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
+                return $this->absent('imap_body', $uidMode);
+            }
+
             ErrorStack::push($e->getMessage());
 
             return false;
