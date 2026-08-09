@@ -2,8 +2,12 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 class ImapFetchstructureTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     public function test_returns_structure_of_a_single_part_message(): void
     {
         $folderName = 'StructBox' . uniqid();
@@ -141,5 +145,36 @@ class ImapFetchstructureTest extends GreenmailTestCase
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_fetchstructure(): Argument #3 ($flags) must be FT_UID or 0');
         imap_fetchstructure($connection, 1, FT_PEEK);
+    }
+
+    /**
+     * c-client answers a message number past the end of the folder from the
+     * count it already holds: a warning, false, and nothing said to the
+     * server or left on the error stack.
+     */
+    public function test_warns_for_a_message_number_past_the_end(): void
+    {
+        $folderName = 'StructureWarnBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        [$result, $warnings] = $this->capturingWarnings(fn () => imap_fetchstructure($connection, 9));
+
+        $this->assertFalse($result);
+        $this->assertSame(['imap_fetchstructure(): Bad message number'], $warnings);
+    }
+
+    public function test_warns_for_a_uid_that_does_not_exist(): void
+    {
+        $folderName = 'StructureWarnBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        [$result, $warnings] = $this->capturingWarnings(fn () => imap_fetchstructure($connection, 99999, FT_UID));
+
+        $this->assertFalse($result);
+        $this->assertSame(['imap_fetchstructure(): UID does not exist'], $warnings);
     }
 }

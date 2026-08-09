@@ -2,8 +2,12 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 class ImapBodystructTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     public function test_returns_structure_of_the_only_part_in_a_single_part_message(): void
     {
         $folderName = 'BodystructBox'.uniqid();
@@ -188,5 +192,23 @@ class ImapBodystructTest extends GreenmailTestCase
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_bodystruct(): Argument #2 ($message_num) must be greater than 0');
         imap_bodystruct($connection, 0, '1');
+    }
+
+    /**
+     * c-client answers a message number past the end of the folder from the
+     * count it already holds: a warning, false, and nothing said to the
+     * server or left on the error stack.
+     */
+    public function test_warns_for_a_message_number_past_the_end(): void
+    {
+        $folderName = 'BodystructWarnBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        [$result, $warnings] = $this->capturingWarnings(fn () => imap_bodystruct($connection, 9, '1'));
+
+        $this->assertFalse($result);
+        $this->assertSame(['imap_bodystruct(): Bad message number'], $warnings);
     }
 }

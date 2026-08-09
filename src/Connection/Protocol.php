@@ -397,6 +397,14 @@ final class Protocol
     public function bodyStructure(int $id, bool $byUid): array
     {
         $data = $this->fetch(['BODYSTRUCTURE'], [$id], null, $byUid ? UidMode::UID : UidMode::MSGNO);
+
+        // An empty response is the server saying the message is not there,
+        // which the caller answers for; a response that came back without
+        // the item asked for is the server breaking its own contract.
+        if ($data === []) {
+            throw new MessageNotFoundException('message not found: '.$id);
+        }
+
         $structure = $data[$id] ?? reset($data);
 
         if (!is_array($structure)) {

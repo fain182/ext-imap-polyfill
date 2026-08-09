@@ -2,10 +2,14 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 use PHPUnit\Framework\Attributes\Group;
 
 class ImapSavebodyTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     private const MULTIPART_MESSAGE = "Subject: Multi\r\n"
         ."MIME-Version: 1.0\r\n"
         ."Content-Type: multipart/mixed; boundary=\"B1\"\r\n"
@@ -152,5 +156,36 @@ class ImapSavebodyTest extends GreenmailTestCase
         $this->expectException(\ValueError::class);
         $this->expectExceptionMessage('imap_savebody(): Argument #5 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');
         imap_savebody($connection, tempnam(sys_get_temp_dir(), 'imap_savebody_'), 1, '1', 0x40);
+    }
+
+    /**
+     * c-client answers a message number past the end of the folder from the
+     * count it already holds: a warning, false, and nothing said to the
+     * server or left on the error stack.
+     */
+    public function test_warns_for_a_message_number_past_the_end(): void
+    {
+        $folderName = 'SavebodyWarnBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        [$result, $warnings] = $this->capturingWarnings(fn () => imap_savebody($connection, tempnam(sys_get_temp_dir(), 'sb'), 9, '1'));
+
+        $this->assertFalse($result);
+        $this->assertSame(['imap_savebody(): Bad message number'], $warnings);
+    }
+
+    public function test_warns_for_a_uid_that_does_not_exist(): void
+    {
+        $folderName = 'SavebodyWarnBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        [$result, $warnings] = $this->capturingWarnings(fn () => imap_savebody($connection, tempnam(sys_get_temp_dir(), 'sb'), 99999, '1', FT_UID));
+
+        $this->assertFalse($result);
+        $this->assertSame(['imap_savebody(): UID does not exist'], $warnings);
     }
 }

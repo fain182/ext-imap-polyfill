@@ -2,10 +2,14 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 use PHPUnit\Framework\Attributes\Group;
 
 class ImapHeaderinfoTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     /**
      * Asserts the Recent/Unseen flags, which are session-scoped and
      * differ between the two servers for the same message.
@@ -258,5 +262,23 @@ class ImapHeaderinfoTest extends GreenmailTestCase
         $this->assertSame("{$first} {$second}", $result->subject);
         $this->assertSame("{$first} {$second}", $result->Subject);
         $this->assertSame(str_repeat('A', 30).str_repeat('B', 30), imap_utf8($result->subject));
+    }
+
+    /**
+     * c-client answers a message number past the end of the folder from the
+     * count it already holds: a warning, false, and nothing said to the
+     * server or left on the error stack.
+     */
+    public function test_warns_for_a_message_number_past_the_end(): void
+    {
+        $folderName = 'HeaderinfoWarnBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        [$result, $warnings] = $this->capturingWarnings(fn () => imap_headerinfo($connection, 9));
+
+        $this->assertFalse($result);
+        $this->assertSame(['imap_headerinfo(): Bad message number'], $warnings);
     }
 }

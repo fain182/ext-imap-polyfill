@@ -56,7 +56,9 @@ final class Mailbox
         // Nothing to look through: c-client answers from the count it
         // holds rather than asking, so no SEARCH goes out and a folder
         // that has gone away is not an error, just empty.
-        if ($this->selectionCovering(1, UidMode::MSGNO) === false) {
+        $status = $this->selectedFolder();
+
+        if ($status === false || $status->exists < 1) {
             return false;
         }
 
@@ -81,25 +83,56 @@ final class Mailbox
      *
      * c-client checks the number against the count it already holds and
      * answers from that: past the end is simply absent, so no FETCH goes
-     * out and nothing is logged. A UID is not a position in the folder, so
-     * it is not checked this way. A selection that fails outright is
-     * another matter, and is reported as any failure is.
+     * out and nothing reaches the error stack — it warns instead, naming
+     * the function the caller entered through. A UID is not a position in
+     * the folder, so it is not checked this way. A selection that fails
+     * outright is another matter, and is reported as any failure is.
      */
-    private function selectionCovering(int $messageNum, int $uidMode): FolderState|false
+    private function selectionCovering(int $messageNum, int $uidMode, string $function): FolderState|false
+    {
+        $status = $this->selectedFolder();
+
+        if ($status === false) {
+            return false;
+        }
+
+        if ($uidMode !== UidMode::UID && $messageNum > $status->exists) {
+            return $this->absent($function, $uidMode);
+        }
+
+        return $status;
+    }
+
+    /**
+     * The selected folder as c-client holds it, or false with the failure
+     * on the error stack. Says nothing about any particular message.
+     */
+    private function selectedFolder(): FolderState|false
     {
         try {
-            $status = $this->connection->selectOrExamine();
+            return $this->connection->selectOrExamine();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
             return false;
         }
+    }
 
-        if ($uidMode !== UidMode::UID && $messageNum > $status->exists) {
-            return false;
-        }
+    /**
+     * The message is not there. c-client answers that from the cache it
+     * already holds rather than from a failed FETCH, so php_imap.c warns
+     * (php_error_docref) and leaves the error stack alone.
+     */
+    private function absent(string $function, int $uidMode): false
+    {
+        trigger_error(
+            $uidMode === UidMode::UID
+                ? "{$function}(): UID does not exist"
+                : "{$function}(): Bad message number",
+            E_USER_WARNING,
+        );
 
-        return $status;
+        return false;
     }
 
     public function fetchHeader(int $messageNum, int $flags): string|false
@@ -118,7 +151,7 @@ final class Mailbox
             ? UidMode::UID
             : UidMode::MSGNO;
 
-        if ($this->selectionCovering($messageNum, $uidMode) === false) {
+        if ($this->selectionCovering($messageNum, $uidMode, 'imap_fetchheader') === false) {
             return false;
         }
 
@@ -128,6 +161,10 @@ final class Mailbox
             ErrorStack::push($e->getMessage());
 
             return false;
+        }
+
+        if ($headers === []) {
+            return $this->absent('imap_fetchheader', $uidMode);
         }
 
         return $headers[$messageNum] ?? reset($headers);
@@ -150,19 +187,7 @@ final class Mailbox
             throw new \ValueError('imap_headerinfo(): Argument #4 ($subject_length) must be between 0 and 1024');
         }
 
-        try {
-            $status = $this->connection->selectOrExamine();
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        // c-client checks the number against the count it already holds and
-        // answers from that, so a message past the end of the folder is
-        // simply absent rather than a failed FETCH — nothing to report, and
-        // nothing said to the server.
-        if ($messageNum > $status->exists) {
+        if ($this->selectionCovering($messageNum, UidMode::MSGNO, 'imap_headerinfo') === false) {
             return false;
         }
 
@@ -283,12 +308,14 @@ final class Mailbox
 
         $uidMode = ($flags & FT_UID) ? UidMode::UID : UidMode::MSGNO;
 
-        if ($this->selectionCovering($messageNum, $uidMode) === false) {
+        if ($this->selectionCovering($messageNum, $uidMode, 'imap_fetchstructure') === false) {
             return false;
         }
 
         try {
             $parsed = $this->connection->backend()->fetchBodyStructure($messageNum, (bool) ($flags & FT_UID));
+        } catch (MessageNotFoundException) {
+            return $this->absent('imap_fetchstructure', $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -310,6 +337,16 @@ final class Mailbox
             throw new \ValueError('imap_fetchbody(): Argument #4 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');
         }
 
+        return $this->fetchSection($messageNum, $section, $flags, 'imap_fetchbody');
+    }
+
+    /**
+     * The body of one section, for the two functions that fetch one:
+     * imap_fetchbody() and imap_savebody(), which warn under their own name
+     * when the message is not there.
+     */
+    private function fetchSection(int $messageNum, string $section, int $flags, string $function): string|false
+    {
         $uidMode = ($flags & FT_UID)
             ? UidMode::UID
             : UidMode::MSGNO;
@@ -318,7 +355,7 @@ final class Mailbox
         $wireSection = $section === '0' ? 'HEADER' : $section;
         $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$wireSection}]" : "BODY[{$wireSection}]";
 
-        if ($this->selectionCovering($messageNum, $uidMode) === false) {
+        if ($this->selectionCovering($messageNum, $uidMode, $function) === false) {
             return false;
         }
 
@@ -355,6 +392,10 @@ final class Mailbox
             return false;
         }
 
+        if ($data === []) {
+            return $this->absent($function, $uidMode);
+        }
+
         return $data[$messageNum] ?? reset($data);
     }
 
@@ -375,7 +416,7 @@ final class Mailbox
             : UidMode::MSGNO;
         $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$section}.MIME]" : "BODY[{$section}.MIME]";
 
-        if ($this->selectionCovering($messageNum, $uidMode) === false) {
+        if ($this->selectionCovering($messageNum, $uidMode, 'imap_fetchmime') === false) {
             return false;
         }
 
@@ -385,6 +426,10 @@ final class Mailbox
             ErrorStack::push($e->getMessage());
 
             return false;
+        }
+
+        if ($data === []) {
+            return $this->absent('imap_fetchmime', $uidMode);
         }
 
         return $data[$messageNum] ?? reset($data);
@@ -398,13 +443,18 @@ final class Mailbox
             throw new \ValueError('imap_bodystruct(): Argument #2 ($message_num) must be greater than 0');
         }
 
+        // c-client's mail_body() indexes a single BODYSTRUCTURE fetch by
+        // section, unlike imap_fetchbody(): there is no msgno/uid
+        // equivalent of BODYSTRUCTURE for one section, so this is always
+        // a msgno, never a uid (no FT_UID here, unlike imap_fetchbody()).
+        if ($this->selectionCovering($messageNum, UidMode::MSGNO, 'imap_bodystruct') === false) {
+            return false;
+        }
+
         try {
-            $this->connection->selectOrExamine();
-            // c-client's mail_body() indexes a single BODYSTRUCTURE fetch by
-            // section, unlike imap_fetchbody(): there is no msgno/uid
-            // equivalent of BODYSTRUCTURE for one section, so this is always
-            // a msgno, never a uid (no FT_UID here, unlike imap_fetchbody()).
             $parsed = $this->connection->backend()->fetchBodyStructure($messageNum, false);
+        } catch (MessageNotFoundException) {
+            return $this->absent('imap_bodystruct', UidMode::MSGNO);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -445,12 +495,22 @@ final class Mailbox
             }
         }
 
-        // ext-imap's C implementation never checks whether the underlying
-        // mail_fetchbody_full() call actually produced anything — it just
-        // writes whatever it got (nothing, for an invalid section) and
-        // returns true as long as the destination could be opened.
-        $body = $this->fetchBody($messageNum, $section, $flags);
-        fwrite($handle, $body === false ? '' : $body);
+        // A section that isn't there is written as nothing and still counts
+        // as success — ext-imap's C implementation never looks at what
+        // mail_fetchbody_full() produced. A message that isn't there is a
+        // different answer: that one is settled before any of this, and
+        // false is what it gets.
+        $body = $this->fetchSection($messageNum, $section, $flags, 'imap_savebody');
+
+        if ($body === false) {
+            if (!$isResource) {
+                fclose($handle);
+            }
+
+            return false;
+        }
+
+        fwrite($handle, $body);
 
         if (!$isResource) {
             fclose($handle);
@@ -476,7 +536,7 @@ final class Mailbox
             : UidMode::MSGNO;
         $item = ($flags & FT_PEEK) ? 'BODY.PEEK[TEXT]' : 'BODY[TEXT]';
 
-        if ($this->selectionCovering($messageNum, $uidMode) === false) {
+        if ($this->selectionCovering($messageNum, $uidMode, 'imap_body') === false) {
             return false;
         }
 
@@ -486,6 +546,10 @@ final class Mailbox
             ErrorStack::push($e->getMessage());
 
             return false;
+        }
+
+        if ($data === []) {
+            return $this->absent('imap_body', $uidMode);
         }
 
         return $data[$messageNum] ?? reset($data);
@@ -577,7 +641,9 @@ final class Mailbox
             throw new \ValueError('imap_msgno(): Argument #2 ($message_uid) must be greater than 0');
         }
 
-        if ($this->selectionCovering(1, UidMode::MSGNO) === false) {
+        $status = $this->selectedFolder();
+
+        if ($status === false || $status->exists < 1) {
             return 0;
         }
 

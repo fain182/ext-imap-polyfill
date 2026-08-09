@@ -2,8 +2,12 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 class ImapBodyTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     public function test_returns_the_body_without_the_header(): void
     {
         $folderName = 'BodyBox'.uniqid();
@@ -66,5 +70,36 @@ class ImapBodyTest extends GreenmailTestCase
 
         $this->expectException(\ValueError::class);
         imap_body($connection, 1, 4096);
+    }
+
+    /**
+     * c-client answers a message number past the end of the folder from the
+     * count it already holds: a warning, false, and nothing said to the
+     * server or left on the error stack.
+     */
+    public function test_warns_for_a_message_number_past_the_end(): void
+    {
+        $folderName = 'BodyWarnBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        [$result, $warnings] = $this->capturingWarnings(fn () => imap_body($connection, 9));
+
+        $this->assertFalse($result);
+        $this->assertSame(['imap_body(): Bad message number'], $warnings);
+    }
+
+    public function test_warns_for_a_uid_that_does_not_exist(): void
+    {
+        $folderName = 'BodyWarnBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        [$result, $warnings] = $this->capturingWarnings(fn () => imap_body($connection, 99999, FT_UID));
+
+        $this->assertFalse($result);
+        $this->assertSame(['imap_body(): UID does not exist'], $warnings);
     }
 }
