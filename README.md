@@ -112,7 +112,6 @@ POP3 is supported too, with the same reduced feature set it has under the real e
 |---|---|
 | `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host stays as written in the spec; c-client reports the resolver's canonical name for it. PHP exposes no way to ask for that name — `gethostbyname()` returns only an address, and the reverse lookup answers a different question, and often a different name |
 | `imap_mail` | always delivers through the `sendmail_path` pipe, and returns false when that ini is empty |
-| `imap_open` | the warning on a failed open is `E_USER_WARNING` where c-client's is `E_WARNING`; the message text is identical, but `trigger_error()` cannot raise a non-user warning from PHP |
 | `imap_open` with `/tls` | negotiates the best TLS version both ends support. c-client asks for TLS 1.0 and nothing else, so against a server on the usual TLS 1.2 minimum its `/tls` fails outright and needs `/tls-sslv23` to work at all — the same is true of the upgrade it performs unasked |
 | `imap_timeout` | `IMAP_WRITETIMEOUT` is stored and read back, but not applied: a PHP socket has one timeout covering both directions, and the read timeout takes it |
 | `imap_utf8` | decodes an ISO-8859-1 segment to precomposed UTF-8 (`café`, U+00E9); c-client emits the decomposed form (`cafe` + U+0301) |
@@ -127,6 +126,6 @@ Connections upgrade themselves: `STARTTLS` (or POP3's `STLS`) goes out whenever 
 
 `imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` throw: they speak a command dropped from IMAP4rev1 that in practice only c-client's own UW-IMAP server ever implemented, so no server you can reach would answer them. Opening a `{host/nntp}` mailbox throws too — the real extension speaks NNTP, this doesn't.
 
-Warnings are raised as `E_USER_WARNING` rather than `E_WARNING`, which userland cannot produce.
+Warnings are raised as `E_USER_WARNING` rather than `E_WARNING`, which userland cannot produce. The message text is the same; an error handler that filters on the level will see the difference.
 
 </details>
