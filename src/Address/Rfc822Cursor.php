@@ -16,8 +16,13 @@ use ImapPolyfill\Support\ErrorStack;
  */
 final class Rfc822Cursor
 {
-    /** RFC 822 specials: the characters an atom may not contain. */
-    private const SPECIALS = '()<>@,;:\\".[]';
+    /**
+     * c-client's wspecials, the delimiters rfc822_parse_word() reads a word
+     * up to. The dot is not one of them: a word may hold dots, and where
+     * they are significant — between the parts of a mailbox or a domain —
+     * the caller looks for them itself.
+     */
+    private const SPECIALS = '()<>@,;:\\"[]';
 
     private int $position = 0;
 
@@ -58,6 +63,15 @@ final class Rfc822Cursor
     public function skip(int $count = 1): void
     {
         $this->position += $count;
+    }
+
+    /**
+     * Read no further. c-client reaches this by leaving a NIL where the
+     * parse pointer would be, which the caller reads as "nothing follows".
+     */
+    public function skipToEnd(): void
+    {
+        $this->position = strlen($this->source);
     }
 
     /**

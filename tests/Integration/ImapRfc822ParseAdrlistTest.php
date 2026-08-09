@@ -176,6 +176,61 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, array<string, string>, string|false}>
+     */
+    public static function domains(): array
+    {
+        return [
+            // A word may hold dots — they are not among the delimiters
+            // rfc822_parse_word() stops at — so none of these is the parser
+            // giving up partway.
+            'two dots running' => ['a@b..c', ['mailbox' => 'a', 'host' => 'b..c'], false],
+            'leading dot' => ['a@.b', ['mailbox' => 'a', 'host' => '.b'], false],
+            'trailing dot' => ['a@b.', ['mailbox' => 'a', 'host' => 'b.'], false],
+            // Whitespace around the dots is not part of the domain.
+            'space before the domain' => ['a@ b.com', ['mailbox' => 'a', 'host' => 'b.com'], false],
+            'tab inside the domain' => ["a@b\t.com", ['mailbox' => 'a', 'host' => 'b.com'], false],
+            // Kept with its brackets: they are what says the text between
+            // them is not a name to look up anywhere.
+            'domain literal' => ['a@[1.2.3.4]', ['mailbox' => 'a', 'host' => '[1.2.3.4]'], false],
+            // No domain at all keeps the address and marks the host, rather
+            // than quietly reading the default host into it.
+            'nothing after the at sign' => [
+                'a@',
+                ['mailbox' => 'a', 'host' => '.SYNTAX-ERROR.'],
+                'Missing or invalid host name after @',
+            ],
+            'empty domain literal' => [
+                'a@[]',
+                ['mailbox' => 'a', 'host' => '.SYNTAX-ERROR.'],
+                'Empty domain literal',
+            ],
+            'unterminated domain literal' => [
+                'a@[1.2.3.4',
+                ['mailbox' => 'a', 'host' => '.SYNTAX-ERROR.'],
+                'Unterminated domain literal',
+            ],
+        ];
+    }
+
+    /**
+     * @param array<string, string> $expected
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('domains')]
+    public function test_domains_are_read_as_rfc822_parse_domain_reads_them(
+        string $list,
+        array $expected,
+        string|false $error,
+    ): void {
+        imap_errors();
+
+        $parsed = @imap_rfc822_parse_adrlist($list, 'default.host');
+
+        $this->assertSame($expected, get_object_vars($parsed[0]));
+        $this->assertSame($error === false ? [] : [$error], imap_errors() ?: []);
+    }
+
+    /**
      * A comment that never closes is reported, once, and takes the rest of
      * the string with it: rfc822_skip_comment() writes a NUL over its "(" so
      * that a second pass over the same text neither parses what was in it

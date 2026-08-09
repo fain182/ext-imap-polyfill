@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Address;
 
+use ImapPolyfill\Support\ErrorStack;
+
 /**
  * One entry of a parsed address list. Every field is optional because
  * c-client's ADDRESS carries more than mailboxes: a group opens with an
@@ -11,6 +13,9 @@ namespace ImapPolyfill\Address;
  */
 final class Address
 {
+    /** c-client's errhst: the host it writes where a real one is missing. */
+    private const ERROR_HOST = '.SYNTAX-ERROR.';
+
     private function __construct(
         public readonly ?string $mailbox,
         public readonly ?string $host,
@@ -157,7 +162,7 @@ final class Address
         $cursor->skipWhitespaceAndComments();
         $adl = self::readRoute($cursor);
         $cursor->skipWhitespaceAndComments();
-        $mailbox = self::readLocalPart($cursor);
+        $mailbox = self::readDottedWords($cursor);
 
         if ($mailbox === null) {
             return null;
@@ -168,19 +173,79 @@ final class Address
         }
 
         $cursor->skip();
-        $host = self::readDotAtom($cursor);
+        $cursor->skipWhitespaceAndComments();
 
-        return [$mailbox, $host !== '' ? $host : $defaultHostname];
+        // A domain literal is its own branch, with its own complaints: the
+        // "missing host name" one belongs to the branch that reads a word.
+        if ($cursor->peek() === '[') {
+            return [$mailbox, self::readDomainLiteral($cursor) ?? self::ERROR_HOST];
+        }
+
+        $host = self::readDottedWords($cursor);
+
+        if ($host === null) {
+            // rfc822_parse_domain() answers NIL and says so, and
+            // rfc822_parse_addrspec() puts the error host in its place —
+            // the address is kept, with the marker where its domain would be.
+            ErrorStack::push('Missing or invalid host name after @');
+
+            return [$mailbox, self::ERROR_HOST];
+        }
+
+        return [$mailbox, $host];
     }
 
     /**
-     * The mailbox rfc822_parse_addrspec() reads: one word, and then the
-     * dot-separated words after it — joined with dots, and with whatever
-     * whitespace was written around those dots dropped. A second *word*, with
-     * no dot between, is not part of the mailbox: that is where the address
-     * ends and the caller's complaint about the rest begins.
+     * A domain written as an address rather than a name — "[1.2.3.4]".
+     * rfc822_parse_domain() keeps the brackets, which is why this is not
+     * simply a word: they are what says the text between them is not to be
+     * looked up anywhere.
      */
-    private static function readLocalPart(Rfc822Cursor $cursor): ?string
+    private static function readDomainLiteral(Rfc822Cursor $cursor): ?string
+    {
+        $start = $cursor->position();
+        $cursor->skip();
+        $content = $cursor->position();
+
+        while (($char = $cursor->peek()) !== null && $char !== ']') {
+            $cursor->skip($char === '\\' ? 2 : 1);
+        }
+
+        // Read as a word delimited by "]" and "\\": an empty one is no word
+        // at all, and so is a run that reaches the end without its bracket.
+        if ($cursor->position() === $content) {
+            ErrorStack::push('Empty domain literal');
+            // The parse pointer is left NIL here, not after the brackets, so
+            // the "]" is not data trailing the address.
+            $cursor->skipToEnd();
+
+            return null;
+        }
+
+        if ($cursor->peek() === null) {
+            ErrorStack::push('Unterminated domain literal');
+
+            return null;
+        }
+
+        $cursor->skip();
+
+        return $cursor->slice($start, $cursor->position());
+    }
+
+    /**
+     * One word, and then the dot-separated words after it — joined with
+     * dots, and with whatever whitespace was written around those dots
+     * dropped. A second *word*, with no dot between, is not part of it: that
+     * is where the address ends and the caller's complaint about the rest
+     * begins.
+     *
+     * Both halves of an addr-spec are read this way. rfc822_parse_addrspec()
+     * and rfc822_parse_domain() are separate functions in c-client and this
+     * is what they have in common; the mailbox differs only in having no
+     * error host to fall back on.
+     */
+    private static function readDottedWords(Rfc822Cursor $cursor): ?string
     {
         $start = $cursor->position();
         $end = $cursor->readWord();
@@ -227,7 +292,8 @@ final class Address
 
         while ($cursor->peek() === '@') {
             $cursor->skip();
-            self::readDotAtom($cursor);
+            $cursor->skipWhitespaceAndComments();
+            self::readDottedWords($cursor);
             $cursor->skipWhitespaceAndComments();
 
             if ($cursor->peek() === ',') {
@@ -250,16 +316,6 @@ final class Address
         return $route;
     }
 
-    /** A domain: atoms joined by dots, with comments allowed between them. */
-    private static function readDotAtom(Rfc822Cursor $cursor): string
-    {
-        $cursor->skipWhitespaceAndComments();
-        $start = $cursor->position();
-        $end = self::readPhrase($cursor);
-
-        return $end === null ? '' : Rfc822Cursor::unquote($cursor->slice($start, $end));
-    }
-
     /** The entry c-client emits where a group begins: its name, and nothing else. */
     public static function groupStart(string $name): self
     {
@@ -278,7 +334,7 @@ final class Address
      */
     public static function syntaxError(string $reason): self
     {
-        return new self($reason, '.SYNTAX-ERROR.', null);
+        return new self($reason, self::ERROR_HOST, null);
     }
 
     public function isGroupMarker(): bool
