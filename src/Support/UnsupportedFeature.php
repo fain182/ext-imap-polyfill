@@ -22,6 +22,23 @@ final class UnsupportedFeature extends \RuntimeException
         ));
     }
 
+    /**
+     * Only reachable on Windows, and only with no sendmail_path to fall
+     * back on: the extension's Windows build never read that ini because it
+     * spoke SMTP itself, so a host configured for it has nothing this
+     * package can deliver through. On Unix both send through the pipe and
+     * an unset path is the same silent false in either.
+     */
+    public static function smtp(): self
+    {
+        return new self(
+            'imap_mail() delivers through the sendmail_path ini, which is not set. '
+            .'The Windows build of ext-imap sent mail over SMTP instead, using the '
+            .'SMTP and smtp_port ini settings; ext-imap-polyfill has no SMTP client, '
+            .'so sendmail_path has to name a mail delivery program.',
+        );
+    }
+
     public static function scan(string $function): self
     {
         return new self(sprintf(

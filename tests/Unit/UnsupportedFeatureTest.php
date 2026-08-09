@@ -20,6 +20,19 @@ class UnsupportedFeatureTest extends TestCase
         }
     }
 
+    /**
+     * The Windows guard around it cannot run here, so this pins the refusal
+     * itself: what a host set up for the extension's SMTP transport is told
+     * when it finds no sendmail_path to deliver through instead.
+     */
+    public function test_the_smtp_refusal_says_which_ini_to_set(): void
+    {
+        $exception = UnsupportedFeature::smtp();
+
+        $this->assertStringContainsString('sendmail_path', $exception->getMessage());
+        $this->assertStringContainsString('no SMTP client', $exception->getMessage());
+    }
+
     public function test_opening_an_nntp_mailbox_refuses_instead_of_using_imap(): void
     {
         $this->expectException(UnsupportedFeature::class);

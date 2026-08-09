@@ -111,9 +111,8 @@ POP3 is supported too, with the same reduced feature set it has under the real e
 | Function | Divergence |
 |---|---|
 | `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host stays as written in the spec; c-client reports the resolver's canonical name for it. PHP exposes no way to ask for that name — `gethostbyname()` returns only an address, and the reverse lookup answers a different question, and often a different name |
-| `imap_mail` | always delivers through the `sendmail_path` pipe, and returns false when that ini is empty |
 | `imap_open` with `/tls` | negotiates the best TLS version both ends support. c-client asks for TLS 1.0 and nothing else, so against a server on the usual TLS 1.2 minimum its `/tls` fails outright and needs `/tls-sslv23` to work at all — the same is true of the upgrade it performs unasked |
-| `imap_timeout` | `IMAP_WRITETIMEOUT` is stored and read back, but not applied: a PHP socket has one timeout covering both directions, and the read timeout takes it |
+| `imap_timeout` | `IMAP_READTIMEOUT` and `IMAP_WRITETIMEOUT` are one shared value — a PHP socket has a single timeout for both directions — so setting either sets both, and reading either reports the last one set. c-client keeps them apart and applies each to its own direction |
 | `imap_utf8` | decodes an ISO-8859-1 segment to precomposed UTF-8 (`café`, U+00E9); c-client emits the decomposed form (`cafe` + U+0301) |
 
 `imap_open()` reads the whole `{host}` switch set and every `OP_*` flag, including the ones whose faithful answer is a refusal: `/secure`, `OP_SECURE` and `/authuser=` ask for an authentication stronger than `LOGIN`, which this package has no SASL to provide, so they get c-client's own "Can't do secure authentication with this server" rather than a plaintext login. The set is closed, as it is in c-client: `{host/nowalidate-cert}` is not a connection with a switch ignored, it is `false` and "invalid remote specification".
@@ -124,7 +123,7 @@ Connections upgrade themselves: `STARTTLS` (or POP3's `STLS`) goes out whenever 
 
 `imap_search()` and `imap_sort()` accept the criteria c-client can build a `SEARCHPGM` from, which is narrower than IMAP's own `SEARCH` grammar: `ALL`, `ANSWERED`, `BCC`, `BEFORE`, `BODY`, `CC`, `DELETED`, `FLAGGED`, `FROM`, `KEYWORD`, `NEW`, `OLD`, `ON`, `RECENT`, `SEEN`, `SINCE`, `SUBJECT`, `TEXT`, `TO`, `UNANSWERED`, `UNDELETED`, `UNFLAGGED`, `UNKEYWORD`, `UNSEEN`. There is no `HEADER`, `OR`, `NOT`, `LARGER`, `SMALLER`, `DRAFT` or `SENT*`, and naming one returns `false` with `Unknown search criterion: …` — the same answer the real extension gives, on IMAP as much as on POP3. Dates must be ones the program can hold, between 1970 and 2097.
 
-`imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` throw: they speak a command dropped from IMAP4rev1 that in practice only c-client's own UW-IMAP server ever implemented, so no server you can reach would answer them. Opening a `{host/nntp}` mailbox throws too — the real extension speaks NNTP, this doesn't.
+`imap_scan()`, `imap_scanmailbox()` and `imap_listscan()` throw: they speak a command dropped from IMAP4rev1 that in practice only c-client's own UW-IMAP server ever implemented, so no server you can reach would answer them. Opening a `{host/nntp}` mailbox throws too — the real extension speaks NNTP, this doesn't. So does `imap_mail()` on Windows with no `sendmail_path` set: the extension's build there sent over SMTP without ever reading that ini, and this package has no SMTP client to offer in its place.
 
 Warnings are raised as `E_USER_WARNING` rather than `E_WARNING`, which userland cannot produce. The message text is the same; an error handler that filters on the level will see the difference.
 

@@ -9,8 +9,10 @@ namespace ImapPolyfill\Mail;
  * mail(): mail() rewrites header order, terminates lines with CRLF, and
  * enforces its own $additional_headers policy, all of which would diverge
  * from the real extension's verbatim LF-terminated output. The real
- * extension's Windows build spoke SMTP (TSendMail) instead; this port is
- * pipe-only (see README).
+ * extension's Windows build spoke SMTP (TSendMail) instead, which this
+ * package has no client for: there, an unset sendmail_path throws rather
+ * than answering the bare false a host configured for SMTP could make no
+ * sense of.
  */
 final class OutgoingMail
 {
@@ -36,6 +38,14 @@ final class OutgoingMail
 
         $sendmailPath = ini_get('sendmail_path');
         if ($sendmailPath === false || $sendmailPath === '') {
+            // On Windows this is not a missing configuration, it is the
+            // wrong one to be looking for: the extension's build there sent
+            // over SMTP and never read this ini, so a host set up for it
+            // would get a bare false with nothing to go on.
+            if (PHP_OS_FAMILY === 'Windows') {
+                throw \ImapPolyfill\Support\UnsupportedFeature::smtp();
+            }
+
             return false;
         }
 
