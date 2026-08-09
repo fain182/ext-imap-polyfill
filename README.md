@@ -28,7 +28,7 @@ So the test suite doesn't just run against this package. **Every integration tes
 
 That's what caught `imap_uid()` over POP3 returning the server's UIDL cast to an integer — right on one server, nonsense on the other.
 
-POP3 is supported too, with the same reduced feature set it has under the real extension.
+POP3 is supported too, and runs through the same parity checks.
 
 <details>
 <summary>Function reference</summary>
