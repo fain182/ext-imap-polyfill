@@ -108,38 +108,17 @@ POP3 is supported too, with the same reduced feature set it has under the real e
 
 ### Notes on individual functions
 
-Anything not mentioned here behaves as the extension does; that is what the
-parity suite is for. Below are the few places it doesn't, and the behaviours
-worth knowing before you migrate even where it does.
+Your code has already run against the extension, so the only thing worth
+reading here is where this package answers differently. Everything else
+behaves as it did — that is what the parity suite is for.
 
 | Function | Divergence |
 |---|---|
 | `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host reads back as you wrote it in the spec; the extension reports the name DNS resolved it to |
 | `imap_open` with `/tls` | negotiates the best TLS version both ends support, so it connects where the extension's `/tls` fails outright — that one asks for TLS 1.0 and nothing else |
+| `imap_open` with `/secure`, `OP_SECURE`, `/authuser=` | always refused: they ask for an authentication that keeps the password off the wire, and this package only speaks `LOGIN`. The extension refuses too unless the server offers a SASL mechanism it can use |
 | `imap_timeout` | `IMAP_READTIMEOUT` and `IMAP_WRITETIMEOUT` are one value: setting either sets both, since a PHP socket has a single timeout for both directions |
 | `imap_utf8` | returns precomposed UTF-8 (`café`, U+00E9) where the extension returns the decomposed form (`cafe` + U+0301); the two do not compare equal |
-
-**`imap_open()` switches and flags.** `/secure`, `OP_SECURE` and `/authuser=`
-refuse the connection outright: they ask for an authentication that keeps the
-password off the wire, and this package only speaks `LOGIN`. An unrecognized
-switch fails the open too — `{host/nowalidate-cert}` returns `false` and
-"invalid remote specification" rather than connecting with the misspelling
-ignored. Accepted and inert: `OP_DEBUG`, `/debug`, `OP_SHORTCACHE`, `/tryssl`,
-`/loser`, and the `$options` argument.
-
-**Connections upgrade themselves.** `STARTTLS` — `STLS` over POP3 — goes out
-whenever the server offers it and the spec said neither `/ssl` nor `/notls`, so
-a cleartext spec against a modern server ends up encrypted, and `imap_check()`
-reports the `/tls` it negotiated.
-
-**Search criteria.** `imap_search()` and `imap_sort()` accept `ALL`,
-`ANSWERED`, `BCC`, `BEFORE`, `BODY`, `CC`, `DELETED`, `FLAGGED`, `FROM`,
-`KEYWORD`, `NEW`, `OLD`, `ON`, `RECENT`, `SEEN`, `SINCE`, `SUBJECT`, `TEXT`,
-`TO`, `UNANSWERED`, `UNDELETED`, `UNFLAGGED`, `UNKEYWORD` and `UNSEEN` —
-narrower than IMAP's own `SEARCH` grammar, and the same set the extension
-accepts. Anything else, `HEADER` and `OR` and `NOT` and `LARGER` and `SMALLER`
-and `DRAFT` and the `SENT*` dates included, returns `false` with
-`Unknown search criterion: …`. Dates have to fall between 1970 and 2097.
 
 **What throws**, rather than returning `false`: `imap_scan()`,
 `imap_scanmailbox()` and `imap_listscan()`, which speak a command no reachable
