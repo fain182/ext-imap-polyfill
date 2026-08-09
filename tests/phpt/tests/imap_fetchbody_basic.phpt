@@ -1,8 +1,5 @@
 --TEST--
 Test imap_fetchbody() function : basic functionality
---XFAIL--
-PHP 8.5 deprecates the `case X;` this test file itself is written with.
-Passes on 8.3, where the extension it characterises last shipped.
 --SKIPIF--
 <?php
 require_once(__DIR__.'/setup/skipif.inc');
@@ -32,19 +29,19 @@ foreach ($options as $key => $option) {
     echo "-- Option is $key --\n";
     switch ($key) {
 
-        case 'FT_UID';
+        case 'FT_UID':
         $msg_uid = imap_uid($stream_id, $msg_no);
         var_dump( imap_fetchbody($stream_id, $msg_uid, $section, $option) );
         break;
 
-        case 'FT_PEEK';
+        case 'FT_PEEK':
         var_dump( imap_fetchbody($stream_id, $msg_no, $section, $option) );
         $overview = imap_fetch_overview($stream_id, 1);
         echo "Seen Flag: ";
         var_dump( $overview[0]->seen );
         break;
 
-        case 'FT_INTERNAL';
+        case 'FT_INTERNAL':
         var_dump( imap_fetchbody($stream_id, $msg_no, $section, $option) );
         break;
 

@@ -55,12 +55,13 @@ the one suite here nobody on this project wrote, which is exactly what makes it
 worth keeping: a failure is a divergence from the extension as the people who
 wrote it characterised it, not from what we thought it did.
 
-Ten of the 89 cannot be answered from PHP and carry an `--XFAIL--` saying why —
-mostly things a userland function is not allowed to do, plus two that are PHP
-8.5's wording rather than the 8.3 these were written against. An `--XFAIL--`
-that starts *passing* fails the target: run-tests only warns, and a reason gone
-stale is worth catching. `tests/phpt/README.md` has the provenance and the three
-modifications made to the vendored copy.
+Six of the 89 cannot be answered from PHP and carry an `--XFAIL--` saying why:
+things a userland function is not allowed to do, plus one that is the fixture's
+doing. Three others were edited instead, where what failed was not the
+polyfill's behaviour but the shape of running as a Composer package on PHP 8.5;
+`tests/phpt/README.md` draws that line and lists every modification. An
+`--XFAIL--` that starts *passing* fails the target: run-tests only warns, and a
+reason gone stale is worth catching.
 
 ## Auditing against a second server
 
