@@ -29,27 +29,29 @@ what runs is what you can read:
    (`make dovecot-up`), reached the way `tests/Integration/DovecotTestCase`
    reaches it. Greenmail cannot host these: too many of them need a server
    that behaves like the one php-src's own README asks for.
-3. **Six files carry an `--XFAIL--` section** saying why the polyfill cannot
-   answer them: the error stack not being printed at request shutdown
-   (`bug46918`, `imap_open_error`), the `, called in ...` a userland
-   TypeError carries (`bug75774`), `null` where a string is declared
-   (`bug77020`), `NIL` not being deprecatable (`nil_constant`), and one that
-   is the fixture's doing rather than anyone's code — it accepts anonymous
+3. **Three files carry an `--XFAIL--` section**, where what the test asserts
+   is the very thing this package cannot do: `NIL` being deprecated
+   (`nil_constant`), `null` reaching a string parameter (`bug77020`), and one
+   that is the fixture's doing rather than any code's — it accepts anonymous
    login, so there is no error to list, and real ext-imap answers the same
    against it (`imap_errors_basic`).
-4. **Three files were edited where the difference was not the polyfill's
-   behaviour at all**, since an `--XFAIL--` there would have said nothing
-   about this package: `bug53377` matches object handles with `%d` (they
-   start higher because a Composer package has objects of its own alive),
-   `imap_final` ends in `%A` (the parent class is autoloaded, so the engine
-   raises the refusal at runtime and it carries a stack trace), and
-   `imap_fetchbody_basic` writes its own `case 'X':` with a colon, PHP 8.5
-   having deprecated the semicolon it was written with. What each asserts is
-   untouched.
+4. **Six files were edited** where the differing bytes were not what the test
+   was asserting. Three are the shape of running as a Composer package on PHP
+   8.5: `bug53377` matches object handles with `%d` (they start higher because
+   objects of our own are alive), `imap_final` ends in `%A` (the parent class
+   is autoloaded, so the engine raises the refusal at runtime, with a stack
+   trace), and `imap_fetchbody_basic` writes its own `case 'X':` with a colon,
+   PHP 8.5 having deprecated the semicolon it was written with. Three end in
+   `%A` to absorb a divergence this package documents rather than asserts here:
+   the `, called in ...` a userland TypeError carries (`bug75774`), and the
+   error stack not being printed at request shutdown (`bug46918`,
+   `imap_open_error`). Everything before the wildcard is still matched
+   literally.
 
-The line between 3 and 4 is worth keeping: a test is edited only where it
-fails for reasons no implementation could answer, and carries an `--XFAIL--`
-wherever the answer is this package's to give.
+An `--XFAIL--` is the last resort, not the tidy answer: a test carrying one is
+not checked at all, so a regression in the parts this package *does* get right
+would go unnoticed. It is used only where what the test asserts is precisely
+what cannot be answered.
 
 ## Running them
 

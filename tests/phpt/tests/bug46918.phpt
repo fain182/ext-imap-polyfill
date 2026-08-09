@@ -1,9 +1,5 @@
 --TEST--
 Bug #46918 (imap_rfc822_parse_adrlist host part not filled in correctly)
---XFAIL--
-Errors left on the stack are not printed at the end of the request: a notice
-raised from userland cannot carry the 'in Unknown on line 0' the extension's
-does. Everything above that line matches.
 --FILE--
 <?php
 
@@ -19,7 +15,7 @@ $add_arr = imap_rfc822_parse_adrlist($adds, 'example.com');
 var_export($add_arr);
 
 ?>
---EXPECT--
+--EXPECTF--
 array (
   0 => 
   (object) array(
@@ -69,5 +65,4 @@ array (
      'mailbox' => 'UNEXPECTED_DATA_AFTER_ADDRESS',
      'host' => '.SYNTAX-ERROR.',
   ),
-)
-Notice: PHP Request Shutdown: Unexpected characters at end of address: @two (errflg=3) in Unknown on line 0
+)%A

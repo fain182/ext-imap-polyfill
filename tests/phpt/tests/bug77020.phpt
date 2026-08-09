@@ -4,7 +4,9 @@ Bug #77020 (null pointer dereference in imap_mail)
 sendmail_path="echo >/dev/null"
 --XFAIL--
 null where a string parameter is declared: an internal function coerces it
-with a deprecation, a userland one raises TypeError.
+with a deprecation, a userland one raises TypeError. Reachable only by making
+every string parameter of every function nullable, which costs every caller's
+static analysis more than the deprecation is worth.
 --FILE--
 <?php
 // For Windows, set it to a string of length HOST_NAME_LEN (256) so the mail is not actually sent

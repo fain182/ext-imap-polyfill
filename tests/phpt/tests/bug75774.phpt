@@ -1,8 +1,5 @@
 --TEST--
 Bug #75774 imap_append HeapCorruction
---XFAIL--
-A TypeError raised by a userland function names the call site (', called in
-...'); one raised by an internal function does not.
 --FILE--
 <?php
 
@@ -19,5 +16,5 @@ fclose($var1);
 unlink($fn);
 
 ?>
---EXPECT--
-imap_append(): Argument #1 ($imap) must be of type IMAP\Connection, resource given
+--EXPECTF--
+imap_append(): Argument #1 ($imap) must be of type IMAP\Connection, resource given%A
