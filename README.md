@@ -130,4 +130,15 @@ client either.
 userland cannot produce. The text is the same; an error handler filtering on
 the level will see the difference.
 
+**Errors nobody read** stay on the stack. The extension prints whatever
+`imap_errors()` never drained at the end of the request, as notices reading
+`PHP Request Shutdown: ... (errflg=N)`; a notice raised from userland cannot
+carry the location that one does, so this package says nothing instead.
+
+**Passing `null`** where a string parameter is declared is a `TypeError` here
+and a deprecation notice in the extension, which then reads it as `""`:
+internal functions are allowed a coercion userland ones are not. For the same
+reason, a `TypeError` from this package names the call site (`, called in
+...`) where the extension's does not.
+
 </details>
