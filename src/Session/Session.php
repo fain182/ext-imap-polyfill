@@ -184,7 +184,7 @@ final class Session
                     $spec->switches->notls,
                     !$spec->switches->novalidate,
                     (float) Timeouts::seconds(IMAP_OPENTIMEOUT),
-                    (float) Timeouts::seconds(IMAP_READTIMEOUT),
+                    (float) Timeouts::socketSeconds(),
                 );
 
                 // No CAPA: pop3_auth() checks these before looking at what

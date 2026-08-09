@@ -22,9 +22,8 @@ final class TimedStream extends ImapStream
         $opened = parent::open($transport, $host, $port, $timeout, $options);
 
         // A single socket timeout covers both directions, so c-client's
-        // separate write timeout has nowhere to go; the read one wins,
-        // being the one that governs waiting for a server that went quiet.
-        $this->setTimeout(Timeouts::seconds(IMAP_READTIMEOUT));
+        // two have to become one; see Timeouts::socketSeconds() for which.
+        $this->setTimeout(Timeouts::socketSeconds());
 
         return $opened;
     }

@@ -5,11 +5,19 @@ namespace ImapPolyfill\Support;
 /**
  * ext-imap keeps these as process-global c-client parameters (mail_parameters),
  * not tied to a specific connection.
+ *
+ * Read and write are one value here, not two. A PHP socket has a single
+ * timeout covering both directions, so keeping them apart would only mean
+ * choosing between them later, by some rule nobody asked for: setting either
+ * sets the timeout, and reading either reports it.
  */
 final class Timeouts
 {
     /** @var array<int, int>|null */
     private static ?array $values = null;
+
+    /** The types that name the same shared value. */
+    private const SHARED = [IMAP_READTIMEOUT, IMAP_WRITETIMEOUT];
 
     public static function get(int $type): int|false
     {
@@ -30,6 +38,12 @@ final class Timeouts
         return is_int($value) && $value > 0 ? $value : (int) ini_get('default_socket_timeout');
     }
 
+    /** The one the socket is given, for however long an operation takes. */
+    public static function socketSeconds(): int
+    {
+        return self::seconds(IMAP_READTIMEOUT);
+    }
+
     public static function set(int $type, int $timeout): bool
     {
         self::init();
@@ -38,7 +52,9 @@ final class Timeouts
             return false;
         }
 
-        self::$values[$type] = $timeout;
+        foreach (in_array($type, self::SHARED, true) ? self::SHARED : [$type] as $shared) {
+            self::$values[$shared] = $timeout;
+        }
 
         return true;
     }
