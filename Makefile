@@ -17,7 +17,7 @@ DOVECOT_SSL_DIR := $(CURDIR)/tests/fixtures/dovecot-ssl
 NETWORK_NAME := ext-imap-polyfill-net
 PARITY_IMAGE := ext-imap-polyfill-parity
 
-.PHONY: install install-lowest test test-unit test-integration cross-check phpstan phpt greenmail-up greenmail-down dovecot-up dovecot-down parity parity-build
+.PHONY: fuzz install install-lowest test test-unit test-integration cross-check phpstan phpt greenmail-up greenmail-down dovecot-up dovecot-down parity parity-build
 
 install:
 	composer install
@@ -164,3 +164,24 @@ parity: parity-build greenmail-up dovecot-up
 	$(MAKE) dovecot-down; \
 	$(MAKE) greenmail-down; \
 	exit $$status
+
+## Differential fuzzing of the connectionless functions: the same mutated
+## corpus through this package and through the genuine extension in the
+## parity image, then a diff. It is an occasional campaign rather than part
+## of `make test` — it needs the parity image, it takes minutes, and what it
+## finds belongs in a characterization test, not in a run nobody repeats.
+##
+## FUZZ_SEED picks the corpus, so a run that found something can be run
+## again. FUZZ_COUNT is how many mutations follow the seeds.
+FUZZ_SEED ?= 1
+FUZZ_COUNT ?= 2000
+FUZZ_DIR := $(CURDIR)/tests/fuzz/run
+
+fuzz: parity-build
+	@mkdir -p $(FUZZ_DIR)
+	php tests/fuzz/generate-corpus.php $(FUZZ_SEED) $(FUZZ_COUNT) > $(FUZZ_DIR)/corpus
+	php tests/fuzz/evaluate.php $(FUZZ_DIR)/corpus > $(FUZZ_DIR)/answers.polyfill
+	$(CONTAINER_RUNTIME) run --rm -v $(CURDIR):/app:Z $(PARITY_IMAGE) \
+		sh -c 'php -m | grep -q imap && php tests/fuzz/evaluate.php tests/fuzz/run/corpus' \
+		> $(FUZZ_DIR)/answers.real
+	php tests/fuzz/compare.php $(FUZZ_DIR)/corpus $(FUZZ_DIR)/answers.polyfill $(FUZZ_DIR)/answers.real

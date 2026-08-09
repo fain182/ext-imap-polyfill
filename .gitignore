@@ -16,3 +16,5 @@ tests/phpt/tests/*.out
 tests/phpt/tests/*.php
 tests/phpt/tests/*.sh
 tests/phpt/run.log
+
+tests/fuzz/run/
