@@ -170,6 +170,16 @@ final class Rfc822Cursor
         while ($this->position < $length) {
             $char = $this->source[$this->position];
 
+            // A backslash quotes whatever follows it, here as much as inside
+            // a quoted string: rfc822_parse_word() reads past both and the
+            // word carries on. c-client calls it "pretty pathological" and
+            // parses it anyway.
+            if ($char === '\\' && $this->position + 1 < $length) {
+                $this->position += 2;
+
+                continue;
+            }
+
             if ($char === ' ' || $char === "\t" || $char === "\r" || $char === "\n"
                 || str_contains(self::SPECIALS, $char)) {
                 break;
@@ -183,26 +193,31 @@ final class Rfc822Cursor
 
     /**
      * rfc822_cpy(): the text as it reads once the quoting is taken off —
-     * quote characters dropped, backslash escapes resolved. Applied to a
-     * whole phrase rather than a single word, so `"a" "b"` becomes `a b`
-     * and a comment that fell between two words survives verbatim.
+     * every quote character dropped, every backslash taken as quoting the
+     * character behind it. c-client does not track whether it is inside a
+     * quoted string when it does this, and neither does this: `=\=` is `==`
+     * to the extension, quotes or no quotes.
+     *
+     * Applied to a whole phrase rather than a single word, so `"a" "b"`
+     * becomes `a b` and a comment that fell between two words survives.
      */
     public static function unquote(string $text): string
     {
+        if (strpbrk($text, '\\"') === false) {
+            return $text;
+        }
+
         $result = '';
         $length = strlen($text);
-        $inQuotes = false;
 
         for ($index = 0; $index < $length; ++$index) {
             $char = $text[$index];
 
             if ($char === '"') {
-                $inQuotes = !$inQuotes;
-
                 continue;
             }
 
-            if ($inQuotes && $char === '\\' && $index + 1 < $length) {
+            if ($char === '\\' && $index + 1 < $length) {
                 $result .= $text[++$index];
 
                 continue;

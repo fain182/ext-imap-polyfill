@@ -73,6 +73,17 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
                 '"unterminated <a@b.com>',
                 [['mailbox' => 'INVALID_ADDRESS', 'host' => '.SYNTAX-ERROR.']],
             ],
+            // A backslash quotes what follows it outside a quoted string too:
+            // rfc822_parse_word() reads past both, and rfc822_quote() drops
+            // the backslash without ever asking whether it was in quotes.
+            'escape outside the quotes' => [
+                '=\\=',
+                [['mailbox' => '==', 'host' => 'default.host']],
+            ],
+            'escaped at sign' => [
+                'a\\@b.com',
+                [['mailbox' => 'a@b.com', 'host' => 'default.host']],
+            ],
         ];
     }
 
