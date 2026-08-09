@@ -82,6 +82,7 @@ class ImapMailCopyTest extends GreenmailTestCase
         $connection = imap_open(self::mailboxSpec($sourceName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_mail_copy(): Argument #4 ($flags) must be a bitmask of CP_UID, and CP_MOVE');
         imap_mail_copy($connection, '1', $sourceName, 16);
     }
 }

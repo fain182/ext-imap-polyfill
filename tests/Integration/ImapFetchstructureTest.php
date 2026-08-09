@@ -130,4 +130,16 @@ class ImapFetchstructureTest extends GreenmailTestCase
         $this->expectExceptionMessage('imap_fetchstructure(): Argument #2 ($message_num) must be greater than 0');
         imap_fetchstructure($connection, 0);
     }
+
+    public function test_throws_value_error_for_an_invalid_flags_bitmask(): void
+    {
+        $folderName = 'StructureValBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Flags\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_fetchstructure(): Argument #3 ($flags) must be FT_UID or 0');
+        imap_fetchstructure($connection, 1, FT_PEEK);
+    }
 }

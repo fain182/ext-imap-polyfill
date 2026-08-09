@@ -338,6 +338,13 @@ if (!function_exists('imap_clearflag_full')) {
 if (!function_exists('imap_delete')) {
     function imap_delete(\IMAP\Connection $imap, string $message_nums, int $flags = 0): bool
     {
+        // Validated here rather than left to imap_setflag_full(), which would
+        // name itself and its own argument in the message. ext-imap checks
+        // this one against FT_UID, whose value ST_UID shares.
+        if ($flags !== 0 && ($flags & ~FT_UID) !== 0) {
+            throw new \ValueError('imap_delete(): Argument #3 ($flags) must be FT_UID or 0');
+        }
+
         return imap_setflag_full($imap, $message_nums, '\\Deleted', $flags);
     }
 }
@@ -345,7 +352,11 @@ if (!function_exists('imap_delete')) {
 if (!function_exists('imap_undelete')) {
     function imap_undelete(\IMAP\Connection $imap, string $message_nums, int $flags = 0): bool
     {
-        return imap_clearflag_full($imap, $message_nums, '\\Deleted', $flags);
+        // ext-imap validates imap_delete()'s flags and not this one's, so a
+        // bitmask it would reject there is accepted here and the bits
+        // c-client has no use for are dropped. Masking is what keeps
+        // imap_clearflag_full() from raising the error ext-imap doesn't.
+        return imap_clearflag_full($imap, $message_nums, '\\Deleted', $flags & ST_UID);
     }
 }
 

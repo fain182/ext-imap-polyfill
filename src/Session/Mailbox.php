@@ -32,6 +32,10 @@ final class Mailbox
      */
     public function search(string $criteria, int $flags, string $charset): array|false
     {
+        if ($flags !== 0 && ($flags & ~(SE_UID | SE_FREE)) !== 0) {
+            throw new \ValueError('imap_search(): Argument #3 ($flags) must be a bitmask of SE_FREE, and SE_UID');
+        }
+
         $uidMode = ($flags & SE_UID)
             ? UidMode::UID
             : UidMode::MSGNO;
@@ -104,6 +108,10 @@ final class Mailbox
 
         if ($messageNum < 1) {
             throw new \ValueError('imap_fetchheader(): Argument #2 ($message_num) must be greater than 0');
+        }
+
+        if ($flags !== 0 && ($flags & ~(FT_UID | FT_PREFETCHTEXT | FT_INTERNAL)) !== 0) {
+            throw new \ValueError('imap_fetchheader(): Argument #3 ($flags) must be a bitmask of FT_UID, FT_PREFETCHTEXT, and FT_INTERNAL');
         }
 
         $uidMode = ($flags & FT_UID)
@@ -194,6 +202,10 @@ final class Mailbox
      */
     public function fetchOverview(string $sequence, int $flags): array|false
     {
+        if ($flags !== 0 && ($flags & ~FT_UID) !== 0) {
+            throw new \ValueError('imap_fetch_overview(): Argument #3 ($flags) must be FT_UID or 0');
+        }
+
         $uidMode = ($flags & FT_UID)
             ? UidMode::UID
             : UidMode::MSGNO;
@@ -265,6 +277,10 @@ final class Mailbox
             throw new \ValueError('imap_fetchstructure(): Argument #2 ($message_num) must be greater than 0');
         }
 
+        if ($flags !== 0 && ($flags & ~FT_UID) !== 0) {
+            throw new \ValueError('imap_fetchstructure(): Argument #3 ($flags) must be FT_UID or 0');
+        }
+
         $uidMode = ($flags & FT_UID) ? UidMode::UID : UidMode::MSGNO;
 
         if ($this->selectionCovering($messageNum, $uidMode) === false) {
@@ -288,6 +304,10 @@ final class Mailbox
 
         if ($messageNum < 1) {
             throw new \ValueError('imap_fetchbody(): Argument #2 ($message_num) must be greater than 0');
+        }
+
+        if ($flags !== 0 && ($flags & ~(FT_UID | FT_PEEK | FT_INTERNAL)) !== 0) {
+            throw new \ValueError('imap_fetchbody(): Argument #4 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');
         }
 
         $uidMode = ($flags & FT_UID)
@@ -476,7 +496,7 @@ final class Mailbox
         $this->connection->ensureOpen();
 
         if (($options & ~(CP_UID | CP_MOVE)) !== 0) {
-            throw new \ValueError('imap_mail_copy(): Argument #4 ($options) must be a bitmask of CP_UID, and CP_MOVE');
+            throw new \ValueError('imap_mail_copy(): Argument #4 ($flags) must be a bitmask of CP_UID, and CP_MOVE');
         }
 
         return $this->copyTo($sequence, $folder, $options);
@@ -487,7 +507,7 @@ final class Mailbox
         $this->connection->ensureOpen();
 
         if (($options & ~CP_UID) !== 0) {
-            throw new \ValueError('imap_mail_move(): Argument #4 ($options) must be CP_UID or 0');
+            throw new \ValueError('imap_mail_move(): Argument #4 ($flags) must be CP_UID or 0');
         }
 
         return $this->copyTo($sequence, $folder, $options | CP_MOVE);

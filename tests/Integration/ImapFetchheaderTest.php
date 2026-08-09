@@ -46,4 +46,34 @@ class ImapFetchheaderTest extends GreenmailTestCase
         $this->expectExceptionMessage('imap_fetchheader(): Argument #2 ($message_num) must be greater than 0');
         imap_fetchheader($connection, 0);
     }
+
+    public function test_throws_value_error_for_an_invalid_flags_bitmask(): void
+    {
+        $folderName = 'FetchHeaderValBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Flags\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_fetchheader(): Argument #3 ($flags) must be a bitmask of FT_UID, FT_PREFETCHTEXT, and FT_INTERNAL');
+        imap_fetchheader($connection, 1, FT_PEEK);
+    }
+
+    /**
+     * FT_PREFETCHTEXT only tells c-client to fetch the body along with the
+     * header, so the header comes back unchanged — the point is that the
+     * flag is in this function's bitmask and no other's.
+     */
+    public function test_accepts_ft_prefetchtext(): void
+    {
+        $folderName = 'FetchHeaderPrefetchBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Flags\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->assertSame(
+            imap_fetchheader($connection, 1),
+            imap_fetchheader($connection, 1, FT_PREFETCHTEXT)
+        );
+    }
 }

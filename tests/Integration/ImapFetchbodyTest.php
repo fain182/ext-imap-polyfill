@@ -170,4 +170,16 @@ class ImapFetchbodyTest extends GreenmailTestCase
         $this->expectExceptionMessage('imap_fetchbody(): Argument #2 ($message_num) must be greater than 0');
         imap_fetchbody($connection, 0, '1');
     }
+
+    public function test_throws_value_error_for_an_invalid_flags_bitmask(): void
+    {
+        $folderName = 'FetchBodyValBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Flags\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_fetchbody(): Argument #4 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');
+        imap_fetchbody($connection, 1, '1', 0x40);
+    }
 }

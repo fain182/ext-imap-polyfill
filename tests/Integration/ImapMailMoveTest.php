@@ -54,6 +54,7 @@ class ImapMailMoveTest extends GreenmailTestCase
         $connection = imap_open(self::mailboxSpec($sourceName), self::user(), self::password());
 
         $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_mail_move(): Argument #4 ($flags) must be CP_UID or 0');
         imap_mail_move($connection, '1', $sourceName, 9999);
     }
 }

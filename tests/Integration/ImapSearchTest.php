@@ -165,4 +165,16 @@ class ImapSearchTest extends GreenmailTestCase
         // ...and a criterion it can build still sorts.
         $this->assertSame([1], imap_sort($connection, SORTDATE, 0, 0, 'UNSEEN'));
     }
+
+    public function test_throws_value_error_for_an_invalid_flags_bitmask(): void
+    {
+        $folderName = 'SearchValBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Flags\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_search(): Argument #3 ($flags) must be a bitmask of SE_FREE, and SE_UID');
+        imap_search($connection, 'ALL', 0x40);
+    }
 }

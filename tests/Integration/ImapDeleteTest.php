@@ -67,4 +67,33 @@ class ImapDeleteTest extends GreenmailTestCase
         $this->assertSame(1, $overview[1]->deleted);
         $this->assertSame(0, $overview[2]->deleted);
     }
+
+    public function test_throws_value_error_for_an_invalid_flags_bitmask(): void
+    {
+        $folderName = 'DeleteValBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Flags\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('imap_delete(): Argument #3 ($flags) must be FT_UID or 0');
+        imap_delete($connection, '1', FT_PEEK);
+    }
+
+    /**
+     * ext-imap validates imap_delete()'s flags and not imap_undelete()'s,
+     * so the same bitmask that is a ValueError above is accepted here.
+     */
+    public function test_undelete_accepts_a_bitmask_delete_would_refuse(): void
+    {
+        $folderName = 'UndeleteValBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Flags\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        imap_delete($connection, '1');
+
+        $this->assertTrue(imap_undelete($connection, '1', FT_PEEK));
+        $this->assertSame(0, imap_fetch_overview($connection, '1')[0]->deleted);
+    }
 }
