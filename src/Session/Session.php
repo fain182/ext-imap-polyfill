@@ -103,7 +103,23 @@ final class Session
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
-            return false;
+            // A mailbox that cannot be selected does not cost the caller
+            // the stream: c-client's mail_open keeps the one it has just
+            // logged into and leaves it half-open, reporting <no_mailbox>
+            // until an imap_reopen() names a folder it can select. Only the
+            // dialling and the login answer imap_open() with false, and both
+            // of those fail before there is anything to keep.
+            //
+            // Nothing to keep over POP3 either: half-open is a state of an
+            // IMAP stream, which exists whether or not a mailbox is
+            // selected. A POP3 mailbox is the session, so pop3.c refusing it
+            // — read-only access, or any name but INBOX — is mail_open
+            // returning NIL.
+            if ($spec->service === Service::Pop3) {
+                return false;
+            }
+
+            $connection->markHalfOpen();
         }
 
         return $connection;
