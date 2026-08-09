@@ -76,6 +76,17 @@ if (!defined('SE_NOPREFETCH')) {
     define('SE_NOPREFETCH', 0x4);
 }
 
+// mail_sort()'s options, registered by ext-imap although imap_sort() takes
+// SE_UID and SE_NOPREFETCH instead. Both are 0x8 in mail.h — they belong to
+// different arguments there, and ext-imap exposes the numbers unchanged.
+if (!defined('SO_FREE')) {
+    define('SO_FREE', 0x8);
+}
+
+if (!defined('SO_NOSERVER')) {
+    define('SO_NOSERVER', 0x8);
+}
+
 if (!defined('SORTDATE')) {
     define('SORTDATE', 0);
 }
@@ -112,6 +123,19 @@ if (!defined('FT_PEEK')) {
     define('FT_PEEK', 0x2);
 }
 
+// c-client's mail_fetch_* options that ext-imap registers without any
+// PHP_FUNCTION accepting them, kept here so code that names one still
+// parses. imap_fetchheader() is the exception: FT_PREFETCHTEXT is in its
+// bitmask (it asks c-client to fetch the body along with the header, which
+// nothing observable here depends on).
+if (!defined('FT_NOT')) {
+    define('FT_NOT', 0x4);
+}
+
+if (!defined('FT_PREFETCHTEXT')) {
+    define('FT_PREFETCHTEXT', 0x20);
+}
+
 if (!defined('LATT_NOINFERIORS')) {
     define('LATT_NOINFERIORS', 0x1);
 }
@@ -142,6 +166,16 @@ if (!defined('LATT_HASNOCHILDREN')) {
 
 if (!defined('ST_UID')) {
     define('ST_UID', 0x1);
+}
+
+// mail_setflag()'s other two options, which ext-imap registers but no
+// PHP_FUNCTION accepts: imap_setflag_full() takes ST_UID or 0.
+if (!defined('ST_SILENT')) {
+    define('ST_SILENT', 0x2);
+}
+
+if (!defined('ST_SET')) {
+    define('ST_SET', 0x4);
 }
 
 if (!defined('FT_INTERNAL')) {
