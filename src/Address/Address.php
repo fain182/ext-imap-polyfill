@@ -15,6 +15,7 @@ final class Address
         public readonly ?string $mailbox,
         public readonly ?string $host,
         public readonly ?string $personal,
+        public readonly ?string $adl = null,
     ) {
     }
 
@@ -24,7 +25,7 @@ final class Address
      * a personal name, or an "@" that makes it the local part, or nothing
      * at all — in which case the phrase was the whole mailbox.
      */
-    public static function parse(string $part, string $defaultHostname, bool &$trailingData = false): ?self
+    public static function parse(string $part, string $defaultHostname, ?string &$trailingData = null): ?self
     {
         $cursor = new Rfc822Cursor($part);
         $cursor->skipWhitespaceAndComments();
@@ -35,9 +36,11 @@ final class Address
         // addr-spec branch, never from the one that read angle brackets.
         $angleAddress = $cursor->peek() === '<';
 
+        $adl = null;
+
         if ($angleAddress) {
             $cursor->skip();
-            $address = self::parseAddrSpec($cursor, $defaultHostname);
+            $address = self::parseAddrSpec($cursor, $defaultHostname, $adl);
         } else {
             $start = $cursor->position();
             $phraseEnd = self::readPhrase($cursor);
@@ -55,7 +58,7 @@ final class Address
                 $cursor->skip();
                 $angleAddress = true;
                 $personal = $phrase;
-                $address = self::parseAddrSpec($cursor, $defaultHostname);
+                $address = self::parseAddrSpec($cursor, $defaultHostname, $adl);
             } elseif ($cursor->peek() === '@') {
                 $cursor->skip();
                 $host = self::readDotAtom($cursor);
@@ -80,9 +83,9 @@ final class Address
             $personal ??= $cursor->lastComment();
         }
 
-        $trailingData = !$cursor->atEnd();
+        $trailingData = $cursor->atEnd() ? null : $cursor->rest();
 
-        return new self($address[0], $address[1], $personal);
+        return new self($address[0], $address[1], $personal, $adl);
     }
 
     /**
@@ -125,12 +128,19 @@ final class Address
     }
 
     /**
-     * The local@host inside a pair of angle brackets.
+     * The local@host inside a pair of angle brackets, and the source route
+     * that may precede it.
+     *
+     * @param ?string $adl the route, as c-client's rfc822_parse_routeaddr
+     *   keeps it: the text between the opening bracket and the colon,
+     *   leading "@" and separating commas included
      *
      * @return array{0: string, 1: string}|null [mailbox, host]
      */
-    private static function parseAddrSpec(Rfc822Cursor $cursor, string $defaultHostname): ?array
+    private static function parseAddrSpec(Rfc822Cursor $cursor, string $defaultHostname, ?string &$adl = null): ?array
     {
+        $cursor->skipWhitespaceAndComments();
+        $adl = self::readRoute($cursor);
         $cursor->skipWhitespaceAndComments();
         $start = $cursor->position();
         $localEnd = self::readPhrase($cursor);
@@ -149,6 +159,44 @@ final class Address
         $host = self::readDotAtom($cursor);
 
         return [$mailbox, $host !== '' ? $host : $defaultHostname];
+    }
+
+    /**
+     * The A-D-L of a route-addr: "@domain" repeated, comma-separated, ended
+     * by the colon that introduces the address itself. Answers null where
+     * there is no route, which is every address written this century.
+     */
+    private static function readRoute(Rfc822Cursor $cursor): ?string
+    {
+        if ($cursor->peek() !== '@') {
+            return null;
+        }
+
+        $start = $cursor->position();
+
+        while ($cursor->peek() === '@') {
+            $cursor->skip();
+            self::readDotAtom($cursor);
+            $cursor->skipWhitespaceAndComments();
+
+            if ($cursor->peek() === ',') {
+                $cursor->skip();
+                $cursor->skipWhitespaceAndComments();
+
+                continue;
+            }
+
+            break;
+        }
+
+        if ($cursor->peek() !== ':') {
+            return null;
+        }
+
+        $route = $cursor->slice($start, $cursor->position());
+        $cursor->skip();
+
+        return $route;
     }
 
     /** A domain: atoms joined by dots, with comments allowed between them. */
@@ -206,6 +254,10 @@ final class Address
 
         if ($this->personal !== null) {
             $address->personal = $this->personal;
+        }
+
+        if ($this->adl !== null) {
+            $address->adl = $this->adl;
         }
 
         return $address;

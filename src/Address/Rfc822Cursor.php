@@ -56,6 +56,12 @@ final class Rfc822Cursor
         $this->position += $count;
     }
 
+    /** Whatever is left unread, which is what c-client names in its complaint. */
+    public function rest(): string
+    {
+        return substr($this->source, $this->position);
+    }
+
     public function slice(int $start, int $end): string
     {
         return substr($this->source, $start, $end - $start);

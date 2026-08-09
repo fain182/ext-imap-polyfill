@@ -48,7 +48,7 @@ final class AddressList
             }
 
             if ($part !== '') {
-                $trailingData = false;
+                $trailingData = null;
                 $address = Address::parse($part, $defaultHostname, $trailingData);
 
                 if ($address === null) {
@@ -60,7 +60,8 @@ final class AddressList
                 // What follows a complete address is neither part of it nor
                 // a new one ("a@b@c.com"): c-client keeps what it read and
                 // marks the rest, the same way it marks a second group.
-                if ($trailingData) {
+                if ($trailingData !== null) {
+                    ErrorStack::push('Unexpected characters at end of address: '.substr($trailingData, 0, 80));
                     $result[] = Address::syntaxError('UNEXPECTED_DATA_AFTER_ADDRESS');
 
                     return new self($result);

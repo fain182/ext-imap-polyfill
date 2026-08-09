@@ -108,4 +108,67 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
             get_object_vars($parsed[0]),
         );
     }
+
+    /**
+     * A route-addr: the source route c-client's rfc822_parse_routeaddr()
+     * reads off the front and keeps in adl, brackets and colon gone but the
+     * leading "@" and any separating commas kept. Not reading it lost the
+     * address it introduces and, with it, every address after it in the
+     * header.
+     */
+    public function test_a_source_route_becomes_the_adl_field(): void
+    {
+        $parsed = imap_rfc822_parse_adrlist('<@route.example.com:foo@example.ac.uk>', 'default.host');
+
+        $this->assertCount(1, $parsed);
+        $this->assertSame(
+            ['mailbox' => 'foo', 'host' => 'example.ac.uk', 'adl' => '@route.example.com'],
+            get_object_vars($parsed[0]),
+        );
+    }
+
+    public function test_a_source_route_may_name_more_than_one_host(): void
+    {
+        $parsed = imap_rfc822_parse_adrlist('<@one.example.com,@two.example.com:foo@example.ac.uk>', 'default.host');
+
+        $this->assertSame(
+            ['mailbox' => 'foo', 'host' => 'example.ac.uk', 'adl' => '@one.example.com,@two.example.com'],
+            get_object_vars($parsed[0]),
+        );
+    }
+
+    /**
+     * A route-addr in the middle of a list is read like any other address,
+     * and the ones after it are still read.
+     */
+    public function test_a_source_route_does_not_end_the_list(): void
+    {
+        $parsed = imap_rfc822_parse_adrlist('<@route.example.com:foo@example.ac.uk>, second@example.com', 'default.host');
+
+        $this->assertCount(2, $parsed);
+        $this->assertSame(
+            ['mailbox' => 'second', 'host' => 'example.com'],
+            get_object_vars($parsed[1]),
+        );
+    }
+
+    /**
+     * c-client keeps the address it managed to read, marks the rest, and
+     * says what the rest was.
+     */
+    public function test_trailing_data_is_named_on_the_error_stack(): void
+    {
+        // Drained rather than reset: the stack is process-global under both
+        // implementations, and only one of them can be reset from PHP.
+        imap_errors();
+
+        $parsed = imap_rfc822_parse_adrlist('ian@one@two', 'default.host');
+
+        $this->assertSame(['mailbox' => 'ian', 'host' => 'one'], get_object_vars($parsed[0]));
+        $this->assertSame(
+            ['mailbox' => 'UNEXPECTED_DATA_AFTER_ADDRESS', 'host' => '.SYNTAX-ERROR.'],
+            get_object_vars($parsed[1]),
+        );
+        $this->assertSame(['Unexpected characters at end of address: @two'], imap_errors());
+    }
 }
