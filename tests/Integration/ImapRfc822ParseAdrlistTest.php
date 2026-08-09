@@ -251,6 +251,37 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
         $this->assertSame(['Unterminated comment: (e'], imap_errors());
     }
 
+    /**
+     * @return array<string, array{string, int, string|false}>
+     */
+    public static function commasWithNothingBehindThem(): array
+    {
+        // [list, how many entries come back, what lands on the stack]
+        return [
+            // The comma is consumed, what follows it is not skipped before
+            // the parser is asked again — so whitespace after the last comma
+            // reaches the parser and fails there.
+            'whitespace after the last comma' => ['a@b.com, ', 2, 'Missing address after comma'],
+            // Nothing at all behind it, or another comma, is eaten with the
+            // whitespace around it and never reaches the parser.
+            'nothing after the last comma' => ['a@b.com,', 1, false],
+            'two commas' => ['a@b.com,,', 1, false],
+            'leading comma' => [', ', 0, false],
+            // What the complaint quotes is what was left, so the commas that
+            // were eaten are not in it.
+            'leading comma before a bad address' => [',\\', 1, 'Invalid mailbox list: \\'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('commasWithNothingBehindThem')]
+    public function test_a_comma_with_no_address_behind_it(string $list, int $entries, string|false $error): void
+    {
+        imap_errors();
+
+        $this->assertCount($entries, @imap_rfc822_parse_adrlist($list, 'default.host'));
+        $this->assertSame($error === false ? [] : [$error], imap_errors() ?: []);
+    }
+
     public function test_a_list_holding_only_a_comment_is_empty(): void
     {
         imap_errors();

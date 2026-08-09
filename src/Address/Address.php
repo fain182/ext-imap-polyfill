@@ -30,10 +30,19 @@ final class Address
      * a personal name, or an "@" that makes it the local part, or nothing
      * at all — in which case the phrase was the whole mailbox.
      */
-    public static function parse(string $part, string $defaultHostname, ?string &$trailingData = null): ?self
-    {
+    public static function parse(
+        string $part,
+        string $defaultHostname,
+        ?string &$trailingData = null,
+        string &$unparsed = '',
+    ): ?self {
         $cursor = new Rfc822Cursor($part);
         $cursor->skipWhitespaceAndComments();
+
+        // What the caller names in its complaint if this comes to nothing:
+        // rfc822_parse_mailbox() moves the caller's pointer only when it
+        // succeeds, so what is left over is the text as it stood here.
+        $unparsed = $cursor->rest();
         $personal = null;
 
         // A comment after the address stands in as the name only where the

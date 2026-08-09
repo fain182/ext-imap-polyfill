@@ -37,8 +37,17 @@ final class AddressList
         $inGroup = false;
         $groupClosed = false;
 
-        foreach (self::tokenize($addresses) as [$part, $delimiter]) {
+        foreach (self::tokenize($addresses) as [$part, $delimiter, $delimiterAt]) {
             $part = trim($part);
+
+            // Whitespace where the last comma promised an address. c-client
+            // consumes the comma but does not skip what follows it before
+            // asking whether anything is left, so this reaches the parser and
+            // fails there — where a comma with nothing at all behind it, or
+            // another comma, is eaten whitespace and all.
+            if ($part === '' && $delimiter === '' && $result !== []) {
+                return self::invalid('', $result);
+            }
 
             // Everything after a group has closed is refused, which is how
             // c-client treats a second group in the same list.
@@ -56,10 +65,11 @@ final class AddressList
 
             if ($part !== '') {
                 $trailingData = null;
-                $address = Address::parse($part, $defaultHostname, $trailingData);
+                $unparsed = '';
+                $address = Address::parse($part, $defaultHostname, $trailingData, $unparsed);
 
                 if ($address === null) {
-                    return self::invalid($addresses, $result);
+                    return self::invalid($unparsed, $result);
                 }
 
                 $result[] = $address;
@@ -84,9 +94,18 @@ final class AddressList
             }
 
             if ($delimiter === ';') {
-                // A group terminator with no group open is a malformed list.
                 if (!$inGroup) {
-                    return self::invalid($addresses, $result);
+                    // Outside a group a ";" separates nothing. It is data
+                    // trailing the address before it, and a list with no
+                    // address before it at all is malformed.
+                    if ($result === []) {
+                        return self::invalid(substr($addresses, $delimiterAt), $result);
+                    }
+
+                    ErrorStack::push('Unexpected characters at end of address: '.substr($addresses, $delimiterAt, 80));
+                    $result[] = Address::syntaxError('UNEXPECTED_DATA_AFTER_ADDRESS');
+
+                    return new self($result);
                 }
 
                 $result[] = Address::groupEnd();
@@ -108,11 +127,17 @@ final class AddressList
      * the bad entry, appends the marker and logs — which is why this reaches
      * the global error stack from a value object, as php_imap.c's parser does.
      *
+     * What it logs is what was *left* when the parse gave up, not the list it
+     * started from, and nothing left at all is its own complaint: the comma
+     * that led here had no address behind it.
+     *
      * @param Address[] $parsed
      */
-    private static function invalid(string $addresses, array $parsed): self
+    private static function invalid(string $unparsed, array $parsed): self
     {
-        ErrorStack::push('Invalid mailbox list: '.$addresses);
+        ErrorStack::push($unparsed === ''
+            ? 'Missing address after comma'
+            : 'Invalid mailbox list: '.substr($unparsed, 0, 80));
         $parsed[] = Address::syntaxError('INVALID_ADDRESS');
 
         return new self($parsed);
@@ -138,7 +163,7 @@ final class AddressList
      * group can close without any comma in sight ("A: x@e.com; z@e.com").
      * Quoted strings and angle brackets hide both.
      *
-     * @return array<int, array{0: string, 1: string}> [text, delimiter]
+     * @return array<int, array{0: string, 1: string, 2: int}> [text, delimiter, where the delimiter was]
      */
     private static function tokenize(string $addresses): array
     {
@@ -167,7 +192,7 @@ final class AddressList
             } elseif (!$inQuotes && $char === '>') {
                 $inAngles = false;
             } elseif (!$inQuotes && !$inAngles && ($char === ',' || $char === ';')) {
-                $tokens[] = [$current, $char];
+                $tokens[] = [$current, $char, $index];
                 $current = '';
 
                 continue;
@@ -176,8 +201,8 @@ final class AddressList
             $current .= $char;
         }
 
-        if (trim($current) !== '') {
-            $tokens[] = [$current, ''];
+        if ($current !== '') {
+            $tokens[] = [$current, '', $length];
         }
 
         return $tokens;
