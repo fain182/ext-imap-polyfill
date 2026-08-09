@@ -101,6 +101,95 @@ final class PureFunctionsTest extends TestCase
     }
 
     /**
+     * The quoted-printable inside an encoded word is read by two different
+     * decoders. imap_mime_header_decode() hands it to rfc822_qprint(), which
+     * reports a "=" with no hex pair behind it and reads on — where the
+     * reader inside utf8_mime2text() refuses the word outright. The
+     * underscores are spaces by the time the report is written.
+     */
+    public function test_a_bad_quoted_printable_sequence_is_reported_by_name(): void
+    {
+        imap_errors();
+
+        $decoded = imap_mime_header_decode('=?UTF-8?Q?a=ZZ_b?=');
+
+        $this->assertIsArray($decoded);
+        $this->assertSame('a=ZZ b', $decoded[0]->text);
+        $this->assertSame(['Invalid quoted-printable sequence: =ZZ b'], imap_errors());
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function undecodableWords(): array
+    {
+        // 49 characters of payload before the padding: the first "=" lands in
+        // the second position of a quantum, where rfc822_base64() has no way
+        // to read it and refuses the string.
+        $misplacedPadding = '=?UTF-8?B?nnDusSNdG92w6Fuw61fMjAxOF8wMy0xMzMyNTMzMTkzLnBkZg==?=';
+
+        return [
+            'padding in the wrong place' => [$misplacedPadding, $misplacedPadding],
+            // One "=" is enough in the last position of a quantum, but never
+            // in the second-to-last.
+            'lone padding in the third position' => ['=?UTF-8?B?YWJjZA=?=', '=?UTF-8?B?YWJjZA=?='],
+            'character outside the alphabet' => ['=?UTF-8?B?YWJ!jZA==?=', '=?UTF-8?B?YWJ!jZA==?='],
+            // mime2_decode() reads B and Q; the encoding being anything else
+            // is a syntax error, not a word to leave alone.
+            'unknown encoding' => ['=?UTF-8?X?aGk=?=', '=?UTF-8?X?aGk=?='],
+            // Inside an encoded word "=" must introduce two hex digits. This
+            // is not rfc822_qprint(), which reports and reads on.
+            'quoted-printable without the hex digits' => ['=?UTF-8?Q?a=ZZb?=', '=?UTF-8?Q?a=ZZb?='],
+            // A quantum left incomplete without any padding is legal, and the
+            // bits that do not fill a byte are dropped.
+            'incomplete final quantum' => ['=?UTF-8?B?aGVsbG9z5?=', 'hellos'],
+        ];
+    }
+
+    /**
+     * utf8_mime2text() hands back src untouched the moment mime2_decode()
+     * refuses a word — so a word that will not decode does not merely stay
+     * as it is, it voids the whole call, including the words converted
+     * before it.
+     */
+    #[DataProvider('undecodableWords')]
+    public function test_a_word_that_will_not_decode_voids_the_call(string $input, string $expected): void
+    {
+        $this->assertSame($expected, imap_utf8($input));
+
+        $this->assertSame(
+            $expected === $input ? '=?UTF-8?B?b2s=?= '.$input : 'ok'.$expected,
+            imap_utf8('=?UTF-8?B?b2s=?= '.$input),
+        );
+    }
+
+    /**
+     * Data after complete padding is the one base64 fault c-client reads
+     * past: it keeps what it had and says so.
+     */
+    public function test_data_after_the_padding_is_reported_not_refused(): void
+    {
+        imap_errors();
+
+        $this->assertSame('hello', imap_utf8('=?UTF-8?B?aGVsbG8=extra?='));
+        $this->assertSame(
+            ['Possible data truncation in rfc822_base64(): extra?='],
+            imap_errors(),
+        );
+
+        $decoded = imap_mime_header_decode('=?UTF-8?B?aGVsbG8=extra?=');
+
+        $this->assertIsArray($decoded);
+        $this->assertSame('hello', $decoded[0]->text);
+        // php_imap.c hands the decoder the word's data on its own, so the
+        // same warning quotes less of the header than imap_utf8()'s does.
+        $this->assertSame(
+            ['Possible data truncation in rfc822_base64(): extra'],
+            imap_errors(),
+        );
+    }
+
+    /**
      * @return array<string, array{string, string|false}>
      */
     public static function modifiedUtf7(): array

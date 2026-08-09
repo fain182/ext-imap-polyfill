@@ -6,6 +6,11 @@ use ImapPolyfill\Support\ErrorStack;
 
 final class MimeText
 {
+    private const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+    /** The bytes rfc822_base64()'s table marks WSP — note that \v is not one. */
+    private const BASE64_WHITESPACE = "\0\t\n\f\r ";
+
     /**
      * quoted-printable, decoded the way c-client's rfc822_qprint() does:
      * a "=" that starts neither a hex pair nor a line break is reported,
@@ -33,16 +38,40 @@ final class MimeText
      */
     public static function decode(string $text): string
     {
+        $failed = false;
+
         $decoded = preg_replace_callback(
             // RFC 2047 lets no whitespace inside an encoded word, and
             // c-client holds the line: a "word" with a space in its payload
-            // is left standing as the text it evidently is.
-            '/=\?(?P<charset>[^?\s]+)\?(?P<encoding>[BbQq])\?(?P<data>[^?\s]*)\?=(?:\s+(?==\?[^?\s]+\?[BbQq]\?))?/',
-            static function (array $matches): string {
-                $charset = $matches['charset'];
-                $bytes = strcasecmp($matches['encoding'], 'B') === 0
-                    ? base64_decode($matches['data'])
-                    : quoted_printable_decode(str_replace('_', ' ', $matches['data']));
+            // is left standing as the text it evidently is. The encoding is
+            // one character wide because utf8_mime2text() requires it to be
+            // (its "ee == e + 1"); which character it is decides below.
+            '/=\?(?P<charset>[^?\s]+)\?(?P<encoding>[^?\s])\?(?P<data>[^?\s]*)\?=(?:\s+(?==\?[^?\s]+\?[^?\s]\?))?/',
+            static function (array $matches) use (&$failed, $text): string {
+                if ($failed) {
+                    return '';
+                }
+
+                $charset = $matches['charset'][0];
+                $encoding = $matches['encoding'][0];
+
+                if (strcasecmp($encoding, 'B') === 0) {
+                    // The warning rfc822_base64() may raise quotes the buffer
+                    // it was handed, which here is the whole header text.
+                    $bytes = self::fromBase64($matches['data'][0], substr($text, $matches['data'][1]));
+                } elseif (strcasecmp($encoding, 'Q') === 0) {
+                    $bytes = self::fromMime2QuotedPrintable($matches['data'][0]);
+                } else {
+                    // mime2_decode() knows B and Q; every other encoding is a
+                    // syntax error, handled like any other one below.
+                    $bytes = false;
+                }
+
+                if ($bytes === false) {
+                    $failed = true;
+
+                    return '';
+                }
 
                 if (strcasecmp($charset, 'UTF-8') === 0 || strcasecmp($charset, 'US-ASCII') === 0) {
                     return $bytes;
@@ -52,10 +81,16 @@ final class MimeText
 
                 return $converted !== false ? $converted : $bytes;
             },
-            $text
+            $text,
+            -1,
+            $count,
+            PREG_OFFSET_CAPTURE
         );
 
-        return $decoded ?? $text;
+        // A word that will not decode voids the whole call: utf8_mime2text()
+        // answers with src as it stands, throwing away the words it had
+        // already converted before reaching the broken one.
+        return $failed || $decoded === null ? $text : $decoded;
     }
 
     /**
@@ -99,7 +134,9 @@ final class MimeText
                 $data = $matches['data'][$index][0];
 
                 if (strcasecmp($encoding, 'B') === 0) {
-                    $bytes = base64_decode($data, true);
+                    // php_imap.c hands rfc822_base64() the word's data alone,
+                    // so that is what a warning from it quotes.
+                    $bytes = self::fromBase64($data);
 
                     // One undecodable segment fails the whole call, as in
                     // php_imap.c where rfc822_base64() returning NIL aborts.
@@ -107,7 +144,12 @@ final class MimeText
                         return false;
                     }
                 } elseif (strcasecmp($encoding, 'Q') === 0) {
-                    $bytes = quoted_printable_decode(str_replace('_', ' ', $data));
+                    // rfc822_qprint(), not the stricter reader inside an
+                    // encoded word that decode() uses: a "=" with no hex pair
+                    // behind it is reported and read past, not refused. The
+                    // underscores become spaces first, in php_imap.c and so
+                    // in what the report quotes.
+                    $bytes = self::fromQuotedPrintable(str_replace('_', ' ', $data));
                 } else {
                     $bytes = $data;
                 }
@@ -125,6 +167,142 @@ final class MimeText
         // text and emits a part per run it finds, so no text is no parts —
         // not one part holding nothing.
         return $segments;
+    }
+
+    /**
+     * c-client's rfc822_base64(): the alphabet, plus the whitespace it skips,
+     * and nothing else — any other byte refuses the whole string. A "=" is
+     * padding only at the end of a quantum: one is enough in the fourth
+     * position, in the third it has to be followed immediately by a second,
+     * and anywhere else it is that same syntax error. A quantum left
+     * incomplete with no padding at all is fine, and its spare bits are
+     * dropped. Data *after* complete padding is not an error either: what was
+     * read is kept and a warning goes on the stack.
+     *
+     * @param string|null $context the buffer the warning quotes from, whose
+     *                             offsets are $data's — the whole header for
+     *                             imap_utf8(), the word's data on its own for
+     *                             imap_mime_header_decode()
+     */
+    private static function fromBase64(string $data, ?string $context = null): string|false
+    {
+        $context ??= $data;
+        $bytes = '';
+        $quantum = 0;
+        $position = 0;
+        $length = strlen($data);
+
+        for ($index = 0; $index < $length; $index++) {
+            $char = $data[$index];
+
+            if (strpos(self::BASE64_WHITESPACE, $char) !== false) {
+                continue;
+            }
+
+            if ($char === '=') {
+                if ($position === 2 && ($data[$index + 1] ?? '') === '=') {
+                    $position = 3;
+
+                    continue;
+                }
+
+                if ($position !== 3) {
+                    return false;
+                }
+
+                self::warnOnDataAfterPadding($data, $index + 1, $context);
+
+                return $bytes;
+            }
+
+            $value = strpos(self::BASE64_ALPHABET, $char);
+
+            if ($value === false) {
+                return false;
+            }
+
+            switch ($position) {
+                case 0:
+                    $quantum = ($value << 2) & 0xFF;
+                    break;
+                case 1:
+                    $bytes .= chr($quantum | ($value >> 4));
+                    $quantum = ($value << 4) & 0xFF;
+                    break;
+                case 2:
+                    $bytes .= chr($quantum | ($value >> 2));
+                    $quantum = ($value << 6) & 0xFF;
+                    break;
+                default:
+                    $bytes .= chr($quantum | $value);
+                    break;
+            }
+
+            $position = $position === 3 ? 0 : $position + 1;
+        }
+
+        return $bytes;
+    }
+
+    private static function warnOnDataAfterPadding(string $data, int $offset, string $context): void
+    {
+        for ($index = $offset, $length = strlen($data); $index < $length; $index++) {
+            $char = $data[$index];
+
+            if ($char === '=' || strpos(self::BASE64_WHITESPACE, $char) !== false) {
+                continue;
+            }
+
+            if (strpos(self::BASE64_ALPHABET, $char) === false) {
+                continue;
+            }
+
+            $message = 'Possible data truncation in rfc822_base64(): '.substr($context, $index, 80);
+            $break = strcspn($message, "\r\n");
+
+            ErrorStack::push(substr($message, 0, $break));
+
+            return;
+        }
+    }
+
+    /**
+     * The quoted-printable mime2_decode() reads inside an encoded word, which
+     * is not rfc822_qprint(): there is no soft line break here, "_" is a
+     * space, and a "=" without two hex digits behind it is a syntax error
+     * that refuses the word rather than something to report and read past.
+     */
+    private static function fromMime2QuotedPrintable(string $data): string|false
+    {
+        $bytes = '';
+        $length = strlen($data);
+
+        for ($index = 0; $index < $length; $index++) {
+            $char = $data[$index];
+
+            if ($char === '_') {
+                $bytes .= ' ';
+
+                continue;
+            }
+
+            if ($char !== '=') {
+                $bytes .= $char;
+
+                continue;
+            }
+
+            $pair = substr($data, $index + 1, 2);
+
+            if (strlen($pair) !== 2 || ctype_xdigit($pair) === false) {
+                return false;
+            }
+
+            $bytes .= chr((int) hexdec($pair));
+            $index += 2;
+        }
+
+        return $bytes;
     }
 
     private static function segment(string $charset, string $text): \stdClass
