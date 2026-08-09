@@ -273,20 +273,13 @@ final class Mailbox
         try {
             $status = $this->connection->selectOrExamine();
             $exists = $status->exists;
-            $ids = MessageSequence::parse($sequence)->expand($exists);
+
+            // c-client settles the set against the count it already holds,
+            // before anything goes out: these are the only messages on this
+            // path that are not the server's own words.
+            $ids = MessageSequence::parse($sequence)->expand($exists, $uidMode);
 
             if ($ids === []) {
-                return [];
-            }
-
-            // c-client's mail_sequence() checks the numbers against the
-            // count it holds and refuses the lot if any is past the end,
-            // writing this itself — the one message on this path that is
-            // not the server's own words. A UID is not a position, so a
-            // UID sequence is not checked this way.
-            if ($uidMode !== UidMode::UID && max($ids) > $exists) {
-                ErrorStack::push('Sequence out of range');
-
                 return [];
             }
 
