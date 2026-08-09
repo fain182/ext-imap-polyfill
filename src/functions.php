@@ -410,9 +410,7 @@ if (!function_exists('imap_binary')) {
 if (!function_exists('imap_utf8_to_mutf7')) {
     function imap_utf8_to_mutf7(string $string): string|false
     {
-        $result = @mb_convert_encoding($string, 'UTF7-IMAP', 'UTF-8');
-
-        return $result !== false ? $result : false;
+        return \ImapPolyfill\Mime\ModifiedUtf7::fromUtf8($string);
     }
 }
 

@@ -251,6 +251,38 @@ final class PureFunctionsTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, string|false, string|false}>
+     */
+    public static function modifiedUtf7RoundTrips(): array
+    {
+        return [
+            // A control character is ASCII, and utf8_to_mutf7() shifts into a
+            // BASE64 run for the high bit and for nothing else — where
+            // mbstring's UTF7-IMAP escapes anything unprintable.
+            'tab' => ["\t", "\t", "\t"],
+            'newline' => ["\r\n", "\r\n", "\r\n"],
+            'ampersand' => ['&', '&-', false],
+            'escaped ampersand' => ['&-', '&--', '&'],
+            'accented latin' => ["caff\u{e8}", 'caff&AOg-', false],
+            'a run' => ['&Jjo-', '&-Jjo-', "\u{263a}"],
+            // Refused rather than substituted: utf8_get() answering an error
+            // is c-client returning NIL, and an octet with the high bit set
+            // is "reserved for future use with UTF-8" on the way back.
+            'invalid utf-8' => ["\xff", false, false],
+            // Half a surrogate pair is not text: c-client's converter writes
+            // nothing where mbstring would write a substitute character.
+            'half a surrogate pair' => ['&2D3es-', '&-2D3es-', ''],
+        ];
+    }
+
+    #[DataProvider('modifiedUtf7RoundTrips')]
+    public function test_modified_utf7_conversions(string $input, string|false $encoded, string|false $decoded): void
+    {
+        $this->assertSame($encoded, imap_utf8_to_mutf7($input));
+        $this->assertSame($decoded, imap_mutf7_to_utf8($input));
+    }
+
+    /**
      * @return array<string, array{string, string, string, string}>
      */
     public static function addresses(): array
