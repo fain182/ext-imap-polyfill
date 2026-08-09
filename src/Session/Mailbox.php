@@ -122,8 +122,14 @@ final class Mailbox
      * The message is not there. c-client answers that from the cache it
      * already holds rather than from a failed FETCH, so php_imap.c warns
      * (php_error_docref) and leaves the error stack alone.
+     *
+     * Always false, so callers can `return $this->absent(...)` whatever
+     * they return alongside it. Declared bool because a standalone false
+     * return type needs PHP 8.2 and this package supports 8.1.
+     *
+     * @return false
      */
-    private function absent(string $function, int $uidMode): false
+    private function absent(string $function, int $uidMode): bool
     {
         trigger_error(
             $uidMode === UidMode::UID
