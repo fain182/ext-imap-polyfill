@@ -10,14 +10,23 @@ use DirectoryTree\ImapEngine\Connection\Tokens\Number;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
 use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\Imap\ImapEngineConnection;
+use ImapPolyfill\Message\SearchProgram;
 
 /**
- * Gateway to the raw IMAP wire, turning ImapEngine's token trees into the
- * plain arrays the imap_* layer consumes. Every command the polyfill needs
- * goes through here, including the ones ImapEngine has no method for (LSUB,
- * msgno-space SEARCH/FETCH/STORE/COPY, SETQUOTA).
+ * The ConnectionBackend an \IMAP\Connection speaks IMAP through, and the
+ * gateway to the raw wire it speaks over: it builds every command the
+ * polyfill needs — including the ones ImapEngine has no method for (LSUB,
+ * msgno-space SEARCH/FETCH/STORE/COPY, SETQUOTA) — and turns ImapEngine's
+ * token trees into the plain arrays the imap_* layer consumes.
+ *
+ * The two are one class because for IMAP there is nothing in between: a
+ * separate backend forwarding each of these methods under a second name
+ * would only make readers learn which of the two names does something. The
+ * POP3 side splits them (Pop3Backend over Pop3Protocol) because there the
+ * backend has a job of its own — synthesizing the flags, the uids and the
+ * searching that POP3 has no wire equivalent for.
  */
-final class Protocol
+final class Protocol implements ConnectionBackend
 {
     /** @var array<int, int>|null msgno => uid for the folder $uidTableFor describes */
     private ?array $uidTable = null;
@@ -31,8 +40,25 @@ final class Protocol
     /** @var list<string> the flags the last real SELECT/EXAMINE advertised */
     private array $selectedFlags = [];
 
-    public function __construct(private readonly ImapEngineConnection $connection)
+    public function __construct(
+        private readonly ImapEngineConnection $connection,
+        private readonly string $host,
+    ) {
+    }
+
+    public function driverName(): string
     {
+        return 'imap';
+    }
+
+    public function host(): string
+    {
+        return $this->host;
+    }
+
+    public function upgradedToTls(): bool
+    {
+        return $this->connection->upgradedToTls();
     }
 
     /**
@@ -41,14 +67,14 @@ final class Protocol
      * c-client sends the second SELECT (seen on the wire), and the server
      * clears \Recent for the session as RFC 3501 says a SELECT does.
      */
-    public function reselect(string $folder, bool $readOnly): FolderState
+    public function reselectFolder(string $folder, bool $readOnly): FolderState
     {
         $this->selectedFolder = null;
 
-        return $this->selectOrExamine($folder, $readOnly);
+        return $this->selectOrExamineFolder($folder, $readOnly);
     }
 
-    public function selectOrExamine(string $folder, bool $readOnly): FolderState
+    public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState
     {
         // c-client selects a mailbox once and keeps it: the counts it reports
         // afterwards come from untagged responses arriving on whatever
@@ -133,12 +159,13 @@ final class Protocol
     }
 
     /**
-     * @param string[] $tokens
-     *
      * @return int[]
      */
-    public function search(array $tokens, int $uidMode, string $charset = ''): array
+    public function search(SearchProgram $program, int $uidMode, string $charset = ''): array
     {
+        // The criteria go out as written: they have been checked against
+        // the vocabulary c-client would accept, and the server does the rest.
+        $tokens = $program->tokens;
         $command = $uidMode === UidMode::UID ? 'UID SEARCH' : 'SEARCH';
 
         // CHARSET comes before the criteria, as in c-client's imap_search():
@@ -173,28 +200,15 @@ final class Protocol
      */
     public function sort(string $program, string $charset, array $searchTokens, int $uidMode): ?array
     {
-        try {
-            $responses = $this->connection->sendAndCollect(
-                $uidMode === UidMode::UID ? 'UID SORT' : 'SORT',
-                ["({$program})", self::astring($charset), ...$searchTokens],
-            );
-        } catch (CommandFailedException $e) {
-            if ($e->status() !== 'BAD') {
-                throw $e;
-            }
+        $tokens = $this->delegated(
+            $uidMode === UidMode::UID ? 'UID SORT' : 'SORT',
+            'SORT',
+            ["({$program})", self::astring($charset), ...$searchTokens],
+        );
 
-            return null;
-        }
-
-        foreach ($responses as $response) {
-            if ((string) $response->type() !== 'SORT') {
-                continue;
-            }
-
-            return array_map('intval', array_map('strval', $response->tokensAfter(2)));
-        }
-
-        return [];
+        return $tokens === null
+            ? null
+            : array_map('intval', array_map('strval', $tokens));
     }
 
     /**
@@ -213,11 +227,34 @@ final class Protocol
      */
     public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array
     {
+        $tokens = $this->delegated(
+            $uidMode === UidMode::UID ? 'UID THREAD' : 'THREAD',
+            'THREAD',
+            [$algorithm, self::astring($charset), ...$searchTokens],
+        );
+
+        return $tokens === null
+            ? null
+            : array_map(self::value(...), $tokens);
+    }
+
+    /**
+     * The two commands c-client hands the whole job to the server for, and
+     * the one refusal it takes for an answer: a BAD is the server saying it
+     * cannot do this, which is imap_sort()/imap_thread()'s cue to do it
+     * locally instead (imap4r1.c). Every other failure is a failure.
+     *
+     * Null for that BAD; otherwise the untagged response's tokens, which the
+     * caller reads as the ids or the tree it asked for.
+     *
+     * @param string[] $arguments
+     *
+     * @return array<int, Token|Data>|null
+     */
+    private function delegated(string $command, string $responseType, array $arguments): ?array
+    {
         try {
-            $responses = $this->connection->sendAndCollect(
-                $uidMode === UidMode::UID ? 'UID THREAD' : 'THREAD',
-                [$algorithm, self::astring($charset), ...$searchTokens],
-            );
+            $responses = $this->connection->sendAndCollect($command, $arguments);
         } catch (CommandFailedException $e) {
             if ($e->status() !== 'BAD') {
                 throw $e;
@@ -227,24 +264,12 @@ final class Protocol
         }
 
         foreach ($responses as $response) {
-            if ((string) $response->type() !== 'THREAD') {
-                continue;
+            if ((string) $response->type() === $responseType) {
+                return $response->tokensAfter(2);
             }
-
-            return array_map(self::value(...), $response->tokensAfter(2));
         }
 
         return [];
-    }
-
-    /**
-     * @param int[] $ids
-     *
-     * @return array<int, string>
-     */
-    public function headers(array $ids, string $type, int $uidMode): array
-    {
-        return $this->fetch(["{$type}.HEADER"], $ids, null, $uidMode);
     }
 
     /**
@@ -407,18 +432,18 @@ final class Protocol
     /**
      * @return array<int, mixed>
      */
-    public function bodyStructure(int $id, bool $byUid): array
+    public function fetchBodyStructure(int $messageNum, bool $byUid): array
     {
-        $data = $this->fetch(['BODYSTRUCTURE'], [$id], null, $byUid ? UidMode::UID : UidMode::MSGNO);
+        $data = $this->fetch(['BODYSTRUCTURE'], [$messageNum], null, $byUid ? UidMode::UID : UidMode::MSGNO);
 
         // An empty response is the server saying the message is not there,
         // which the caller answers for; a response that came back without
         // the item asked for is the server breaking its own contract.
         if ($data === []) {
-            throw new MessageNotFoundException('message not found: '.$id);
+            throw new MessageNotFoundException('message not found: '.$messageNum);
         }
 
-        $structure = $data[$id] ?? reset($data);
+        $structure = $data[$messageNum] ?? reset($data);
 
         if (!is_array($structure)) {
             throw new \RuntimeException('no BODYSTRUCTURE in FETCH response');
@@ -454,6 +479,8 @@ final class Protocol
      */
     public function getAcl(string $mailbox): array
     {
+        $this->ensureAclCapability();
+
         $responses = $this->connection->sendAndCollect('GETACL', [self::astring($mailbox)]);
 
         $acl = [];
@@ -474,6 +501,8 @@ final class Protocol
 
     public function setAcl(string $mailbox, string $id, string $rights): void
     {
+        $this->ensureAclCapability();
+
         $this->connection->sendAndCollect('SETACL', [
             self::astring($mailbox),
             self::astring($id),
@@ -508,10 +537,34 @@ final class Protocol
 
     public function setQuota(string $quotaRoot, int $mailboxSize): void
     {
+        $this->ensureQuotaCapability();
+
         $this->connection->sendAndCollect('SETQUOTA', [
             Str::literal($quotaRoot),
             "(STORAGE {$mailboxSize})",
         ]);
+    }
+
+    /**
+     * c-client's LEVELACL gate (imap_acl_work), the ACL twin of the quota
+     * one below, down to the message it logs.
+     */
+    private function ensureAclCapability(): void
+    {
+        if (!$this->hasCapability('ACL')) {
+            throw new \RuntimeException('ACL not available on this IMAP server');
+        }
+    }
+
+    /**
+     * c-client's LEVELQUOTA gate: without the capability no command is sent
+     * and this exact message lands on the error stack.
+     */
+    private function ensureQuotaCapability(): void
+    {
+        if (!$this->hasCapability('QUOTA')) {
+            throw new \RuntimeException('Quota not available on this IMAP server');
+        }
     }
 
     /**
@@ -603,6 +656,8 @@ final class Protocol
      */
     private function quotaCommand(string $command, string $argument): array
     {
+        $this->ensureQuotaCapability();
+
         $responses = $this->connection->sendAndCollect($command, [Str::literal($argument)]);
 
         $resources = [];

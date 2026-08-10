@@ -36,7 +36,7 @@ class ProtocolThreadTest extends TestCase
         $connection = new ImapEngineConnection($this->stream);
         $connection->connect('fake.example.com');
 
-        return new Protocol($connection);
+        return new Protocol($connection, 'fake.example.com');
     }
 
     public function test_sends_the_algorithm_charset_and_search_program(): void

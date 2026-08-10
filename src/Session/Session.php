@@ -163,7 +163,7 @@ final class Session
                 // (SORT, THREAD, QUOTA) read the second answer.
                 $connection->forgetCapabilities();
 
-                return new \ImapPolyfill\Connection\Imap\ImapBackend($connection, $spec->host);
+                return new \ImapPolyfill\Connection\Protocol($connection, $spec->host);
             } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionFailedException $e) {
                 // c-client reports "Can't connect to host,port: reason", and
                 // naming the attempted port is the only way the default-port

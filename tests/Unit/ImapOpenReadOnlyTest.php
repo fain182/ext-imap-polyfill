@@ -19,7 +19,7 @@ class ImapOpenReadOnlyTest extends TestCase
             $this->markTestSkipped('IMAP\Connection is opaque on real ext-imap; no readOnly property to check.');
         }
 
-        $backend = new \ImapPolyfill\Connection\Imap\ImapBackend(
+        $backend = new \ImapPolyfill\Connection\Protocol(
             new \ImapPolyfill\Connection\Imap\ImapEngineConnection(new \DirectoryTree\ImapEngine\Connection\Streams\ImapStream()),
             'example.com',
         );
@@ -34,7 +34,7 @@ class ImapOpenReadOnlyTest extends TestCase
             $this->markTestSkipped('IMAP\Connection is opaque on real ext-imap; no readOnly property to check.');
         }
 
-        $backend = new \ImapPolyfill\Connection\Imap\ImapBackend(
+        $backend = new \ImapPolyfill\Connection\Protocol(
             new \ImapPolyfill\Connection\Imap\ImapEngineConnection(new \DirectoryTree\ImapEngine\Connection\Streams\ImapStream()),
             'example.com',
         );
