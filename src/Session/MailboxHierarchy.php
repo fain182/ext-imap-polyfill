@@ -181,15 +181,7 @@ final class MailboxHierarchy
     {
         $this->connection->ensureOpen();
 
-        try {
-            $this->connection->backend()->setAcl($mailbox, $id, $rights);
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return $this->attempt(fn () => $this->connection->backend()->setAcl($mailbox, $id, $rights));
     }
 
     /**
@@ -201,17 +193,7 @@ final class MailboxHierarchy
      */
     public function getQuota(string $quotaRoot): array|false
     {
-        $this->connection->ensureOpen();
-
-        try {
-            $resources = $this->connection->backend()->getQuota($quotaRoot);
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return $this->quotaArray($resources);
+        return $this->quotaReported(fn () => $this->connection->backend()->getQuota($quotaRoot));
     }
 
     /**
@@ -219,32 +201,34 @@ final class MailboxHierarchy
      */
     public function getQuotaRoot(string $mailbox): array|false
     {
+        return $this->quotaReported(fn () => $this->connection->backend()->getQuotaRoot($mailbox));
+    }
+
+    /**
+     * @param \Closure(): array<int, array{name: string, usage: int, limit: int}> $resources
+     *
+     * @return array<string, int|array<string, int>>|false
+     */
+    private function quotaReported(\Closure $resources): array|false
+    {
         $this->connection->ensureOpen();
 
         try {
-            $resources = $this->connection->backend()->getQuotaRoot($mailbox);
+            $reported = $resources();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
             return false;
         }
 
-        return $this->quotaArray($resources);
+        return $this->quotaArray($reported);
     }
 
     public function setQuota(string $quotaRoot, int $mailboxSize): bool
     {
         $this->connection->ensureOpen();
 
-        try {
-            $this->connection->backend()->setQuota($quotaRoot, $mailboxSize);
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return $this->attempt(fn () => $this->connection->backend()->setQuota($quotaRoot, $mailboxSize));
     }
 
     /**
@@ -273,80 +257,55 @@ final class MailboxHierarchy
     public function createMailbox(string $mailbox): bool
     {
         $this->connection->ensureOpen();
-
         $folderName = MailboxReference::parse($mailbox)->bareReference;
 
-        try {
-            $this->connection->backend()->createFolder($folderName);
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return $this->attempt(fn () => $this->connection->backend()->createFolder($folderName));
     }
 
     public function deleteMailbox(string $mailbox): bool
     {
         $this->connection->ensureOpen();
-
         $folderName = MailboxReference::parse($mailbox)->bareReference;
 
-        try {
-            $this->connection->backend()->deleteFolder($folderName);
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return $this->attempt(fn () => $this->connection->backend()->deleteFolder($folderName));
     }
 
     public function renameMailbox(string $from, string $to): bool
     {
         $this->connection->ensureOpen();
-
         $fromName = MailboxReference::parse($from)->bareReference;
         $toName = MailboxReference::parse($to)->bareReference;
 
-        try {
-            $this->connection->backend()->renameFolder($fromName, $toName);
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return $this->attempt(fn () => $this->connection->backend()->renameFolder($fromName, $toName));
     }
 
     public function subscribe(string $mailbox): bool
     {
         $this->connection->ensureOpen();
-
         $folderName = MailboxReference::parse($mailbox)->bareReference;
 
-        try {
-            $this->connection->backend()->subscribeFolder($folderName);
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        return true;
+        return $this->attempt(fn () => $this->connection->backend()->subscribeFolder($folderName));
     }
 
     public function unsubscribe(string $mailbox): bool
     {
         $this->connection->ensureOpen();
-
         $folderName = MailboxReference::parse($mailbox)->bareReference;
 
+        return $this->attempt(fn () => $this->connection->backend()->unsubscribeFolder($folderName));
+    }
+
+    /**
+     * The whole of what the folder-mutating functions do with a failure:
+     * the server's own words go on the error stack and the caller is told
+     * false, which is all php_imap.c reports of them either.
+     *
+     * @param \Closure(): void $operation
+     */
+    private function attempt(\Closure $operation): bool
+    {
         try {
-            $this->connection->backend()->unsubscribeFolder($folderName);
+            $operation();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
