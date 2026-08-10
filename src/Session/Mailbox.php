@@ -391,6 +391,12 @@ final class Mailbox
         // not a literal MIME part index.
         $wireSection = $section === '0' ? 'HEADER' : $section;
 
+        // Asked here and again inside fetchItem() below, because the probe
+        // between the two must not run for a message that is not there: it
+        // would report the server's refusal where the caller is owed the
+        // warning naming the message. Settling it twice costs nothing — the
+        // selection is cached, and a message that is absent has answered and
+        // returned before the second one.
         if ($this->selectionCovering($messageNum, $uidMode, $function) === false) {
             return false;
         }
