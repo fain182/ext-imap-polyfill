@@ -5,14 +5,24 @@ namespace ImapPolyfill\Address;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
- * RFC 822 address lists, including the group syntax c-client's
- * rfc822_parse_adrlist() supports and its quirks around it: a group opens
- * with a name-only entry and closes with an empty one, an unterminated
- * group is closed implicitly at end of input, and anything following a
- * closed group — a second group included — is refused rather than parsed.
+ * RFC 822 address lists, parsed the way c-client's rfc822_parse_adrlist()
+ * parses them: one pass over the text, an address at a time, with the group
+ * syntax and its quirks — a group opens with a name-only entry and closes
+ * with an empty one, an unterminated group is closed implicitly at the end
+ * of the input, and a complaint inside a group reads differently from the
+ * same complaint outside one.
+ *
+ * The single pass is the point. Splitting on commas first and parsing the
+ * pieces afterwards gets the well-formed lists right and every malformed one
+ * subtly wrong: a comma inside a group is not the same separator, the text a
+ * complaint quotes is what remained of the *whole* list rather than of one
+ * piece, and where the parse gives up decides how much of the list survives.
  */
 final class AddressList
 {
+    /** MAXGROUPDEPTH: "RFC [2]822 doesn't allow any group nesting" anyway. */
+    private const MAX_GROUP_DEPTH = 50;
+
     /**
      * @param Address[] $addresses
      */
@@ -22,193 +32,200 @@ final class AddressList
 
     public static function parse(string $addresses, string $defaultHostname): self
     {
+        $cursor = new Rfc822Cursor($addresses);
+
         // rfc822_parse_adrlist() skips whitespace before it looks at
         // anything, and comments are whitespace: a list holding nothing but
         // a comment is an empty list, not a malformed one. An unterminated
         // comment says so here, on the way past.
-        $leading = new Rfc822Cursor($addresses);
-        $leading->skipWhitespaceAndComments();
+        $cursor->skipWhitespaceAndComments();
 
-        if ($leading->atEnd()) {
+        if ($cursor->atEnd()) {
             return new self([]);
         }
 
-        $result = [];
-        $inGroup = false;
-        $groupClosed = false;
+        $parsed = [];
 
-        foreach (self::tokenize($addresses) as [$part, $delimiter, $delimiterAt]) {
-            // Only the leading whitespace goes: what trails an address is
-            // quoted back to the user when the parse fails, and c-client
-            // quotes it as it was written.
-            $part = ltrim($part);
-
-            // Whitespace where the last comma promised an address. c-client
-            // consumes the comma but does not skip what follows it before
-            // asking whether anything is left, so this reaches the parser and
-            // fails there — where a comma with nothing at all behind it, or
-            // another comma, is eaten whitespace and all.
-            if ($part === '' && $delimiter === '' && $result !== []) {
-                return self::invalid('', $result);
+        while (!$cursor->isCancelled()) {
+            // "RFC 822 allowed null addresses!!"
+            while ($cursor->peek() === ',') {
+                $cursor->skip();
+                $cursor->skipWhitespaceAndComments();
             }
 
-            // Everything after a group has closed is refused, which is how
-            // c-client treats a second group in the same list.
-            if ($groupClosed && ($part !== '' || $delimiter === ';')) {
-                $result[] = Address::syntaxError('UNEXPECTED_DATA_AFTER_ADDRESS');
-
-                return new self($result);
+            if ($cursor->atEnd()) {
+                break;
             }
 
-            if (!$inGroup && $part !== '' && ($name = self::groupNameOf($part)) !== null) {
-                $result[] = Address::groupStart($name);
-                $inGroup = true;
-                $part = trim(substr($part, strlen($name) + 1));
+            $outcome = self::parseAddress($cursor, $defaultHostname, $parsed, 0);
+
+            if ($outcome === AddressParse::Cancelled) {
+                break;
             }
 
-            if ($part !== '') {
-                $trailingData = null;
-                $unparsed = '';
-                $address = Address::parse($part, $defaultHostname, $trailingData, $unparsed);
+            if ($outcome === AddressParse::Read) {
+                $cursor->skipWhitespaceAndComments();
+                $next = $cursor->peek();
 
-                if ($address === null) {
-                    return self::invalid($unparsed, $result);
+                if ($next === ',') {
+                    $cursor->skip();
+
+                    continue;
                 }
 
-                $result[] = $address;
-
-                // What follows a complete address is neither part of it nor
-                // a new one ("a@b@c.com"): c-client keeps what it read and
-                // marks the rest, the same way it marks a second group.
-                if ($trailingData !== null) {
-                    // c-client picks its wording off the first character it
-                    // could not use: a letter or a digit there reads as an
-                    // address someone forgot to separate, anything else as
-                    // debris.
-                    $complaint = ctype_alnum($trailingData[0])
-                        ? 'Must use comma to separate addresses: '
-                        : 'Unexpected characters at end of address: ';
-
-                    ErrorStack::push($complaint.substr($trailingData, 0, 80));
-                    $result[] = Address::syntaxError('UNEXPECTED_DATA_AFTER_ADDRESS');
-
-                    return new self($result);
-                }
-            }
-
-            if ($delimiter === ';') {
-                if (!$inGroup) {
-                    // Outside a group a ";" separates nothing. It is data
-                    // trailing the address before it, and a list with no
-                    // address before it at all is malformed.
-                    if ($result === []) {
-                        return self::invalid(substr($addresses, $delimiterAt), $result);
-                    }
-
-                    ErrorStack::push('Unexpected characters at end of address: '.substr($addresses, $delimiterAt, 80));
-                    $result[] = Address::syntaxError('UNEXPECTED_DATA_AFTER_ADDRESS');
-
-                    return new self($result);
+                if ($next === null) {
+                    break;
                 }
 
-                $result[] = Address::groupEnd();
-                $inGroup = false;
-                $groupClosed = true;
+                // c-client picks its wording off the first character it
+                // could not use: a letter or a digit there reads as an
+                // address someone forgot to separate, anything else as
+                // debris.
+                ErrorStack::push(sprintf(
+                    ctype_alnum($next)
+                        ? 'Must use comma to separate addresses: %.80s'
+                        : 'Unexpected characters at end of address: %.80s',
+                    $cursor->rest(),
+                ));
+                $parsed[] = Address::syntaxError('UNEXPECTED_DATA_AFTER_ADDRESS');
+
+                break;
             }
+
+            $cursor->skipWhitespaceAndComments();
+            ErrorStack::push($cursor->atEnd()
+                ? 'Missing address after comma'
+                : sprintf('Invalid mailbox list: %.80s', $cursor->rest()));
+            $parsed[] = Address::syntaxError('INVALID_ADDRESS');
+
+            break;
         }
-
-        // An unterminated group still gets its closing entry.
-        if ($inGroup) {
-            $result[] = Address::groupEnd();
-        }
-
-        return new self($result);
-    }
-
-    /**
-     * The list was malformed: c-client keeps whatever it had parsed before
-     * the bad entry, appends the marker and logs — which is why this reaches
-     * the global error stack from a value object, as php_imap.c's parser does.
-     *
-     * What it logs is what was *left* when the parse gave up, not the list it
-     * started from, and nothing left at all is its own complaint: the comma
-     * that led here had no address behind it.
-     *
-     * @param Address[] $parsed
-     */
-    private static function invalid(string $unparsed, array $parsed): self
-    {
-        ErrorStack::push($unparsed === ''
-            ? 'Missing address after comma'
-            : 'Invalid mailbox list: '.substr($unparsed, 0, 80));
-        $parsed[] = Address::syntaxError('INVALID_ADDRESS');
 
         return new self($parsed);
     }
 
     /**
-     * The group name a part opens with, if any: a colon outside quotes and
-     * angle brackets, with no "@" before it (that would be a route, which
-     * c-client rejects outright rather than parsing).
+     * rfc822_parse_address(): a group if the text reads as one, otherwise a
+     * mailbox, appended to the list as it is read.
+     *
+     * @param Address[] $parsed
      */
-    private static function groupNameOf(string $part): ?string
+    private static function parseAddress(Rfc822Cursor $cursor, string $defaultHostname, array &$parsed, int $depth): AddressParse
     {
-        if (!preg_match('/^(?P<name>[^"<>@:]+):/', $part, $matches)) {
-            return null;
+        if ($cursor->isCancelled()) {
+            return AddressParse::Cancelled;
         }
 
-        return trim($matches['name']);
+        $cursor->skipWhitespaceAndComments();
+
+        if ($cursor->atEnd()) {
+            return AddressParse::NotAnAddress;
+        }
+
+        if (self::parseGroup($cursor, $defaultHostname, $parsed, $depth)) {
+            return $cursor->isCancelled() ? AddressParse::Cancelled : AddressParse::Read;
+        }
+
+        $addresses = Address::parseMailbox($cursor, $defaultHostname);
+
+        if ($addresses !== null) {
+            array_push($parsed, ...$addresses);
+
+            return $cursor->isCancelled() ? AddressParse::Cancelled : AddressParse::Read;
+        }
+
+        // A mailbox that failed while something else was cancelling the
+        // parse is not itself a malformed entry: whatever cancelled it has
+        // already said so.
+        return $cursor->isCancelled() ? AddressParse::Cancelled : AddressParse::NotAnAddress;
     }
 
     /**
-     * Splits on both list separators, keeping which one ended each piece:
-     * "," merely separates addresses, while ";" also closes a group, and a
-     * group can close without any comma in sight ("A: x@e.com; z@e.com").
-     * Quoted strings and angle brackets hide both.
+     * rfc822_parse_group(): a phrase, a colon, the addresses up to the
+     * semicolon, and the empty entry that marks the end. Answers false where
+     * the text is not a group at all, having moved nothing.
      *
-     * @return array<int, array{0: string, 1: string, 2: int}> [text, delimiter, where the delimiter was]
+     * @param Address[] $parsed
      */
-    private static function tokenize(string $addresses): array
+    private static function parseGroup(Rfc822Cursor $cursor, string $defaultHostname, array &$parsed, int $depth): bool
     {
-        $tokens = [];
-        $current = '';
-        $inQuotes = false;
-        $inAngles = false;
-        $length = strlen($addresses);
+        if ($depth > self::MAX_GROUP_DEPTH) {
+            ErrorStack::push('Ignoring excessively deep group recursion');
 
-        for ($index = 0; $index < $length; ++$index) {
-            $char = $addresses[$index];
+            return false;
+        }
 
-            // A backslash escapes what follows it wherever it stands, so an
-            // escaped quote does not close a string and an escaped comma
-            // separates nothing. Unescaping is Address::parse's job.
-            if ($char === '\\' && $index + 1 < $length) {
-                $current .= $char.$addresses[++$index];
+        $cursor->skipWhitespaceAndComments();
+
+        if ($cursor->atEnd()) {
+            return false;
+        }
+
+        $start = $cursor->position();
+
+        // A group with no name at all is written ":addresses;", so the
+        // phrase is only looked for when the colon is not already here.
+        if ($cursor->peek() !== ':') {
+            if ($cursor->readPhrase() === null) {
+                $cursor->seek($start);
+
+                return false;
+            }
+
+            $nameEnd = $cursor->position();
+            $cursor->skipWhitespaceAndComments();
+
+            if ($cursor->peek() !== ':') {
+                $cursor->seek($start);
+
+                return false;
+            }
+        } else {
+            $nameEnd = $start;
+        }
+
+        $parsed[] = Address::groupStart(Rfc822Cursor::unquote($cursor->slice($start, $nameEnd)));
+        $cursor->skip();
+        $cursor->skipWhitespaceAndComments();
+
+        while (!$cursor->isCancelled() && !$cursor->atEnd() && $cursor->peek() !== ';') {
+            $outcome = self::parseAddress($cursor, $defaultHostname, $parsed, $depth + 1);
+
+            if ($outcome === AddressParse::Cancelled) {
+                continue;
+            }
+
+            if ($outcome === AddressParse::NotAnAddress) {
+                ErrorStack::push(sprintf('Invalid group mailbox list: %.80s', $cursor->rest()));
+                $cursor->cancel();
+                $parsed[] = Address::syntaxError('INVALID_ADDRESS_IN_GROUP');
 
                 continue;
             }
 
-            if ($char === '"') {
-                $inQuotes = !$inQuotes;
-            } elseif (!$inQuotes && $char === '<') {
-                $inAngles = true;
-            } elseif (!$inQuotes && $char === '>') {
-                $inAngles = false;
-            } elseif (!$inQuotes && !$inAngles && ($char === ',' || $char === ';')) {
-                $tokens[] = [$current, $char, $index];
-                $current = '';
+            $cursor->skipWhitespaceAndComments();
+            $next = $cursor->peek();
 
-                continue;
+            if ($next === ',') {
+                $cursor->skip();
+            } elseif ($next !== ';' && $next !== null) {
+                ErrorStack::push(sprintf('Unexpected characters after address in group: %.80s', $cursor->rest()));
+                $cursor->cancel();
+                $parsed[] = Address::syntaxError('UNEXPECTED_DATA_AFTER_ADDRESS_IN_GROUP');
+            }
+        }
+
+        if (!$cursor->isCancelled()) {
+            if ($cursor->peek() === ';') {
+                $cursor->skip();
             }
 
-            $current .= $char;
+            $cursor->skipWhitespaceAndComments();
         }
 
-        if ($current !== '') {
-            $tokens[] = [$current, '', $length];
-        }
+        $parsed[] = Address::groupEnd();
 
-        return $tokens;
+        return true;
     }
 
     /**

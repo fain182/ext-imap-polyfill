@@ -389,4 +389,99 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
         );
         $this->assertSame(['Unexpected characters at end of address: @two'], imap_errors());
     }
+
+    /**
+     * What was left over is quoted as it stands, to the end of the string.
+     * A comma in it separates nothing once the parse has given up, so it is
+     * part of the complaint rather than the start of another address.
+     */
+    public function test_the_leftover_text_is_quoted_to_the_end_of_the_string(): void
+    {
+        imap_errors();
+
+        imap_rfc822_parse_adrlist('a@b.co[m,', 'default.host');
+
+        $this->assertSame(['Unexpected characters at end of address: [m,'], imap_errors());
+    }
+
+    /**
+     * A comment inside a comment, neither of them closed. c-client reports
+     * the inner one and writes a NUL over its "(", which leaves the outer
+     * one unterminated against the shortened text — so the next pass reports
+     * that too, and the two complaints come out innermost first.
+     */
+    public function test_nested_unterminated_comments_are_reported_from_the_inside_out(): void
+    {
+        imap_errors();
+
+        $parsed = @imap_rfc822_parse_adrlist('Joe (the (big', 'default.host');
+
+        $this->assertSame(
+            [['mailbox' => 'Joe', 'host' => 'default.host']],
+            array_map(get_object_vars(...), $parsed),
+        );
+        $this->assertSame(
+            ['Unterminated comment: (big', 'Unterminated comment: (the '],
+            imap_errors(),
+        );
+    }
+
+    /**
+     * @return array<string, array{string, array<int, array<string, string>>, string}>
+     */
+    public static function routeAddressesMissingTheirBracket(): array
+    {
+        return [
+            'no name in front of it' => [
+                '<a',
+                [
+                    ['mailbox' => 'a', 'host' => 'default.host'],
+                    ['mailbox' => 'MISSING_MAILBOX_TERMINATOR', 'host' => '.SYNTAX-ERROR.'],
+                ],
+                'Unterminated mailbox: a@default.host',
+            ],
+            'a name in front of it' => [
+                'Joe <a@b.com',
+                [
+                    ['mailbox' => 'a', 'host' => 'b.com', 'personal' => 'Joe'],
+                    ['mailbox' => 'MISSING_MAILBOX_TERMINATOR', 'host' => '.SYNTAX-ERROR.'],
+                ],
+                'Unterminated mailbox: a@b.com',
+            ],
+        ];
+    }
+
+    /**
+     * An address opened with "<" and never closed is kept, and followed by
+     * the marker saying so — rather than read as though the bracket had
+     * been there.
+     *
+     * @param array<int, array<string, string>> $expected
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('routeAddressesMissingTheirBracket')]
+    public function test_an_unterminated_route_address_is_marked(string $list, array $expected, string $error): void
+    {
+        imap_errors();
+
+        $parsed = @imap_rfc822_parse_adrlist($list, 'default.host');
+
+        $this->assertSame($expected, array_map(get_object_vars(...), $parsed));
+        $this->assertSame([$error], imap_errors());
+    }
+
+    /**
+     * rfc822_parse_domain() leaves the caller's pointer where it found it
+     * when there is no domain to read, so the comment it looked through on
+     * the way is still there for rfc822_parse_addrspec() to read as the
+     * personal name.
+     */
+    public function test_a_comment_becomes_the_name_when_the_domain_is_missing(): void
+    {
+        $parsed = @imap_rfc822_parse_adrlist('<joe@(the host))example.com>', 'default.host');
+
+        $this->assertSame(
+            ['mailbox' => 'joe', 'host' => '.SYNTAX-ERROR.', 'personal' => 'the host'],
+            get_object_vars($parsed[0]),
+        );
+    }
 }

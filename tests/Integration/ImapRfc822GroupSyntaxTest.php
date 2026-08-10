@@ -75,7 +75,83 @@ final class ImapRfc822GroupSyntaxTest extends TestCase
                 '@relay.example.com:user@example.com',
                 [['mailbox' => 'INVALID_ADDRESS', 'host' => '.SYNTAX-ERROR.']],
             ],
+            // The quoting comes off the group name like any other word, so
+            // a backslash in it quotes rather than stands.
+            'escape in the group name' => [
+                'undis\\closed-recipients:',
+                [['mailbox' => 'undisclosed-recipients'], []],
+            ],
+            // Whatever is in front of the colon is the name, however little
+            // it looks like one.
+            'name that is not a phrase anyone meant' => [
+                "=?UTF-8?B?YQ==?==== :Joe\n <joe@example.com>",
+                [
+                    ['mailbox' => '=?UTF-8?B?YQ==?===='],
+                    ['mailbox' => 'joe', 'host' => 'example.com', 'personal' => 'Joe'],
+                    [],
+                ],
+            ],
+            // Inside a group the two failures have their own markers, and
+            // the group is still closed after them.
+            'leftover after a member' => [
+                'Date:== Mon',
+                [
+                    ['mailbox' => 'Date'],
+                    ['mailbox' => '==', 'host' => 'default.host'],
+                    ['mailbox' => 'UNEXPECTED_DATA_AFTER_ADDRESS_IN_GROUP', 'host' => '.SYNTAX-ERROR.'],
+                    [],
+                ],
+            ],
+            'member that will not parse' => [
+                'A: <;',
+                [
+                    ['mailbox' => 'A'],
+                    ['mailbox' => 'INVALID_ADDRESS_IN_GROUP', 'host' => '.SYNTAX-ERROR.'],
+                    [],
+                ],
+            ],
+            'unterminated route address in a group' => [
+                'A: <b',
+                [
+                    ['mailbox' => 'A'],
+                    ['mailbox' => 'b', 'host' => 'default.host'],
+                    ['mailbox' => 'MISSING_MAILBOX_TERMINATOR', 'host' => '.SYNTAX-ERROR.'],
+                    [],
+                ],
+            ],
         ];
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function complaintsMadeInsideAGroup(): array
+    {
+        return [
+            'leftover after a member' => [
+                'Date:== Mon',
+                'Unexpected characters after address in group: Mon',
+            ],
+            'member that will not parse' => [
+                'A: <;',
+                'Invalid group mailbox list: <;',
+            ],
+        ];
+    }
+
+    /**
+     * The same two failures read differently inside a group: c-client has
+     * its own wording and its own markers there, and using the ones from
+     * outside makes a header look like it ended where it did not.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('complaintsMadeInsideAGroup')]
+    public function test_a_complaint_inside_a_group_says_so(string $list, string $error): void
+    {
+        imap_errors();
+
+        @imap_rfc822_parse_adrlist($list, 'default.host');
+
+        $this->assertSame([$error], imap_errors());
     }
 
     /**

@@ -8,46 +8,54 @@ use ImapPolyfill\Support\ErrorStack;
  * A cursor over RFC 822 header text, moving the way c-client's rfc822.c
  * moves through it.
  *
- * The two operations that matter are the ones a regular expression cannot
- * express. Comments nest, so finding where one ends means counting depth,
- * not matching a pattern; and whitespace has to be skipped *with* them,
- * since c-client's rfc822_skipws() treats the two alike. Everything the
- * address parser does is phrased in terms of those.
+ * The three operations that matter are the ones a regular expression cannot
+ * express. Comments nest, so finding where one ends means recursion, not
+ * matching a pattern; whitespace has to be skipped *with* them, since
+ * rfc822_skipws() treats the two alike; and a word may hold a quoted string
+ * in the middle of it. Everything the address parser does is phrased in
+ * terms of those.
+ *
+ * The text is a buffer rather than a value because c-client writes into it:
+ * an unterminated comment is reported once and its "(" overwritten with a
+ * NUL, so a re-scan of the same text cannot report it again. Everything the
+ * parse does afterwards reads the shortened buffer.
  */
 final class Rfc822Cursor
 {
+    /** The control characters c-client's specials tables all carry. */
+    private const CONTROLS = "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
+        ."\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f";
+
     /**
      * c-client's wspecials, the delimiters rfc822_parse_word() reads a word
      * up to. The dot is not one of them: a word may hold dots, and where
      * they are significant — between the parts of a mailbox or a domain —
      * the caller looks for them itself.
      */
-    private const SPECIALS = '()<>@,;:\\"[]';
+    public const WORD_SPECIALS = " ()<>@,;:\\\"[]".self::CONTROLS;
+
+    /**
+     * The two a domain literal is read up to. Neither the quote nor the
+     * space is among them, so both are ordinary text inside brackets.
+     */
+    public const LITERAL_SPECIALS = "]\\";
 
     private int $position = 0;
 
-    private ?string $lastComment = null;
+    private bool $cancelled = false;
 
-    private ?int $unterminatedCommentAt = null;
-
-    public function __construct(private readonly string $source)
+    public function __construct(private string $source)
     {
-    }
-
-    /**
-     * The contents of the comment most recently skipped, brackets off.
-     * RFC 822's other way of writing a name is to put it in a comment after
-     * the address — "joe@example.com (Joe Doe)" — so what skipws stepped
-     * over is not always something to forget.
-     */
-    public function lastComment(): ?string
-    {
-        return $this->lastComment;
     }
 
     public function position(): int
     {
         return $this->position;
+    }
+
+    public function seek(int $position): void
+    {
+        $this->position = $position;
     }
 
     public function atEnd(): bool
@@ -66,26 +74,26 @@ final class Rfc822Cursor
     }
 
     /**
-     * Read no further. c-client reaches this by leaving a NIL where the
-     * parse pointer would be, which the caller reads as "nothing follows".
+     * c-client keeps one parse pointer and abandons the rest of the input by
+     * setting it to NIL — which is what an address list does after a
+     * complaint, and what a group does when its contents will not parse. It
+     * is not the same as having read everything: text may well be left.
      */
-    public function skipToEnd(): void
+    public function cancel(): void
     {
-        $this->position = strlen($this->source);
+        $this->cancelled = true;
     }
 
     /**
-     * Where an unterminated comment began, if one was met.
-     *
-     * rfc822_skip_comment() reports one and then writes a NUL over the "("
-     * — "nuke duplicate messages in case reparse" — so the text stops there
-     * for everything that reads it afterwards, and the same comment is never
-     * reported twice. A caller that parses the same text a second time has
-     * to cut it here for that to hold.
+     * Whether the parse gave up. Not the same question as atEnd(): a pointer
+     * resting on the end of the text is still a pointer, and c-client tells
+     * the two apart — a list ending in a comma reaches its parser with
+     * nothing left to read, and that is what earns "Missing address after
+     * comma" rather than silence.
      */
-    public function unterminatedCommentAt(): ?int
+    public function isCancelled(): bool
     {
-        return $this->unterminatedCommentAt;
+        return $this->cancelled;
     }
 
     /** Whatever is left unread, which is what c-client names in its complaint. */
@@ -101,15 +109,12 @@ final class Rfc822Cursor
 
     /**
      * rfc822_skipws(): whitespace and comments are equally invisible
-     * between tokens. A comment may nest, may hold a quote that opens
-     * nothing, and may hold a backslash that escapes the next character —
-     * including the parenthesis that would otherwise close it.
+     * between tokens. A comment that never closes ends the skip where it
+     * began — the pointer does not move past text nobody could read.
      */
     public function skipWhitespaceAndComments(): void
     {
-        $length = strlen($this->source);
-
-        while ($this->position < $length) {
+        while (!$this->atEnd()) {
             $char = $this->source[$this->position];
 
             if ($char === ' ' || $char === "\t" || $char === "\r" || $char === "\n") {
@@ -118,117 +123,216 @@ final class Rfc822Cursor
                 continue;
             }
 
-            if ($char !== '(') {
-                return;
-            }
-
-            $depth = 0;
-            $start = $this->position;
-            $closed = false;
-
-            while ($this->position < $length) {
-                $char = $this->source[$this->position];
-
-                if ($char === '\\') {
-                    $this->position += 2;
-
-                    continue;
-                }
-
-                ++$this->position;
-
-                if ($char === '(') {
-                    ++$depth;
-                } elseif ($char === ')' && --$depth === 0) {
-                    $closed = true;
-
-                    break;
-                }
-            }
-
-            // A comment that never closes has swallowed the rest of the
-            // input, so whatever it holds was not written as a name.
-            $this->lastComment = $closed
-                ? substr($this->source, $start + 1, $this->position - $start - 2)
-                : null;
-
-            if (!$closed) {
-                $this->unterminatedCommentAt = $start;
-                ErrorStack::push('Unterminated comment: '.substr($this->source, $start, 80));
-
+            if ($char !== '(' || $this->skipComment(false) === null) {
                 return;
             }
         }
     }
 
     /**
-     * rfc822_parse_word(): one quoted string or one atom, whichever is
-     * next. Returns the position just past it, or null where neither
-     * starts — which is how the caller learns a phrase has ended.
+     * rfc822_skip_comment(): what the comment at the cursor holds, with the
+     * cursor left just past it, or null where it never closes.
+     *
+     * Trimming is what a caller reading the comment as a personal name asks
+     * for: the leading blanks are gone either way, and the trailing ones go
+     * with it, since c-client ties the string off after the last character
+     * that was not a blank.
+     *
+     * A comment that never closes is reported and its "(" overwritten, so a
+     * caller that reads this text again does not report it a second time.
+     * An unterminated comment *inside* one is why that matters: the inner is
+     * reported here, and the outer — now unterminated itself, against the
+     * shortened buffer — on the next pass, which is the order the two
+     * complaints come out in.
+     */
+    public function skipComment(bool $trim): ?string
+    {
+        $length = strlen($this->source);
+        $start = $this->position;
+        $index = $start + 1;
+
+        // Where the text of the comment begins: c-client steps over blanks
+        // before it remembers the position, so they are never part of it.
+        $contentStart = $index;
+
+        while ($contentStart < $length && $this->source[$contentStart] === ' ') {
+            ++$contentStart;
+        }
+
+        // The last character that was not a blank, which is where a trimmed
+        // comment ends.
+        $lastSignificant = null;
+
+        while (true) {
+            $char = $this->source[$index] ?? '';
+
+            if ($char === '(') {
+                $this->position = $index;
+
+                if ($this->skipComment(false) === null) {
+                    // Whoever asked is left looking at this comment's own
+                    // "(", not at the inner one that gave up.
+                    $this->position = $start;
+
+                    return null;
+                }
+
+                // The nested comment's own ")" is the significant character.
+                $lastSignificant = $index = $this->position - 1;
+            } elseif ($char === ')') {
+                $this->position = $index + 1;
+
+                if (!$trim) {
+                    return $this->slice($contentStart, $index);
+                }
+
+                return $lastSignificant === null
+                    ? ''
+                    : $this->slice($contentStart, $lastSignificant + 1);
+            } elseif ($char === '\\' && isset($this->source[$index + 1])) {
+                $lastSignificant = ++$index;
+            } elseif ($char === '' || ($char === '\\' && !isset($this->source[$index + 1]))) {
+                ErrorStack::push('Unterminated comment: '.substr($this->source, $start, 80));
+                $this->source = substr($this->source, 0, $start);
+                $this->position = $start;
+
+                return null;
+            } elseif ($char !== ' ') {
+                $lastSignificant = $index;
+            }
+
+            ++$index;
+        }
+    }
+
+    /**
+     * rfc822_parse_word(): one atom, or one quoted string, or a run of both
+     * — the scan resumes after a closing quote, so `"a"b` is a single word.
+     * Answers the position just past it, or null where no word starts here,
+     * which is how a phrase learns it has ended.
      *
      * A quoted string that never closes is not a word: everything after it
      * was going to be read as part of the name, so the address it was
      * attached to is unreachable and the whole entry is malformed.
+     *
+     * The cursor moves to the end of the word, and stays where it was when
+     * there is no word — the leading whitespace this skipped is skipped
+     * again by whoever asks next.
      */
-    public function readWord(): ?int
+    public function readWord(string $delimiters = self::WORD_SPECIALS): ?int
     {
-        $length = strlen($this->source);
+        $entry = $this->position;
+        $this->skipWhitespaceAndComments();
 
-        if ($this->position >= $length) {
+        if ($this->atEnd()) {
+            $this->position = $entry;
+
             return null;
         }
 
-        // A word read past the comment means the comment was not the
-        // trailing one, and cannot stand in as a personal name.
-        $this->lastComment = null;
-
+        $length = strlen($this->source);
         $start = $this->position;
+        $scan = $start;
 
-        while ($this->position < $length) {
-            $char = $this->source[$this->position];
+        while (true) {
+            $stop = self::firstOf($this->source, $delimiters, $scan);
 
-            // A backslash quotes whatever follows it, here as much as inside
-            // a quoted string: rfc822_parse_word() reads past both and the
-            // word carries on. c-client calls it "pretty pathological" and
-            // parses it anyway.
-            if ($char === '\\' && $this->position + 1 < $length) {
-                $this->position += 2;
-
-                continue;
+            if ($stop === null) {
+                return $this->position = $length;
             }
 
-            // A quoted string is part of the word rather than the whole of
-            // it: rfc822_parse_word() resumes its scan after the closing
-            // quote, so `"a"b` is one word and a quote that never closes
-            // leaves no word at all.
+            $char = $this->source[$stop];
+
             if ($char === '"') {
-                ++$this->position;
+                $index = $stop;
 
                 while (true) {
-                    if ($this->position >= $length) {
+                    // The closing quote is looked for before anything else,
+                    // so a backslash inside the string hides the quote that
+                    // follows it rather than being hidden by it.
+                    if (++$index >= $length) {
+                        $this->position = $entry;
+
                         return null;
                     }
 
-                    $quoted = $this->source[$this->position];
-                    $this->position += $quoted === '\\' ? 2 : 1;
-
-                    if ($quoted === '"') {
+                    if ($this->source[$index] === '"') {
                         break;
                     }
+
+                    if ($this->source[$index] === '\\' && ++$index >= $length) {
+                        $this->position = $entry;
+
+                        return null;
+                    }
                 }
+
+                $scan = $index + 1;
 
                 continue;
             }
 
-            if ($char === ' ' || $char === "\t" || $char === "\r" || $char === "\n"
-                || str_contains(self::SPECIALS, $char)) {
+            // A backslash quotes the character behind it here as much as
+            // inside a quoted string. c-client calls that "pretty
+            // pathological" and reads past both anyway.
+            if ($char === '\\' && $stop + 1 < $length) {
+                $scan = $stop + 2;
+
+                continue;
+            }
+
+            if ($stop === $start) {
+                $this->position = $entry;
+
+                return null;
+            }
+
+            return $this->position = $stop;
+        }
+    }
+
+    /** strpbrk() from an offset: the first position holding one of the delimiters. */
+    private static function firstOf(string $text, string $delimiters, int $from): ?int
+    {
+        $length = strlen($text);
+
+        for ($index = $from; $index < $length; ++$index) {
+            if (str_contains($delimiters, $text[$index])) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * rfc822_parse_phrase(): words, and the whitespace and comments between
+     * them, up to whatever ends the phrase. Answers where the last word
+     * ended — which is where the phrase ends, never at the trailing
+     * whitespace or comment the scan had to look through to find that out.
+     */
+    public function readPhrase(): ?int
+    {
+        $end = $this->readWord();
+
+        if ($end === null) {
+            return null;
+        }
+
+        while (!$this->atEnd()) {
+            $this->skipWhitespaceAndComments();
+            $next = $this->readWord();
+
+            if ($next === null) {
                 break;
             }
 
-            ++$this->position;
+            $end = $next;
         }
 
-        return $this->position > $start ? $this->position : null;
+        $this->position = $end;
+
+        return $end;
     }
 
     /**
