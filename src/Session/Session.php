@@ -54,8 +54,7 @@ final class Session
             return false;
         }
 
-        // Refused rather than quietly opened over IMAP, which is what
-        // happened before and is worse than any error.
+        // Refused rather than quietly opened over IMAP instead.
         if ($spec->service === Service::Nntp) {
             throw \ImapPolyfill\Support\UnsupportedFeature::nntp($mailbox);
         }

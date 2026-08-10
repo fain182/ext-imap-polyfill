@@ -5,12 +5,10 @@ namespace ImapPolyfill\Connection;
 /**
  * What a SELECT/EXAMINE reported about the folder it selected.
  *
- * A value object rather than the keyed array this used to be. The counters
- * are the whole point of selecting, and a caller handed one without them has
- * no sensible answer: as an array they were read as `$status['exists'] ?? 0`
- * in fourteen places, so a count that never arrived reported the folder
- * empty rather than reporting a failure. Now whoever builds one has to have
- * both counts in hand, and no caller has anything to guard against.
+ * The counters are the whole point of selecting, so they are constructor
+ * arguments rather than optional keys: whoever builds one has to have both
+ * counts in hand, and no caller has anything to guard against. A count that
+ * never arrived is a failure to raise, not a folder reporting itself empty.
  */
 final class FolderState
 {
