@@ -11,6 +11,7 @@ use DirectoryTree\ImapEngine\Connection\Tokens\Token;
 use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\Imap\ImapEngineConnection;
 use ImapPolyfill\Message\SearchProgram;
+use ImapPolyfill\Message\UidMode;
 
 /**
  * The ConnectionBackend an \IMAP\Connection speaks IMAP through, and the

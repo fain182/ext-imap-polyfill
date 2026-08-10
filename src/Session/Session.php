@@ -2,11 +2,13 @@
 
 namespace ImapPolyfill\Session;
 
+use ImapPolyfill\Connection\ConnectionFailedException;
+use ImapPolyfill\Connection\ConnectionLostException;
 use ImapPolyfill\Connection\Credentials;
 use ImapPolyfill\Connection\FolderState;
-use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Mailbox\MailboxSpec;
 use ImapPolyfill\Mailbox\Service;
+use ImapPolyfill\Message\UidMode;
 use ImapPolyfill\Support\ErrorStack;
 use ImapPolyfill\Support\Timeouts;
 
@@ -164,12 +166,14 @@ final class Session
                 $connection->forgetCapabilities();
 
                 return new \ImapPolyfill\Connection\Protocol($connection, $spec->host);
-            } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionFailedException $e) {
+            } catch (ConnectionFailedException $e) {
                 // c-client reports "Can't connect to host,port: reason", and
                 // naming the attempted port is the only way the default-port
                 // choice stays observable (and parity-testable) from outside.
-                $reason = $e->getPrevious()?->getMessage() ?? $e->getMessage();
-                ErrorStack::push("Can't connect to {$spec->host},{$spec->port}: {$reason}");
+                // The exception carries the reason alone, host and port here
+                // being the ones the spec asked for rather than the ones the
+                // socket resolved.
+                ErrorStack::push("Can't connect to {$spec->host},{$spec->port}: {$e->getMessage()}");
             } catch (\Throwable $e) {
                 ErrorStack::push($e->getMessage());
             }
@@ -390,7 +394,7 @@ final class Session
 
         try {
             $this->connection->backend()->noop();
-        } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException) {
+        } catch (ConnectionLostException) {
             // Reporting a dead stream is what this function is for, so
             // finding one is an answer rather than a failure: c-client
             // returns NIL and logs nothing.
@@ -473,7 +477,7 @@ final class Session
 
         try {
             $status = $this->connection->reselectFolder($spec->folder, $readOnly);
-        } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException) {
+        } catch (ConnectionLostException) {
             // Losing the socket is not losing the connection: c-client
             // dials the host again and logs back in rather than reporting
             // a dead stream, which is what makes a session survive a server

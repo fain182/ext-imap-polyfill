@@ -5,7 +5,7 @@ namespace ImapPolyfill\Tests\Unit;
 use DirectoryTree\ImapEngine\Connection\Streams\FakeStream;
 use ImapPolyfill\Connection\Imap\ImapEngineConnection;
 use ImapPolyfill\Connection\Protocol;
-use ImapPolyfill\Connection\UidMode;
+use ImapPolyfill\Message\UidMode;
 use PHPUnit\Framework\TestCase;
 
 /**

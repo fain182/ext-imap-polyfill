@@ -4,7 +4,6 @@ namespace ImapPolyfill\Session;
 
 use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\MessageNotFoundException;
-use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Mailbox\MailboxReference;
 use ImapPolyfill\Message\BodyStructure;
 use ImapPolyfill\Message\HeaderInfo;
@@ -15,6 +14,7 @@ use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Message\SortCriterion;
 use ImapPolyfill\Message\SortKey;
 use ImapPolyfill\Message\ThreadBuilder;
+use ImapPolyfill\Message\UidMode;
 use ImapPolyfill\Support\ErrorStack;
 
 /**

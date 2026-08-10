@@ -1,6 +1,6 @@
 <?php
 
-namespace ImapPolyfill\Connection;
+namespace ImapPolyfill\Message;
 
 /**
  * Which id space a wire operation addresses messages in. The values are

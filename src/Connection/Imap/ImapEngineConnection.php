@@ -11,8 +11,12 @@ use DirectoryTree\ImapEngine\Connection\Responses\Response;
 use DirectoryTree\ImapEngine\Connection\Responses\TaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Responses\UntaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
+use DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException;
+use DirectoryTree\ImapEngine\Exceptions\ImapConnectionFailedException;
 use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\CommandFailedException;
+use ImapPolyfill\Connection\ConnectionFailedException;
+use ImapPolyfill\Connection\ConnectionLostException;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -34,6 +38,29 @@ final class ImapEngineConnection extends ImapConnection
     private ?array $capabilities = null;
 
     private bool $upgraded = false;
+
+    /**
+     * The dial, with its failure re-raised as this package's own.
+     *
+     * Alongside assertTaggedResponse() below, this is what keeps ImapEngine's
+     * exception classes inside Connection\: the layers above tell a stream
+     * that never opened from one that hung up and from a command the server
+     * refused, and each of the three is a type of ours.
+     *
+     * @param array<string, mixed> $options
+     */
+    public function connect(string $host, ?int $port = null, array $options = []): void
+    {
+        try {
+            parent::connect($host, $port, $options);
+        } catch (ImapConnectionFailedException $e) {
+            // Whatever the socket itself said, which is the half c-client
+            // reports after its own "Can't connect to host,port: ". Both of
+            // ImapEngine's failures here carry it as the message; the unwrap
+            // is for a future one that nests the real error instead.
+            throw new ConnectionFailedException($e->getPrevious()?->getMessage() ?? $e->getMessage(), previous: $e);
+        }
+    }
 
     /**
      * @param list<string|array{0: string, 1: string}> $tokens
@@ -230,7 +257,17 @@ final class ImapEngineConnection extends ImapConnection
      */
     protected function nextReply(): Data|Token|Response|null
     {
-        $reply = parent::nextReply();
+        try {
+            $reply = parent::nextReply();
+        } catch (ImapConnectionClosedException $e) {
+            throw new ConnectionLostException($e->getMessage(), previous: $e);
+        } catch (ImapConnectionFailedException $e) {
+            // A read that failed for neither EOF nor timeout. It reaches here
+            // during the dial too, where connect() above would have caught
+            // ImapEngine's own class — translating it first means the reason
+            // is the same string whichever side of the greeting it arrives on.
+            throw new ConnectionFailedException($e->getMessage(), previous: $e);
+        }
 
         if ($reply instanceof UntaggedResponse) {
             $this->absorbCounts($reply);

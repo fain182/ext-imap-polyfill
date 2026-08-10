@@ -4,9 +4,9 @@ namespace ImapPolyfill\Connection\Pop3;
 
 use ImapPolyfill\Connection\ConnectionBackend;
 use ImapPolyfill\Connection\FolderState;
-use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\SearchProgram;
+use ImapPolyfill\Message\UidMode;
 use ImapPolyfill\Connection\MessageNotFoundException;
 
 /**

@@ -2,8 +2,6 @@
 
 namespace ImapPolyfill\Message;
 
-use ImapPolyfill\Connection\UidMode;
-
 /**
  * A message-set string, expanded the way c-client's mail_sequence() and
  * mail_uid_sequence() expand one — including where they refuse to.
