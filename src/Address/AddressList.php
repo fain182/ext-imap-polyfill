@@ -153,6 +153,40 @@ final class AddressList
     }
 
     /**
+     * The name of the group starting here, with the cursor left past the
+     * colon that ended it — or null, and the cursor where it was, when this
+     * is not a group at all.
+     *
+     * A group with no name is written ":addresses;", so the phrase is only
+     * looked for when the colon is not already here.
+     */
+    private static function groupNameHere(Rfc822Cursor $cursor): ?string
+    {
+        return $cursor->tentatively(static function () use ($cursor): ?string {
+            $start = $cursor->position();
+
+            if ($cursor->peek() !== ':') {
+                if ($cursor->readPhrase() === null) {
+                    return null;
+                }
+
+                $nameEnd = $cursor->position();
+                $cursor->skipWhitespaceAndComments();
+
+                if ($cursor->peek() !== ':') {
+                    return null;
+                }
+            } else {
+                $nameEnd = $start;
+            }
+
+            $cursor->skip();
+
+            return Rfc822Cursor::unquote($cursor->slice($start, $nameEnd));
+        });
+    }
+
+    /**
      * rfc822_parse_group(): a phrase, a colon, the addresses up to the
      * semicolon, and the empty entry that marks the end. Answers false where
      * the text is not a group at all, having moved nothing.
@@ -173,31 +207,13 @@ final class AddressList
             return false;
         }
 
-        $start = $cursor->position();
+        $name = self::groupNameHere($cursor);
 
-        // A group with no name at all is written ":addresses;", so the
-        // phrase is only looked for when the colon is not already here.
-        if ($cursor->peek() !== ':') {
-            if ($cursor->readPhrase() === null) {
-                $cursor->seek($start);
-
-                return false;
-            }
-
-            $nameEnd = $cursor->position();
-            $cursor->skipWhitespaceAndComments();
-
-            if ($cursor->peek() !== ':') {
-                $cursor->seek($start);
-
-                return false;
-            }
-        } else {
-            $nameEnd = $start;
+        if ($name === null) {
+            return false;
         }
 
-        $parsed[] = Address::groupStart(Rfc822Cursor::unquote($cursor->slice($start, $nameEnd)));
-        $cursor->skip();
+        $parsed[] = Address::groupStart($name);
         $cursor->skipWhitespaceAndComments();
 
         while (!$cursor->isCancelled() && !$cursor->atEnd() && $cursor->peek() !== ';') {

@@ -96,6 +96,36 @@ final class Rfc822Cursor
         return $this->cancelled;
     }
 
+    /**
+     * Runs something that may turn out not to be here at all, and puts the
+     * cursor back where it started if it was not.
+     *
+     * Every parser in rfc822.c takes its string by value and writes back
+     * through the caller's pointer only when it has something to write, so
+     * a phrase that was not a group name, or a word that never started,
+     * leaves the caller looking at exactly what it was looking at before.
+     * Done by hand that is a saved offset and a restore on each failing
+     * path, and the ones that got missed were not visible as anything but a
+     * wrong answer several frames away.
+     *
+     * @template T
+     *
+     * @param callable(): (T|null) $parse
+     *
+     * @return T|null
+     */
+    public function tentatively(callable $parse): mixed
+    {
+        $entry = $this->position;
+        $parsed = $parse();
+
+        if ($parsed === null) {
+            $this->position = $entry;
+        }
+
+        return $parsed;
+    }
+
     /** Whatever is left unread, which is what c-client names in its complaint. */
     public function rest(): string
     {
@@ -221,88 +251,67 @@ final class Rfc822Cursor
      */
     public function readWord(string $delimiters = self::WORD_SPECIALS): ?int
     {
-        $entry = $this->position;
-        $this->skipWhitespaceAndComments();
+        return $this->tentatively(function () use ($delimiters): ?int {
+            $this->skipWhitespaceAndComments();
 
-        if ($this->atEnd()) {
-            $this->position = $entry;
-
-            return null;
-        }
-
-        $length = strlen($this->source);
-        $start = $this->position;
-        $scan = $start;
-
-        while (true) {
-            $stop = self::firstOf($this->source, $delimiters, $scan);
-
-            if ($stop === null) {
-                return $this->position = $length;
-            }
-
-            $char = $this->source[$stop];
-
-            if ($char === '"') {
-                $index = $stop;
-
-                while (true) {
-                    // The closing quote is looked for before anything else,
-                    // so a backslash inside the string hides the quote that
-                    // follows it rather than being hidden by it.
-                    if (++$index >= $length) {
-                        $this->position = $entry;
-
-                        return null;
-                    }
-
-                    if ($this->source[$index] === '"') {
-                        break;
-                    }
-
-                    if ($this->source[$index] === '\\' && ++$index >= $length) {
-                        $this->position = $entry;
-
-                        return null;
-                    }
-                }
-
-                $scan = $index + 1;
-
-                continue;
-            }
-
-            // A backslash quotes the character behind it here as much as
-            // inside a quoted string. c-client calls that "pretty
-            // pathological" and reads past both anyway.
-            if ($char === '\\' && $stop + 1 < $length) {
-                $scan = $stop + 2;
-
-                continue;
-            }
-
-            if ($stop === $start) {
-                $this->position = $entry;
-
+            if ($this->atEnd()) {
                 return null;
             }
 
-            return $this->position = $stop;
-        }
-    }
+            $length = strlen($this->source);
+            $start = $this->position;
+            $scan = $start;
 
-    /** strpbrk() from an offset: the first position holding one of the delimiters. */
-    private static function firstOf(string $text, string $delimiters, int $from): ?int
-    {
-        $length = strlen($text);
+            while (true) {
+                $stop = $scan + strcspn($this->source, $delimiters, $scan);
 
-        for ($index = $from; $index < $length; ++$index) {
-            if (str_contains($delimiters, $text[$index])) {
-                return $index;
+                if ($stop >= $length) {
+                    return $this->position = $length;
+                }
+
+                $char = $this->source[$stop];
+
+                if ($char === '"') {
+                    $index = $stop;
+
+                    while (true) {
+                        // The closing quote is looked for before anything
+                        // else, so a backslash inside the string hides the
+                        // quote behind it rather than being hidden by it.
+                        if (++$index >= $length) {
+                            return null;
+                        }
+
+                        if ($this->source[$index] === '"') {
+                            break;
+                        }
+
+                        if ($this->source[$index] === '\\' && ++$index >= $length) {
+                            return null;
+                        }
+                    }
+
+                    $scan = $index + 1;
+
+                    continue;
+                }
+
+                // A backslash quotes the character behind it here as much as
+                // inside a quoted string. c-client calls that "pretty
+                // pathological" and reads past both anyway.
+                if ($char === '\\' && $stop + 1 < $length) {
+                    $scan = $stop + 2;
+
+                    continue;
+                }
+
+                if ($stop === $start) {
+                    return null;
+                }
+
+                return $this->position = $stop;
             }
-        }
-
-        return null;
+        });
     }
 
     /**

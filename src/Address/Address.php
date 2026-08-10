@@ -44,60 +44,50 @@ final class Address
             return null;
         }
 
-        // Where the parse pointer stays if nothing here is a mailbox: only a
-        // route-address or an addr-spec that parsed moves it, so the caller
-        // can tell "no address here" from "the list ends here".
-        $start = $cursor->position();
+        // Only a route-address or an addr-spec that parsed moves the cursor:
+        // where nothing here is a mailbox the caller has to be able to tell
+        // "no address here" from "the list ends here".
+        return $cursor->tentatively(static function () use ($cursor, $defaultHostname): ?array {
+            $start = $cursor->position();
 
-        // A route-address with no phrase in front of it.
-        if ($cursor->peek() === '<') {
-            $addresses = self::parseRouteAddress($cursor, $defaultHostname);
-
-            if ($addresses === null) {
-                $cursor->seek($start);
+            // A route-address with no phrase in front of it.
+            if ($cursor->peek() === '<') {
+                return self::parseRouteAddress($cursor, $defaultHostname);
             }
 
-            return $addresses;
-        }
+            if ($cursor->readPhrase() === null) {
+                return null;
+            }
 
-        if ($cursor->readPhrase() === null) {
+            $phraseEnd = $cursor->position();
+            $addresses = self::parseRouteAddress($cursor, $defaultHostname);
+
+            if ($addresses !== null) {
+                // The phrase is the source text from its first word to its
+                // last, so a comment *between* two words is part of it,
+                // while one before or after was skipped as whitespace and is
+                // gone. It replaces any name the route-address found in a
+                // comment.
+                $addresses[0] = $addresses[0]->withPersonal(Rfc822Cursor::unquote($cursor->slice($start, $phraseEnd)));
+
+                return $addresses;
+            }
+
+            // A phrase the route-address behind it will not back up is no
+            // name at all. The parse starts over from the beginning of the
+            // string as a plain addr-spec — which reads one word where the
+            // phrase read several, and leaves the rest for the caller to
+            // complain about.
+            //
+            // The text it starts over on is whatever the first pass left: an
+            // unterminated comment it met has already been cut off the
+            // buffer, which is how c-client keeps the second pass from
+            // reporting the same comment again.
             $cursor->seek($start);
+            $address = self::parseAddrSpec($cursor, $defaultHostname);
 
-            return null;
-        }
-
-        $phraseEnd = $cursor->position();
-        $addresses = self::parseRouteAddress($cursor, $defaultHostname);
-
-        if ($addresses !== null) {
-            // The phrase is the source text from its first word to its last,
-            // so a comment *between* two words is part of it, while one
-            // before or after was skipped as whitespace and is gone. It
-            // replaces any name the route-address found in a comment.
-            $addresses[0] = $addresses[0]->withPersonal(Rfc822Cursor::unquote($cursor->slice($start, $phraseEnd)));
-
-            return $addresses;
-        }
-
-        // A phrase the route-address behind it will not back up is no name
-        // at all. The parse starts over from the beginning of the string as
-        // a plain addr-spec — which reads one word where the phrase read
-        // several, and leaves the rest for the caller to complain about.
-        //
-        // The text it starts over on is whatever the first pass left: an
-        // unterminated comment it met has already been cut off the buffer,
-        // which is how c-client keeps the second pass from reporting the
-        // same comment again.
-        $cursor->seek($start);
-        $address = self::parseAddrSpec($cursor, $defaultHostname);
-
-        if ($address === null) {
-            $cursor->seek($start);
-
-            return null;
-        }
-
-        return [$address];
+            return $address === null ? null : [$address];
+        });
     }
 
     /**
@@ -115,13 +105,11 @@ final class Address
         }
 
         $cursor->skip();
-        $afterBracket = $cursor->position();
-        $adl = self::readRoute($cursor);
 
-        if ($adl === null) {
-            $cursor->seek($afterBracket);
-        }
-
+        // A route that does not end in its colon is not a route: the parse
+        // goes back to just after the bracket and reads what is there as the
+        // address itself.
+        $adl = $cursor->tentatively(static fn (): ?string => self::readRoute($cursor));
         $address = self::parseAddrSpec($cursor, $defaultHostname);
 
         if ($address === null) {
@@ -251,9 +239,12 @@ final class Address
 
         if ($end === null) {
             ErrorStack::push('Missing or invalid host name after @');
-            // rfc822_parse_domain() leaves the caller's pointer alone when
-            // it finds no domain, so a comment this looked through is still
-            // there to be read as a personal name.
+            // Restored by hand rather than with tentatively(), because only
+            // one of this function's two branches leaves the pointer alone:
+            // a domain literal that will not parse has moved it, and the
+            // caller reads on from where that stopped. Here the caller reads
+            // on from before the whitespace, so a comment this looked
+            // through is still there to be taken as a personal name.
             $cursor->seek($entry);
 
             return null;
