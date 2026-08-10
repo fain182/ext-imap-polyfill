@@ -43,16 +43,37 @@ function isTheDocumentedDecomposition(string $label, string $polyfill, string $r
     // polyfill's and see whether that is what the extension said.
     $decomposed = preg_replace_callback(
         '/hex:([0-9a-f]*)/',
-        static function (array $match): string {
-            $text = hex2bin($match[1]);
-            $normalized = @\Normalizer::normalize($text, \Normalizer::FORM_D);
-
-            return 'hex:'.bin2hex(is_string($normalized) ? $normalized : $text);
-        },
+        static fn (array $match): string => 'hex:'.bin2hex(decompose(hex2bin($match[1]))),
         $polyfill,
     );
 
     return $decomposed === $real;
+}
+
+/**
+ * The decomposed form of every part of the text that is UTF-8 at all.
+ *
+ * Normalizer refuses a string holding one invalid byte, and half the corpus
+ * is mutated header text, so decomposing the whole answer at once answers
+ * "no" for exactly the inputs a fuzzer spends its time on — the documented
+ * divergence would then be reported as a new finding on every run. Each
+ * maximal valid run is decomposed on its own instead, which is what
+ * decomposing character by character would come to.
+ */
+function decompose(string $text): string
+{
+    return (string) preg_replace_callback(
+        '/(?:[\x00-\x7F]|[\xC2-\xDF][\x80-\xBF]|\xE0[\xA0-\xBF][\x80-\xBF]'
+            .'|[\xE1-\xEC\xEE\xEF][\x80-\xBF]{2}|\xED[\x80-\x9F][\x80-\xBF]'
+            .'|\xF0[\x90-\xBF][\x80-\xBF]{2}|[\xF1-\xF3][\x80-\xBF]{3}'
+            .'|\xF4[\x80-\x8F][\x80-\xBF]{2})+/',
+        static function (array $match): string {
+            $normalized = \Normalizer::normalize($match[0], \Normalizer::FORM_D);
+
+            return is_string($normalized) ? $normalized : $match[0];
+        },
+        $text,
+    );
 }
 
 /**
