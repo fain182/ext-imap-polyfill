@@ -125,7 +125,16 @@ final class MimeText
             '/(?:^|(?<=\s))=\?(?P<charset>'.self::MIME2_TOKEN.'*)'
                 .'\?(?P<encoding>'.self::MIME2_TOKEN.')'
                 .'\?(?P<data>[^\x00-\x20\x7F-\xFF?]*[^?]?)\?=(?=\s|$)'
-                .'(?:\s+(?==\?))?/',
+                // The whitespace before a *continuation* word is folding and
+                // goes with it — blanks, or a line break with the blanks
+                // that make it a folded line. What makes it a continuation
+                // is c-client's sniff, which is one character deep and takes
+                // MINENCWORD bytes to be there behind the "=?": "a =?" at
+                // the end of a header keeps its space, because nothing that
+                // short could have been a word. The folded form counts from
+                // the last blank rather than from the "=", which is why it
+                // asks for one byte less.
+                .'(?:[ \t]*\r?\n[ \t]+(?==\?[\s\S]{7})|[ \t]*(?==\?[\s\S]{8}))?/',
             static function (array $matches) use (&$failed, $text): string {
                 if ($failed) {
                     return '';
@@ -171,9 +180,7 @@ final class MimeText
                     return $bytes;
                 }
 
-                $converted = @iconv($charset, 'UTF-8//IGNORE', $bytes);
-
-                return $converted !== false ? $converted : $bytes;
+                return self::toUtf8From($charset, $bytes);
             },
             $text,
             -1,
@@ -185,6 +192,29 @@ final class MimeText
         // answers with src as it stands, throwing away the words it had
         // already converted before reaching the broken one.
         return $failed || $decoded === null ? $text : $decoded;
+    }
+
+    /**
+     * The charset conversion utf8_text() does, and its answer to a charset
+     * it does not know: c-client looks the name up in its own table and,
+     * finding nothing there, hands the bytes back as they are.
+     *
+     * iconv reports that same "no such charset" through the error system
+     * instead, so the diagnostic is caught here rather than left for a
+     * user's error handler — one that does not honour "@" would otherwise
+     * see a complaint the real extension never makes.
+     */
+    private static function toUtf8From(string $charset, string $bytes): string
+    {
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            $converted = iconv($charset, 'UTF-8//IGNORE', $bytes);
+        } finally {
+            restore_error_handler();
+        }
+
+        return $converted !== false ? $converted : $bytes;
     }
 
     /**

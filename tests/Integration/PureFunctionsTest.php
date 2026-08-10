@@ -443,6 +443,58 @@ final class PureFunctionsTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, string}>
+     */
+    public static function whitespaceBeforeAContinuationWord(): array
+    {
+        return [
+            // Between two words the whitespace is folding and goes.
+            'space between two words' => ['=?UTF-8?B?YQ==?= =?UTF-8?B?Yg==?=', 'ab'],
+            'fold between two words' => ["=?UTF-8?B?YQ==?=\r\n =?UTF-8?B?Yg==?=", 'ab'],
+            // What decides it is a sniff for "=?" with MINENCWORD bytes
+            // behind it, and nothing shorter counts — so the space in front
+            // of a "=?" that ends the header stays where it is.
+            'space before something too short' => ['=?UTF-8?B?YQ==?= =?', 'a =?'],
+            'fold before something too short' => ["=?UTF-8?B?YQ==?=\r\n =?", "a\r\n =?"],
+        ];
+    }
+
+    /**
+     * The whitespace between two encoded words belongs to neither, and the
+     * whitespace before anything else belongs to the text.
+     */
+    #[DataProvider('whitespaceBeforeAContinuationWord')]
+    public function test_whitespace_before_a_continuation_word(string $input, string $expected): void
+    {
+        $this->assertSame($expected, imap_utf8($input));
+    }
+
+    /**
+     * A charset nobody has is not an error: c-client looks the name up in
+     * its own table and, finding nothing, hands the bytes back. Nothing is
+     * raised on the way — not even something an error handler that ignores
+     * "@" could see.
+     */
+    public function test_an_unknown_charset_is_silent(): void
+    {
+        $raised = [];
+        set_error_handler(static function (int $severity, string $message) use (&$raised): bool {
+            $raised[] = $message;
+
+            return true;
+        });
+
+        try {
+            $decoded = imap_utf8('=?NOSUCHCHARSET?Q?abc?= tail');
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertSame('abc tail', $decoded);
+        $this->assertSame([], $raised);
+    }
+
+    /**
      * Return-Path is not one of the headers rfc822_parse_msg_full() knows:
      * its dispatch on "R" reads Reply-To and References and stops there, so
      * env->return_path stays NIL no matter what the header says. The property
