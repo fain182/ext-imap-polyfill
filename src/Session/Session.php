@@ -246,19 +246,7 @@ final class Session
     public function numMessages(): int|false
     {
         $this->connection->ensureOpen();
-
-        try {
-            $status = $this->connection->selectOrExamine();
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
-
-            // ext-imap's imap_num_msg is a cached client-side read (c-client's
-            // stream->nmsgs), not a live query: it keeps returning the last
-            // known count rather than false if the connection later breaks.
-            return $this->connection->numMessages();
-        }
-
-        $this->connection->rememberCounts($status->exists, $status->recent);
+        $this->refreshCounts();
 
         return $this->connection->numMessages();
     }
@@ -266,19 +254,31 @@ final class Session
     public function numRecent(): int|false
     {
         $this->connection->ensureOpen();
+        $this->refreshCounts();
 
+        return $this->connection->numRecent();
+    }
+
+    /**
+     * Brings the cached counters up to date, and leaves them alone when the
+     * connection has nothing to say.
+     *
+     * ext-imap's imap_num_msg/imap_num_recent are cached client-side reads
+     * (c-client's stream->nmsgs, stream->recent), not live queries: a
+     * connection that has since broken leaves the last known count standing
+     * rather than turning the read into false.
+     */
+    private function refreshCounts(): void
+    {
         try {
             $status = $this->connection->selectOrExamine();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
-            // Cached client-side read, like numMessages(); see its comment.
-            return $this->connection->numRecent();
+            return;
         }
 
         $this->connection->rememberCounts($status->exists, $status->recent);
-
-        return $this->connection->numRecent();
     }
 
     public function check(): \stdClass|false
