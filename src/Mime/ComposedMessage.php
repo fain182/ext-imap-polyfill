@@ -158,16 +158,21 @@ final class ComposedMessage
     }
 
     /**
-     * @param array<array-key, mixed> $envelope
+     * A string-valued field as php_imap.c reads one: absent stays absent,
+     * present is converted and checked for header injection. $label names
+     * the field in the injection warning, which for a body field is not
+     * its key ("body subtype", not "subtype").
+     *
+     * @param array<array-key, mixed> $source
      */
-    private static function stringField(array $envelope, string $key): ?string
+    private static function stringField(array $source, string $key, ?string $label = null): ?string
     {
-        if (!array_key_exists($key, $envelope)) {
+        if (!array_key_exists($key, $source)) {
             return null;
         }
 
-        $value = self::stringValue($envelope[$key]);
-        self::checkInjection($value, adrlist: false, field: $key);
+        $value = self::stringValue($source[$key]);
+        self::checkInjection($value, adrlist: false, field: $label ?? $key);
 
         return $value;
     }
@@ -231,9 +236,8 @@ final class ComposedMessage
             }
         }
 
-        if (array_key_exists('charset', $spec)) {
-            $charset = self::stringValue($spec['charset']);
-            self::checkInjection($charset, adrlist: false, field: 'body charset');
+        $charset = self::stringField($spec, 'charset', 'body charset');
+        if ($charset !== null) {
             $body->parameters = [['CHARSET', $charset], ...$body->parameters];
         }
 
@@ -251,29 +255,13 @@ final class ComposedMessage
             }
         }
 
-        if (array_key_exists('subtype', $spec)) {
-            $subtype = self::stringValue($spec['subtype']);
-            self::checkInjection($subtype, adrlist: false, field: 'body subtype');
-            $body->subtype = $subtype;
-        }
+        $body->subtype = self::stringField($spec, 'subtype', 'body subtype');
 
-        if (array_key_exists('id', $spec)) {
-            $id = self::stringValue($spec['id']);
-            self::checkInjection($id, adrlist: false, field: 'body id');
-            $body->id = $id;
-        }
+        $body->id = self::stringField($spec, 'id', 'body id');
 
-        if (array_key_exists('description', $spec)) {
-            $description = self::stringValue($spec['description']);
-            self::checkInjection($description, adrlist: false, field: 'body description');
-            $body->description = $description;
-        }
+        $body->description = self::stringField($spec, 'description', 'body description');
 
-        if (array_key_exists('disposition.type', $spec)) {
-            $dispositionType = self::stringValue($spec['disposition.type']);
-            self::checkInjection($dispositionType, adrlist: false, field: 'body disposition.type');
-            $body->dispositionType = $dispositionType;
-        }
+        $body->dispositionType = self::stringField($spec, 'disposition.type', 'body disposition.type');
 
         if (array_key_exists('disposition', $spec)) {
             $parameters = self::parseParameters($spec['disposition'], $dispositionLabel);
@@ -289,11 +277,7 @@ final class ComposedMessage
             $body->contents = self::stringValue($spec['contents.data']);
         }
 
-        if (array_key_exists('md5', $spec)) {
-            $md5 = self::stringValue($spec['md5']);
-            self::checkInjection($md5, adrlist: false, field: 'body md5');
-            $body->md5 = $md5;
-        }
+        $body->md5 = self::stringField($spec, 'md5', 'body md5');
 
         return $body;
     }
