@@ -4,8 +4,6 @@ namespace ImapPolyfill\Connection\Imap;
 
 use DirectoryTree\ImapEngine\Collections\ResponseCollection;
 use DirectoryTree\ImapEngine\Connection\ImapConnection;
-use DirectoryTree\ImapEngine\Connection\ImapTokenizer;
-use DirectoryTree\ImapEngine\Connection\Streams\StreamInterface;
 use DirectoryTree\ImapEngine\Connection\Responses\ContinuationResponse;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\Data;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\ResponseCodeData;
@@ -36,15 +34,6 @@ final class ImapEngineConnection extends ImapConnection
     private ?array $capabilities = null;
 
     private bool $upgraded = false;
-
-    /**
-     * Response text arrives as the server wrote it, 8-bit bytes included;
-     * see EightBitTokenizer for why ImapEngine's own would refuse it.
-     */
-    protected function newTokenizer(StreamInterface $stream): ImapTokenizer
-    {
-        return new EightBitTokenizer($stream);
-    }
 
     /**
      * @param list<string|array{0: string, 1: string}> $tokens

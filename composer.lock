@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "fb89327da71105e6ba3dceba1997778f",
+    "content-hash": "b8122c809ce0087c7f122b7413f2bea3",
     "packages": [
         {
             "name": "carbonphp/carbon-doctrine-types",
@@ -77,16 +77,16 @@
         },
         {
             "name": "directorytree/imapengine",
-            "version": "v1.25.4",
+            "version": "v1.25.5",
             "source": {
                 "type": "git",
                 "url": "https://github.com/DirectoryTree/ImapEngine.git",
-                "reference": "f2a626c34d0f3b9774a4e729893e84e6360605f6"
+                "reference": "e3e0e5f5b1f1713013d17ea2a72277ffcfb44088"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/DirectoryTree/ImapEngine/zipball/f2a626c34d0f3b9774a4e729893e84e6360605f6",
-                "reference": "f2a626c34d0f3b9774a4e729893e84e6360605f6",
+                "url": "https://api.github.com/repos/DirectoryTree/ImapEngine/zipball/e3e0e5f5b1f1713013d17ea2a72277ffcfb44088",
+                "reference": "e3e0e5f5b1f1713013d17ea2a72277ffcfb44088",
                 "shasum": ""
             },
             "require": {
@@ -127,7 +127,7 @@
             ],
             "support": {
                 "issues": "https://github.com/DirectoryTree/ImapEngine/issues",
-                "source": "https://github.com/DirectoryTree/ImapEngine/tree/v1.25.4"
+                "source": "https://github.com/DirectoryTree/ImapEngine/tree/v1.25.5"
             },
             "funding": [
                 {
@@ -135,7 +135,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-07-30T21:01:32+00:00"
+            "time": "2026-08-10T02:59:51+00:00"
         },
         {
             "name": "doctrine/lexer",
@@ -4446,5 +4446,5 @@
     "platform-overrides": {
         "php": "8.1.0"
     },
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }
