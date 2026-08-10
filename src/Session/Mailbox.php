@@ -36,9 +36,7 @@ final class Mailbox
             throw new \ValueError('imap_search(): Argument #3 ($flags) must be a bitmask of SE_FREE, and SE_UID');
         }
 
-        $uidMode = ($flags & SE_UID)
-            ? UidMode::UID
-            : UidMode::MSGNO;
+        $uidMode = UidMode::fromFlags($flags, SE_UID);
 
         $this->connection->ensureOpen();
 
@@ -170,6 +168,41 @@ final class Mailbox
         return false;
     }
 
+    /**
+     * One FETCH item for one message, which is the whole of what
+     * imap_body(), imap_fetchbody(), imap_fetchmime(), imap_fetchheader()
+     * and imap_savebody() ask the server for.
+     *
+     * The message being absent is answered as absence rather than as
+     * failure, in the two shapes a server reports it: an empty response,
+     * and — because a UID was never checked against the count up front —
+     * a rejected FETCH whose uid the folder turns out not to have.
+     */
+    private function fetchItem(int $messageNum, string $item, int $uidMode, string $function): string|false
+    {
+        if ($this->selectionCovering($messageNum, $uidMode, $function) === false) {
+            return false;
+        }
+
+        try {
+            $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
+        } catch (\Throwable $e) {
+            if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
+                return $this->absent($function, $uidMode);
+            }
+
+            ErrorStack::push($e->getMessage());
+
+            return false;
+        }
+
+        if ($data === []) {
+            return $this->absent($function, $uidMode);
+        }
+
+        return $data[$messageNum] ?? reset($data);
+    }
+
     public function fetchHeader(int $messageNum, int $flags): string|false
     {
         $this->connection->ensureOpen();
@@ -182,31 +215,7 @@ final class Mailbox
             throw new \ValueError('imap_fetchheader(): Argument #3 ($flags) must be a bitmask of FT_UID, FT_PREFETCHTEXT, and FT_INTERNAL');
         }
 
-        $uidMode = ($flags & FT_UID)
-            ? UidMode::UID
-            : UidMode::MSGNO;
-
-        if ($this->selectionCovering($messageNum, $uidMode, 'imap_fetchheader') === false) {
-            return false;
-        }
-
-        try {
-            $headers = $this->connection->backend()->headers([$messageNum], 'RFC822', $uidMode);
-        } catch (\Throwable $e) {
-            if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
-                return $this->absent('imap_fetchheader', $uidMode);
-            }
-
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        if ($headers === []) {
-            return $this->absent('imap_fetchheader', $uidMode);
-        }
-
-        return $headers[$messageNum] ?? reset($headers);
+        return $this->fetchItem($messageNum, 'RFC822.HEADER', UidMode::fromFlags($flags, FT_UID), 'imap_fetchheader');
     }
 
     public function headerInfo(int $messageNum, int $fromLength = 0, int $subjectLength = 0): \stdClass|false
@@ -270,9 +279,7 @@ final class Mailbox
             throw new \ValueError('imap_fetch_overview(): Argument #3 ($flags) must be FT_UID or 0');
         }
 
-        $uidMode = ($flags & FT_UID)
-            ? UidMode::UID
-            : UidMode::MSGNO;
+        $uidMode = UidMode::fromFlags($flags, FT_UID);
 
         $this->connection->ensureOpen();
 
@@ -338,7 +345,7 @@ final class Mailbox
             throw new \ValueError('imap_fetchstructure(): Argument #3 ($flags) must be FT_UID or 0');
         }
 
-        $uidMode = ($flags & FT_UID) ? UidMode::UID : UidMode::MSGNO;
+        $uidMode = UidMode::fromFlags($flags, FT_UID);
 
         if ($this->selectionCovering($messageNum, $uidMode, 'imap_fetchstructure') === false) {
             return false;
@@ -379,13 +386,10 @@ final class Mailbox
      */
     private function fetchSection(int $messageNum, string $section, int $flags, string $function): string|false
     {
-        $uidMode = ($flags & FT_UID)
-            ? UidMode::UID
-            : UidMode::MSGNO;
+        $uidMode = UidMode::fromFlags($flags, FT_UID);
         // ext-imap's section "0" is a legacy alias for the top-level header,
         // not a literal MIME part index.
         $wireSection = $section === '0' ? 'HEADER' : $section;
-        $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$wireSection}]" : "BODY[{$wireSection}]";
 
         if ($this->selectionCovering($messageNum, $uidMode, $function) === false) {
             return false;
@@ -416,23 +420,16 @@ final class Mailbox
             }
         }
 
-        try {
-            $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
-        } catch (\Throwable $e) {
-            if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
-                return $this->absent($function, $uidMode);
-            }
+        return $this->fetchItem($messageNum, self::bodyItem($wireSection, $flags), $uidMode, $function);
+    }
 
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        if ($data === []) {
-            return $this->absent($function, $uidMode);
-        }
-
-        return $data[$messageNum] ?? reset($data);
+    /**
+     * BODY[section], asked for without marking the message \Seen when the
+     * caller passed FT_PEEK.
+     */
+    private static function bodyItem(string $section, int $flags): string
+    {
+        return ($flags & FT_PEEK) ? "BODY.PEEK[{$section}]" : "BODY[{$section}]";
     }
 
     public function fetchMime(int $messageNum, string $section, int $flags): string|false
@@ -447,32 +444,12 @@ final class Mailbox
             throw new \ValueError('imap_fetchmime(): Argument #4 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');
         }
 
-        $uidMode = ($flags & FT_UID)
-            ? UidMode::UID
-            : UidMode::MSGNO;
-        $item = ($flags & FT_PEEK) ? "BODY.PEEK[{$section}.MIME]" : "BODY[{$section}.MIME]";
-
-        if ($this->selectionCovering($messageNum, $uidMode, 'imap_fetchmime') === false) {
-            return false;
-        }
-
-        try {
-            $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
-        } catch (\Throwable $e) {
-            if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
-                return $this->absent('imap_fetchmime', $uidMode);
-            }
-
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        if ($data === []) {
-            return $this->absent('imap_fetchmime', $uidMode);
-        }
-
-        return $data[$messageNum] ?? reset($data);
+        return $this->fetchItem(
+            $messageNum,
+            self::bodyItem("{$section}.MIME", $flags),
+            UidMode::fromFlags($flags, FT_UID),
+            'imap_fetchmime',
+        );
     }
 
     public function bodyStruct(int $messageNum, string $section): \stdClass|false
@@ -525,7 +502,7 @@ final class Mailbox
             throw new \ValueError('imap_savebody(): Argument #5 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');
         }
 
-        $uidMode = ($flags & FT_UID) ? UidMode::UID : UidMode::MSGNO;
+        $uidMode = UidMode::fromFlags($flags, FT_UID);
 
         // Settled before the destination is touched, the way c-client
         // settles it: from the counts and the uid table it already holds.
@@ -585,32 +562,12 @@ final class Mailbox
             throw new \ValueError('imap_body(): Argument #3 ($flags) must be a bitmask of FT_UID, FT_PEEK, and FT_INTERNAL');
         }
 
-        $uidMode = ($flags & FT_UID)
-            ? UidMode::UID
-            : UidMode::MSGNO;
-        $item = ($flags & FT_PEEK) ? 'BODY.PEEK[TEXT]' : 'BODY[TEXT]';
-
-        if ($this->selectionCovering($messageNum, $uidMode, 'imap_body') === false) {
-            return false;
-        }
-
-        try {
-            $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
-        } catch (\Throwable $e) {
-            if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
-                return $this->absent('imap_body', $uidMode);
-            }
-
-            ErrorStack::push($e->getMessage());
-
-            return false;
-        }
-
-        if ($data === []) {
-            return $this->absent('imap_body', $uidMode);
-        }
-
-        return $data[$messageNum] ?? reset($data);
+        return $this->fetchItem(
+            $messageNum,
+            self::bodyItem('TEXT', $flags),
+            UidMode::fromFlags($flags, FT_UID),
+            'imap_body',
+        );
     }
 
     public function copy(string $sequence, string $folder, int $options): bool
@@ -637,9 +594,7 @@ final class Mailbox
 
     private function copyTo(string $sequence, string $folder, int $options): bool
     {
-        $uidMode = ($options & CP_UID)
-            ? UidMode::UID
-            : UidMode::MSGNO;
+        $uidMode = UidMode::fromFlags($options, CP_UID);
 
         try {
             $this->connection->selectOrExamine();
@@ -724,17 +679,7 @@ final class Mailbox
             throw new \ValueError('imap_setflag_full(): Argument #4 ($options) must be ST_UID or 0');
         }
 
-        $command = ($options & ST_UID) ? 'UID STORE' : 'STORE';
-        $flagsAtom = '('.trim($flag).')';
-
-        try {
-            $this->connection->selectOrExamine();
-            $this->connection->backend()->store($command, [$sequence, '+FLAGS.SILENT', $flagsAtom]);
-        } catch (\Throwable $e) {
-            ErrorStack::push($e->getMessage());
-        }
-
-        return true;
+        return $this->storeFlags($sequence, $flag, $options, '+FLAGS.SILENT');
     }
 
     public function clearFlagFull(string $sequence, string $flag, int $options): bool
@@ -745,12 +690,21 @@ final class Mailbox
             throw new \ValueError('imap_clearflag_full(): Argument #4 ($options) must be ST_UID or 0');
         }
 
+        return $this->storeFlags($sequence, $flag, $options, '-FLAGS.SILENT');
+    }
+
+    /**
+     * Always true, whatever the server said: php_imap.c's
+     * imap_setflag_full/imap_clearflag_full return RETURN_TRUE
+     * unconditionally, having thrown away mail_setflag_full()'s void.
+     */
+    private function storeFlags(string $sequence, string $flag, int $options, string $item): bool
+    {
         $command = ($options & ST_UID) ? 'UID STORE' : 'STORE';
-        $flagsAtom = '('.trim($flag).')';
 
         try {
             $this->connection->selectOrExamine();
-            $this->connection->backend()->store($command, [$sequence, '-FLAGS.SILENT', $flagsAtom]);
+            $this->connection->backend()->store($command, [$sequence, $item, '('.trim($flag).')']);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
         }
@@ -878,7 +832,7 @@ final class Mailbox
                     ($reverse ? 'REVERSE ' : '').SortKey::wireName($criterion),
                     $charset ?? 'US-ASCII',
                     $program === null ? ['ALL'] : $program->tokens,
-                    ($flags & SE_UID) ? UidMode::UID : UidMode::MSGNO,
+                    UidMode::fromFlags($flags, SE_UID),
                 );
 
                 if ($sorted !== null) {
