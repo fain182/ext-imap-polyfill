@@ -37,7 +37,7 @@ class ProtocolSortTest extends TestCase
         $connection = new ImapEngineConnection($this->stream);
         $connection->connect('fake.example.com');
 
-        return new Protocol($connection);
+        return new Protocol($connection, 'fake.example.com');
     }
 
     public function test_msgno_sort_sends_the_criteria_charset_and_search_program(): void

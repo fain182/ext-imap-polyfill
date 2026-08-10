@@ -65,7 +65,7 @@ class UnsupportedFeatureTest extends TestCase
         // Built without connecting: the refusal must come from the function
         // itself, not from the argument check in front of it.
         $connection = \IMAP\Connection::forSession(
-            new \ImapPolyfill\Connection\Imap\ImapBackend(
+            new \ImapPolyfill\Connection\Protocol(
                 new \ImapPolyfill\Connection\Imap\ImapEngineConnection(
                     new \DirectoryTree\ImapEngine\Connection\Streams\ImapStream()
                 ),

@@ -185,17 +185,6 @@ final class Pop3Backend implements ConnectionBackend
         return null;
     }
 
-    public function headers(array $ids, string $type, int $uidMode): array
-    {
-        $result = [];
-        foreach ($ids as $id) {
-            $msgno = $uidMode === self::UID_MODE ? $this->resolveMsgno($id) : $id;
-            $result[$id] = $this->rawMessage($msgno)->getRawHeader()."\r\n";
-        }
-
-        return $result;
-    }
-
     public function fetch(array $items, array $ids, ?int $to, int $uidMode): array
     {
         $result = [];

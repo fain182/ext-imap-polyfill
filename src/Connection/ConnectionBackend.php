@@ -9,7 +9,7 @@ use ImapPolyfill\Message\SearchProgram;
  * actually speaks. IMAP\Connection owns connection-level state (selected
  * folder, read-only flag, cached counters) and is otherwise a thin delegator
  * to one implementation of this interface per protocol (see
- * Connection\Imap\ImapBackend, Connection\Pop3\Pop3Backend).
+ * Connection\Protocol, Connection\Pop3\Pop3Backend).
  */
 interface ConnectionBackend
 {
@@ -93,13 +93,6 @@ interface ConnectionBackend
      * @return array<int, mixed>|null
      */
     public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array;
-
-    /**
-     * @param int[] $ids
-     *
-     * @return array<int, string>
-     */
-    public function headers(array $ids, string $type, int $uidMode): array;
 
     /**
      * A single requested item collapses to its scalar value per id instead
