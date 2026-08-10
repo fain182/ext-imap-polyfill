@@ -445,6 +445,73 @@ final class PureFunctionsTest extends TestCase
     /**
      * @return array<string, array{string, string}>
      */
+    public static function headerBlocksReadLineByLine(): array
+    {
+        return [
+            // A tab is coerced to a space wherever it stands, and only the
+            // blanks after the colon are dropped: what trails the value is
+            // part of it.
+            'tab in a value' => ["Subject: a\tb \r\n", 'a b '],
+            // Folding drops the line break and keeps the whitespace that
+            // continued the line.
+            'folded value' => ["Subject: a\r\n\tb\r\n", 'a b'],
+            // Trailing blanks come off the *name*, not off the value.
+            'blanks before the colon' => ["Subject   : a\r\n", 'a'],
+            // A header written twice is read twice, and the second is
+            // dropped: c-client only fills a field it has not filled yet.
+            'repeated header' => ["Subject: one\r\nSubject: two\r\n", 'one'],
+            // Where the header block ends: a line beginning with a bare LF
+            // stops the scan, and a CRLF blank line does not — so a message
+            // written with CRLF has its body read as more headers.
+            'bare LF blank line ends the block' => ["Subject: one\n\nSubject: two\n", 'one'],
+            'CRLF blank line does not end the block' => ["X: y\r\n\r\nSubject: two\r\n", 'two'],
+        ];
+    }
+
+    /**
+     * rfc822_parse_msg_full() collects a logical line at a time, and the
+     * three rules it does it by are all observable.
+     */
+    #[DataProvider('headerBlocksReadLineByLine')]
+    public function test_a_header_block_is_read_the_way_c_client_reads_it(string $headers, string $subject): void
+    {
+        $this->assertSame($subject, imap_rfc822_parse_headers($headers)->subject);
+    }
+
+    /**
+     * An address header written twice is one list: c-client appends what it
+     * reads to what the earlier line left, rather than replacing it.
+     */
+    public function test_a_repeated_address_header_is_one_list(): void
+    {
+        $parsed = imap_rfc822_parse_headers("From: a@b.com\r\nTo: t@u.com\r\nFrom: c@d.com\r\n");
+
+        $this->assertSame('a@b.com, c@d.com', $parsed->fromaddress);
+        $this->assertSame(['a', 'c'], array_column($parsed->from, 'mailbox'));
+    }
+
+    /**
+     * The headers are parsed where they stand, not in the order the
+     * properties are written in: two malformed ones put their complaints on
+     * the stack in the order the message wrote them.
+     */
+    public function test_complaints_come_out_in_the_order_the_headers_were_written(): void
+    {
+        imap_errors();
+
+        @imap_rfc822_parse_headers("From: a@@b.com\r\nTo: c@@d.com\r\n");
+
+        $this->assertSame([
+            'Missing or invalid host name after @',
+            'Unexpected characters at end of address: @b.com',
+            'Missing or invalid host name after @',
+            'Unexpected characters at end of address: @d.com',
+        ], imap_errors());
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
     public static function whitespaceBeforeAContinuationWord(): array
     {
         return [

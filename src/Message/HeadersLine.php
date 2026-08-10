@@ -28,7 +28,7 @@ final class HeadersLine
         string $defaultHost,
         array $registeredUserFlags = [],
     ): string {
-        $fields = RawHeaderFields::parse($rawHeader);
+        $fields = RawHeaderFields::parse($rawHeader)->toArray();
         $subject = $fields['subject'] ?? '';
 
         return self::flagChars($flags)

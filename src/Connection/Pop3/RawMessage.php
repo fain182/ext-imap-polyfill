@@ -53,6 +53,6 @@ final class RawMessage
      */
     public function getHeaders(): array
     {
-        return $this->fields ??= RawHeaderFields::parse($this->header);
+        return $this->fields ??= RawHeaderFields::parse($this->header)->toArray();
     }
 }

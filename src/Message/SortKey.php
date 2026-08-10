@@ -17,7 +17,7 @@ final class SortKey
      */
     public static function resolve(SortCriterion $criteria, array $message, string $defaultHost): int|string
     {
-        $fields = RawHeaderFields::parse($message['RFC822.HEADER']);
+        $fields = RawHeaderFields::parse($message['RFC822.HEADER'])->toArray();
 
         return match ($criteria) {
             SortCriterion::Date => strtotime($fields['date'] ?? '') ?: 0,

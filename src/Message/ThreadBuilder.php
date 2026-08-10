@@ -34,7 +34,7 @@ final class ThreadBuilder
             }
 
             $message = $data[$msgno];
-            $fields = RawHeaderFields::parse($message['RFC822.HEADER']);
+            $fields = RawHeaderFields::parse($message['RFC822.HEADER'])->toArray();
             $refsHeader = $fields['references'] ?? $fields['in-reply-to'] ?? '';
 
             $messages[] = [

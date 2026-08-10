@@ -18,7 +18,7 @@ final class Overview
         int $msgno,
         string $defaultHost,
     ): \stdClass {
-        $fields = RawHeaderFields::parse($rawHeader);
+        $fields = RawHeaderFields::parse($rawHeader)->toArray();
         $result = new \stdClass();
 
         if (isset($fields['subject'])) {

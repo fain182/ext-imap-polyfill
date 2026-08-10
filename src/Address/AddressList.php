@@ -30,6 +30,18 @@ final class AddressList
     {
     }
 
+    /**
+     * The same header written more than once. c-client parses each
+     * occurrence on its own and appends what it read to the list it already
+     * has, so a message with two From headers has one list of two addresses
+     * — and each line keeps its own complaint and its own marker, which a
+     * single parse of the two joined together would not.
+     */
+    public function append(self $other): self
+    {
+        return new self([...$this->addresses, ...$other->addresses]);
+    }
+
     public static function parse(string $addresses, string $defaultHostname): self
     {
         $cursor = new Rfc822Cursor($addresses);

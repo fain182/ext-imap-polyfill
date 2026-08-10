@@ -111,34 +111,52 @@ final class HeaderInfo
         // observable: foreach, get_object_vars() and var_dump() all show it.
         // Note that each address list is preceded by its raw "*address"
         // string, not followed by it.
-        if (isset($fields['date'])) {
-            $result->date = $fields['date'];
-            $result->Date = $fields['date'];
+        // Each of these is written once and kept: a second Date header is
+        // read and dropped, since c-client only fills a field it has not
+        // filled yet.
+        if (($date = $fields->first('date')) !== null) {
+            $result->date = $date;
+            $result->Date = $date;
         }
 
-        if (isset($fields['subject'])) {
-            $result->subject = $fields['subject'];
-            $result->Subject = $fields['subject'];
+        if (($subject = $fields->first('subject')) !== null) {
+            $result->subject = $subject;
+            $result->Subject = $subject;
         }
 
         foreach (['in-reply-to' => 'in_reply_to', 'message-id' => 'message_id', 'references' => 'references'] as $header => $property) {
-            if (isset($fields[$header])) {
-                $result->$property = $fields[$header];
+            if (($value = $fields->first($header)) !== null) {
+                $result->$property = $value;
             }
         }
 
-        foreach (self::ADDRESS_HEADERS as $header => $property) {
-            if (!isset($fields[$header])) {
+        // Parsed where each header stands, which is not the order the
+        // properties are written in below: c-client's dispatch reaches the
+        // headers in the order the message wrote them, and two malformed
+        // ones put their complaints on the error stack in that order.
+        $parsed = [];
+
+        foreach ($fields->lines() as [$header, $value]) {
+            $property = self::ADDRESS_HEADERS[$header] ?? null;
+
+            if ($property === null) {
                 continue;
             }
 
-            $addresses = AddressList::parse($fields[$header], $defaultHost);
+            $addresses = AddressList::parse($value, $defaultHost);
+            $parsed[$property] = isset($parsed[$property])
+                ? $parsed[$property]->append($addresses)
+                : $addresses;
+        }
+
+        foreach (self::ADDRESS_HEADERS as $property) {
+            $addresses = $parsed[$property] ?? null;
 
             // Both properties are guarded on the parsed list, not on the
             // header being there: php_imap.c's UPDATE_PROPERTY_PARSED_ADDRESS
             // tests en->to and friends, which a header holding nothing an
             // address parser can use leaves NIL.
-            if ($addresses->isEmpty()) {
+            if ($addresses === null || $addresses->isEmpty()) {
                 continue;
             }
 
