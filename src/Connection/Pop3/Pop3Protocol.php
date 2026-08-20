@@ -10,6 +10,9 @@ namespace ImapPolyfill\Connection\Pop3;
  */
 final class Pop3Protocol
 {
+    /** The ceiling on a line of the server's own talk; see readStatusLine(). */
+    private const MAX_STATUS_LINE = 8192;
+
     /** @var resource */
     private $stream;
 
@@ -88,12 +91,18 @@ final class Pop3Protocol
     /**
      * RFC 2595 STLS. Throws rather than carrying on unencrypted: an upgrade
      * that failed halfway is the one outcome the switch exists to prevent.
+     *
+     * The method is the IMAP side's (ImapEngineConnection::startTls), so
+     * that a spec gets the same TLS versions whichever protocol it names.
+     * STREAM_CRYPTO_METHOD_ANY_CLIENT is that set plus SSLv2 and SSLv3,
+     * which no server this package can reach still speaks and no client
+     * should offer.
      */
     private function startTls(): void
     {
         $this->command('STLS');
 
-        $crypto = @stream_socket_enable_crypto($this->stream, true, STREAM_CRYPTO_METHOD_ANY_CLIENT);
+        $crypto = @stream_socket_enable_crypto($this->stream, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
 
         if ($crypto !== true) {
             throw new \RuntimeException('Unable to negotiate TLS with this server');
@@ -125,20 +134,14 @@ final class Pop3Protocol
     {
         fwrite($this->stream, "CAPA\r\n");
 
-        $status = fgets($this->stream);
-
-        if ($status === false) {
-            throw new \RuntimeException('POP3 connection closed unexpectedly');
-        }
-
-        if (!str_starts_with($status, '+OK')) {
+        if (!str_starts_with($this->readStatusLine(), '+OK')) {
             return [];
         }
 
         $capabilities = [];
 
-        while (($raw = fgets($this->stream)) !== false) {
-            $line = rtrim($raw, "\r\n");
+        while (true) {
+            $line = rtrim($this->readStatusLine(), "\r\n");
 
             if ($line === '.') {
                 break;
@@ -215,8 +218,23 @@ final class Pop3Protocol
         }
     }
 
+    /**
+     * One command, one line. The arguments this class formats into a line
+     * are its own message numbers except for two, USER's and PASS's, which
+     * are whatever imap_open() was handed — a login form's, in the kind of
+     * application that reaches for this package. A CR or LF in one of those
+     * does not travel as part of it: it ends the command and starts a
+     * second one, which is why it is refused rather than sent.
+     *
+     * Deliberate divergence, in the README's table: pop3.c formats them
+     * into its command buffer and sends what they hold.
+     */
     private function command(string $line): string
     {
+        if (strpbrk($line, "\r\n\0") !== false) {
+            throw new \RuntimeException('Command argument contains a line break');
+        }
+
         fwrite($this->stream, $line."\r\n");
 
         return $this->readSingleLine();
@@ -248,13 +266,7 @@ final class Pop3Protocol
 
     private function readSingleLine(): string
     {
-        $line = fgets($this->stream);
-
-        if ($line === false) {
-            throw new \RuntimeException('POP3 connection closed unexpectedly');
-        }
-
-        $line = rtrim($line, "\r\n");
+        $line = rtrim($this->readStatusLine(), "\r\n");
 
         if (str_starts_with($line, '+OK')) {
             return trim(substr($line, 3));
@@ -265,5 +277,36 @@ final class Pop3Protocol
         }
 
         throw new \RuntimeException('Unexpected POP3 response: '.$line);
+    }
+
+    /**
+     * One line of the server's own talk — a status line, or one of CAPA's
+     * capability lines — read with a ceiling on it.
+     *
+     * RFC 1939 gives these 512 octets; the ceiling is sixteen times that so
+     * no server meets it by being verbose, and it is here because fgets()
+     * without a length reads until the line ends, which a server that never
+     * ends one turns into the client's whole memory. multilineCommand()
+     * reads message data without a ceiling on purpose: a line of a message
+     * is as long as whoever sent it made it, and cutting one short would
+     * corrupt the message rather than protect anything.
+     */
+    private function readStatusLine(): string
+    {
+        $line = fgets($this->stream, self::MAX_STATUS_LINE + 1);
+
+        if ($line === false) {
+            throw new \RuntimeException('POP3 connection closed unexpectedly');
+        }
+
+        if (!str_ends_with($line, "\n")) {
+            // A line that stopped short either met the ceiling or ran out
+            // of connection; the second is the one c-client has a word for.
+            throw new \RuntimeException(strlen($line) >= self::MAX_STATUS_LINE
+                ? 'POP3 status line too long'
+                : 'POP3 connection closed unexpectedly');
+        }
+
+        return $line;
     }
 }

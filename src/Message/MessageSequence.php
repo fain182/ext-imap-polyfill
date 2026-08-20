@@ -17,7 +17,8 @@ use ImapPolyfill\Connection\UidMode;
  * here as c-client spells it.
  *
  * A uid is not a position in the folder, so the uid vocabulary has no upper
- * bound to be past — only zero is refused.
+ * bound to be past — only zero is refused. The one refusal here that is not
+ * c-client's is MAX_EXPANDED's, and it says so where it is spelled.
  */
 final class MessageSequence
 {
@@ -39,6 +40,27 @@ final class MessageSequence
 
     /** Where no digits were read at all, both vocabularies say the same thing. */
     private const NOT_A_NUMBER = 'Syntax error in sequence';
+
+    /**
+     * How many ids one sequence may expand to, over and above the size of
+     * the folder it is expanded against.
+     *
+     * A sequence names messages, but this class answers with the numbers it
+     * spans, and the two part company on a range nothing fills: c-client
+     * walks the mailbox it has (mail_sequence marks the elements a range
+     * covers, mail_uid_sequence keeps the uids it finds), so its answer can
+     * never be longer than the folder. Expanding the range itself means
+     * "1:4294967295" is four billion ints — not a fetch, an allocation the
+     * caller asked for in one argument — and a repeated range multiplies it
+     * again, which is why this counts the whole expansion rather than each
+     * range. The allowance sits above the folder's own size because uids
+     * are sparse: a folder of three messages can legitimately be asked for
+     * "1:100000" and answer three.
+     */
+    private const MAX_EXPANDED = 100000;
+
+    /** The refusal that names, unlike the rest, a limit of this package. */
+    private const TOO_MANY = 'Sequence expands to more messages than any mailbox holds';
 
     private const NO_MAXIMUM = 'No messages, so no maximum message number';
 
@@ -99,6 +121,10 @@ final class MessageSequence
                 // c-client reads "3:1" as the range it obviously means.
                 if ($first > $last) {
                     [$first, $last] = [$last, $first];
+                }
+
+                if (count($ids) + ($last - $first + 1) > max($lastId, self::MAX_EXPANDED)) {
+                    throw new InvalidSequence(self::TOO_MANY);
                 }
 
                 for ($id = $first; $id <= $last; ++$id) {
