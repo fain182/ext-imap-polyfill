@@ -303,7 +303,6 @@ final class Protocol implements ConnectionBackend
             $this->uidTable = null;
         }
 
-        // "1:*" where there is no 1 is a command some servers refuse.
         if ($exists === 0) {
             return $this->uidTable = [];
         }

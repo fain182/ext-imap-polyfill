@@ -10,12 +10,12 @@ namespace ImapPolyfill\Support;
  */
 final class CommandArgument
 {
-    /** NUL travels no better than a line break; both end what holds them. */
-    private const FORBIDDEN = "\r\n\0";
+    /** CR and LF end the line; NUL ends the string a C server reads it into. */
+    private const TERMINATORS = "\r\n\0";
 
     public static function assertOneCommand(string $argument): void
     {
-        if (strpbrk($argument, self::FORBIDDEN) !== false) {
+        if (strpbrk($argument, self::TERMINATORS) !== false) {
             throw new \RuntimeException('Command argument contains a line break');
         }
     }
