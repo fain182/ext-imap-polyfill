@@ -30,43 +30,6 @@ That's what caught `imap_uid()` over POP3 returning the server's UIDL cast to an
 
 POP3 is supported too, and runs through the same parity checks.
 
-## Vulnerabilities left behind
-
-Replacing the extension with this package removes two classes of them
-outright, because the mechanism each one rode is not here to ride.
-
-**A mailbox string cannot start a process.** CVE-2018-19518: c-client's
-`imap_rimap()` (`imap4r1.c`) and `tcp_aopen()` (`osdep/unix/tcp_unix.c`)
-launch `rsh` to preauthenticate, without preventing argument injection — so
-where `rsh` is `ssh`, a host name carrying `-oProxyCommand` runs a command on
-the machine that called `imap_open()`. There is no preauth path here: the
-only thing this package opens is a socket, `/norsh` is accepted and does
-nothing, and the services a spec may name are `imap` and `pop3` (`nntp`
-throws). The one process it ever starts is the `sendmail_path` binary, from
-`php.ini`, in `imap_mail()`.
-
-**A parser bug is a wrong answer, not a corrupted heap.** The address, MIME
-and sequence parsers here are PHP, so the out-of-bounds reads and writes that
-a 2011 C library carries have no equivalent: the worst a malformed header can
-do is return the wrong thing or throw, which is what the fuzzer in
-`tests/fuzz` looks for by diffing both implementations' answers.
-
-**And one hole closed on the way past.** Some arguments go on the wire
-unquoted, because unquoted is what they are there: a flag, a message
-sequence, a body section, a search charset, a POP3 user name or password. An
-application that builds one of those from input it did not write is
-injectable under the extension, which sends the bytes it is given — the line
-break ends the command and what follows is read as a second one, in a session
-already logged in. Here that argument is refused, and the call answers as it
-does for any other failure, with `Command argument contains a line break` on
-the error stack. Worth grepping your own calls for while you migrate:
-`imap_setflag_full`, `imap_clearflag_full`, `imap_delete`, `imap_undelete`,
-`imap_mail_copy`, `imap_mail_move`, `imap_fetchbody`, `imap_savebody`,
-`imap_search`, `imap_getacl`, `imap_setacl`, and `imap_open` over POP3. It
-covers what goes on the wire as part of a command, so it is not a reason to
-stop validating what you pass `imap_mail()`, which hands `sendmail` the
-headers it is given here exactly as the extension does.
-
 <details>
 <summary>Function reference</summary>
 
@@ -154,6 +117,7 @@ behaves as it did — that is what the parity suite is for.
 | `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host reads back as you wrote it in the spec; the extension reports the name DNS resolved it to |
 | `imap_open` with `/tls` | negotiates the best TLS version both ends support, so it connects where the extension's `/tls` fails outright — that one asks for TLS 1.0 and nothing else |
 | `imap_open` with `/secure`, `OP_SECURE`, `/authuser=` | always refused: they ask for an authentication that keeps the password off the wire, and this package only speaks `LOGIN`. The extension refuses too unless the server offers a SASL mechanism it can use |
+| `imap_setflag_full`, `imap_clearflag_full`, `imap_delete`, `imap_undelete`, `imap_mail_copy`, `imap_mail_move`, `imap_fetchbody`, `imap_savebody`, `imap_search`, `imap_getacl`, `imap_setacl`, `imap_open` over POP3 | an argument that goes on the wire unquoted — a flag, a message sequence, a body section, a search charset, a POP3 user name or password — is refused when it holds a CR or LF, since the line break would end the command and start a second one. The extension sends the bytes. The answer is each function's usual one for a failure, with `Command argument contains a line break` on the error stack |
 | `imap_timeout` | `IMAP_READTIMEOUT` and `IMAP_WRITETIMEOUT` are one value: setting either sets both, since a PHP socket has a single timeout for both directions |
 | `imap_utf8` | returns precomposed UTF-8 (`café`, U+00E9) where the extension returns the decomposed form (`cafe` + U+0301); the two do not compare equal |
 
