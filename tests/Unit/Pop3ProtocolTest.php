@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Tests\Unit;
 
 use ImapPolyfill\Connection\Pop3\Pop3Protocol;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -48,32 +49,32 @@ class Pop3ProtocolTest extends TestCase
         $this->assertSame("USER alice\r\nPASS s3cret\r\n", $this->serverSaw());
     }
 
-    /** User name and password are the two arguments the caller wrote. */
-    public function test_a_password_carrying_a_line_break_is_refused_before_anything_is_sent(): void
+    /**
+     * The two arguments this client formats into a line that did not come
+     * from it. USER goes out when it is the password that is refused: it
+     * carried nothing.
+     *
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function credentials(): iterable
+    {
+        yield 'in the password' => ['alice', "s3cret\r\nDELE 1", "USER alice\r\n"];
+        yield 'in the user name' => ["alice\r\nDELE 1", 's3cret', ''];
+    }
+
+    #[DataProvider('credentials')]
+    public function test_a_line_break_is_refused_before_anything_is_sent(string $user, string $password, string $expected): void
     {
         fwrite($this->server, "+OK user accepted\r\n");
 
         try {
-            $this->protocol->login('alice', "s3cret\r\nDELE 1");
+            $this->protocol->login($user, $password);
             $this->fail('Expected the line break to be refused.');
         } catch (\RuntimeException $e) {
             $this->assertSame('Command argument contains a line break', $e->getMessage());
         }
 
-        // USER carried nothing, so it went out; PASS never did.
-        $this->assertSame("USER alice\r\n", $this->serverSaw());
-    }
-
-    public function test_a_user_name_carrying_a_line_break_is_refused_before_anything_is_sent(): void
-    {
-        try {
-            $this->protocol->login("alice\r\nDELE 1", 's3cret');
-            $this->fail('Expected the line break to be refused.');
-        } catch (\RuntimeException $e) {
-            $this->assertSame('Command argument contains a line break', $e->getMessage());
-        }
-
-        $this->assertSame('', $this->serverSaw());
+        $this->assertSame($expected, $this->serverSaw());
     }
 
     /** A server that never ends a line would otherwise be read forever. */

@@ -6,6 +6,7 @@ use DirectoryTree\ImapEngine\Connection\Streams\FakeStream;
 use ImapPolyfill\Connection\Imap\ImapEngineConnection;
 use ImapPolyfill\Connection\Protocol;
 use ImapPolyfill\Connection\UidMode;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -42,44 +43,43 @@ class WireArgumentTest extends TestCase
         return new Protocol($connection, 'fake.example.com');
     }
 
-    public function test_a_flag_carrying_a_line_break_never_reaches_the_wire(): void
+    /**
+     * @return iterable<string, array{\Closure(Protocol): void, string}>
+     */
+    public static function bareArguments(): iterable
     {
-        $protocol = $this->protocolServing(['TAG1 OK STORE completed']);
+        yield 'a flag' => [
+            fn (Protocol $p) => $p->store('STORE', ['1', '+FLAGS.SILENT', "(\\Seen)\r\nX9 STORE 1:* +FLAGS (\\Deleted)"]),
+            'X9 STORE',
+        ];
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Command argument contains a line break');
+        yield 'a body section' => [
+            fn (Protocol $p) => $p->fetch(["BODY[1]\r\nX9 LOGOUT"], [1], null, UidMode::MSGNO),
+            'X9 LOGOUT',
+        ];
 
-        try {
-            $protocol->store('STORE', ['1', '+FLAGS.SILENT', "(\\Seen)\r\nX9 STORE 1:* +FLAGS (\\Deleted)"]);
-        } finally {
-            $this->stream->assertNotWritten('X9 STORE');
-        }
+        yield 'a message sequence' => [
+            fn (Protocol $p) => $p->copy("1\r\nX9 EXPUNGE", 'Archive', UidMode::MSGNO),
+            'X9 EXPUNGE',
+        ];
     }
 
-    public function test_a_body_section_carrying_a_line_break_never_reaches_the_wire(): void
+    /**
+     * @param \Closure(Protocol): void $call
+     */
+    #[DataProvider('bareArguments')]
+    public function test_an_argument_carrying_a_line_break_never_reaches_the_wire(\Closure $call, string $injected): void
     {
-        $protocol = $this->protocolServing(['TAG1 OK FETCH completed']);
-
-        $this->expectException(\RuntimeException::class);
+        $protocol = $this->protocolServing([]);
 
         try {
-            $protocol->fetch(["BODY[1]\r\nX9 LOGOUT"], [1], null, UidMode::MSGNO);
-        } finally {
-            $this->stream->assertNotWritten('X9 LOGOUT');
+            $call($protocol);
+            $this->fail('Expected the line break to be refused.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Command argument contains a line break', $e->getMessage());
         }
-    }
 
-    public function test_a_message_sequence_carrying_a_line_break_never_reaches_the_wire(): void
-    {
-        $protocol = $this->protocolServing(['TAG1 OK COPY completed']);
-
-        $this->expectException(\RuntimeException::class);
-
-        try {
-            $protocol->copy("1\r\nX9 EXPUNGE", 'Archive', UidMode::MSGNO);
-        } finally {
-            $this->stream->assertNotWritten('X9 EXPUNGE');
-        }
+        $this->stream->assertNotWritten($injected);
     }
 
     /** The refusal is about the shape, not the bytes: a literal is exempt. */
