@@ -30,6 +30,43 @@ That's what caught `imap_uid()` over POP3 returning the server's UIDL cast to an
 
 POP3 is supported too, and runs through the same parity checks.
 
+## Vulnerabilities left behind
+
+Replacing the extension with this package removes two classes of them
+outright, because the mechanism each one rode is not here to ride.
+
+**A mailbox string cannot start a process.** CVE-2018-19518: c-client's
+`imap_rimap()` (`imap4r1.c`) and `tcp_aopen()` (`osdep/unix/tcp_unix.c`)
+launch `rsh` to preauthenticate, without preventing argument injection — so
+where `rsh` is `ssh`, a host name carrying `-oProxyCommand` runs a command on
+the machine that called `imap_open()`. There is no preauth path here: the
+only thing this package opens is a socket, `/norsh` is accepted and does
+nothing, and the services a spec may name are `imap` and `pop3` (`nntp`
+throws). The one process it ever starts is the `sendmail_path` binary, from
+`php.ini`, in `imap_mail()`.
+
+**A parser bug is a wrong answer, not a corrupted heap.** The address, MIME
+and sequence parsers here are PHP, so the out-of-bounds reads and writes that
+a 2011 C library carries have no equivalent: the worst a malformed header can
+do is return the wrong thing or throw, which is what the fuzzer in
+`tests/fuzz` looks for by diffing both implementations' answers.
+
+**And one hole closed on the way past.** Some arguments go on the wire
+unquoted, because unquoted is what they are there: a flag, a message
+sequence, a body section, a search charset, a POP3 user name or password. An
+application that builds one of those from input it did not write is
+injectable under the extension, which sends the bytes it is given — the line
+break ends the command and what follows is read as a second one, in a session
+already logged in. Here that argument is refused, and the call answers as it
+does for any other failure, with `Command argument contains a line break` on
+the error stack. Worth grepping your own calls for while you migrate:
+`imap_setflag_full`, `imap_clearflag_full`, `imap_delete`, `imap_undelete`,
+`imap_mail_copy`, `imap_mail_move`, `imap_fetchbody`, `imap_savebody`,
+`imap_search`, `imap_getacl`, `imap_setacl`, and `imap_open` over POP3. It
+covers what goes on the wire as part of a command, so it is not a reason to
+stop validating what you pass `imap_mail()`, which hands `sendmail` the
+headers it is given here exactly as the extension does.
+
 <details>
 <summary>Function reference</summary>
 
@@ -105,43 +142,6 @@ POP3 is supported too, and runs through the same parity checks.
 `imap_utf7_encode`,
 `imap_utf8`,
 `imap_utf8_to_mutf7`
-
-### Vulnerabilities left behind
-
-Two classes of them, which is worth a paragraph because they are reasons to
-migrate rather than side effects of it.
-
-**A mailbox string cannot start a process.** CVE-2018-19518: c-client's
-`imap_rimap()` (`imap4r1.c`) and `tcp_aopen()` (`osdep/unix/tcp_unix.c`)
-launch `rsh` to preauthenticate, without preventing argument injection — so
-where `rsh` is `ssh`, a host name carrying `-oProxyCommand` runs a command on
-the machine that called `imap_open()`. There is no preauth path here: the
-only thing this package opens is a socket, `/norsh` is accepted and does
-nothing, and the services a spec may name are `imap` and `pop3` (`nntp`
-throws). The one process it ever starts is the `sendmail_path` binary, from
-`php.ini`, in `imap_mail()`.
-
-**A parser bug is a wrong answer, not a corrupted heap.** The address, MIME
-and sequence parsers here are PHP, so the out-of-bounds reads and writes that
-a 2011 C library carries have no equivalent: the worst a malformed header can
-do is return the wrong thing or throw, which is what the fuzzer in
-`tests/fuzz` looks for by diffing both implementations' answers.
-
-**And one hole closed on the way past.** Some arguments go on the wire
-unquoted, because unquoted is what they are there: a flag, a message
-sequence, a body section, a search charset, a POP3 user name or password. An
-application that builds one of those from input it did not write is
-injectable under the extension, which sends the bytes it is given — the line
-break ends the command and what follows is read as a second one, in a session
-already logged in. Here that argument is refused, and the call answers as it
-does for any other failure, with `Command argument contains a line break` on
-the error stack. Worth grepping your own calls for while you migrate:
-`imap_setflag_full`, `imap_clearflag_full`, `imap_delete`, `imap_undelete`,
-`imap_mail_copy`, `imap_mail_move`, `imap_fetchbody`, `imap_savebody`,
-`imap_search`, `imap_getacl`, `imap_setacl`, and `imap_open` over POP3. It
-covers what goes on the wire as part of a command, so it is not a reason to
-stop validating what you pass `imap_mail()`, which hands `sendmail` the
-headers it is given here exactly as the extension does.
 
 ### Notes on individual functions
 
