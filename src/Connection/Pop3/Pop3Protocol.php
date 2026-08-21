@@ -92,11 +92,9 @@ final class Pop3Protocol
      * RFC 2595 STLS. Throws rather than carrying on unencrypted: an upgrade
      * that failed halfway is the one outcome the switch exists to prevent.
      *
-     * The method is the IMAP side's (ImapEngineConnection::startTls), so
-     * that a spec gets the same TLS versions whichever protocol it names.
-     * STREAM_CRYPTO_METHOD_ANY_CLIENT is that set plus SSLv2 and SSLv3,
-     * which no server this package can reach still speaks and no client
-     * should offer.
+     * The method is the IMAP side's, so a spec gets the same TLS versions
+     * whichever protocol it names; ANY_CLIENT is that set plus SSLv2 and
+     * SSLv3.
      */
     private function startTls(): void
     {
@@ -219,15 +217,9 @@ final class Pop3Protocol
     }
 
     /**
-     * One command, one line. The arguments this class formats into a line
-     * are its own message numbers except for two, USER's and PASS's, which
-     * are whatever imap_open() was handed — a login form's, in the kind of
-     * application that reaches for this package. A CR or LF in one of those
-     * does not travel as part of it: it ends the command and starts a
-     * second one, which is why it is refused rather than sent.
-     *
-     * Deliberate divergence, in the README's table: pop3.c formats them
-     * into its command buffer and sends what they hold.
+     * One command, one line — which is why a CR or LF in USER's or PASS's
+     * argument, the two this class does not write itself, is refused rather
+     * than sent. Divergence, in the README's table: pop3.c sends them.
      */
     private function command(string $line): string
     {
@@ -280,16 +272,10 @@ final class Pop3Protocol
     }
 
     /**
-     * One line of the server's own talk — a status line, or one of CAPA's
-     * capability lines — read with a ceiling on it.
-     *
-     * RFC 1939 gives these 512 octets; the ceiling is sixteen times that so
-     * no server meets it by being verbose, and it is here because fgets()
-     * without a length reads until the line ends, which a server that never
-     * ends one turns into the client's whole memory. multilineCommand()
-     * reads message data without a ceiling on purpose: a line of a message
-     * is as long as whoever sent it made it, and cutting one short would
-     * corrupt the message rather than protect anything.
+     * One line of the server's own talk, with a ceiling on it: fgets()
+     * without one reads until the server ends the line. RFC 1939 gives a
+     * status line 512 octets. multilineCommand() reads message data without
+     * a ceiling on purpose — a line of a message is as long as it is.
      */
     private function readStatusLine(): string
     {
@@ -300,8 +286,6 @@ final class Pop3Protocol
         }
 
         if (!str_ends_with($line, "\n")) {
-            // A line that stopped short either met the ceiling or ran out
-            // of connection; the second is the one c-client has a word for.
             throw new \RuntimeException(strlen($line) >= self::MAX_STATUS_LINE
                 ? 'POP3 status line too long'
                 : 'POP3 connection closed unexpectedly');

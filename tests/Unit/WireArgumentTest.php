@@ -9,19 +9,12 @@ use ImapPolyfill\Connection\UidMode;
 use PHPUnit\Framework\TestCase;
 
 /**
- * What a caller's string is allowed to put on the wire.
+ * What a caller's string is allowed to put on the wire. Some arguments go
+ * out bare — a flag list, a body section, a message sequence — and a line
+ * break in one of those would end the command and start a second one, in a
+ * session that has already logged in.
  *
- * Some of the arguments the imap_* layer sends go out bare, because that is
- * what they are on the wire: a flag list, a body section, a message
- * sequence. ImapEngine writes a bare token into the command line as it
- * stands and ends the line itself, so a CR or LF inside one of them does
- * not travel as part of the argument — it ends the command and starts a
- * second one, in a session that has already logged in. These pin the
- * refusal, and the one shape that still carries line breaks: the literal an
- * APPEND is made of.
- *
- * Host-only: a divergence from the extension, which sends those bytes, so
- * there is nothing here for the parity suite to agree with.
+ * Host-only: a divergence from the extension, which sends those bytes.
  */
 class WireArgumentTest extends TestCase
 {
@@ -89,11 +82,7 @@ class WireArgumentTest extends TestCase
         }
     }
 
-    /**
-     * The refusal is about the shape an argument travels in, not about the
-     * bytes: a message is nothing but line breaks, and it goes out as a
-     * literal, whose length says where it ends.
-     */
+    /** The refusal is about the shape, not the bytes: a literal is exempt. */
     public function test_an_appended_message_still_travels_with_its_line_breaks(): void
     {
         $protocol = $this->protocolServing([
@@ -106,11 +95,7 @@ class WireArgumentTest extends TestCase
         $this->stream->assertWritten("Subject: hi\r\n\r\nbody\r\n");
     }
 
-    /**
-     * The user-facing half of the same refusal: imap_setflag_full() answers
-     * true whatever happened, as it always does, and the reason is on the
-     * error stack — the contract every other failure on this path gets.
-     */
+    /** The user-facing half: true whatever happened, reason on the stack. */
     public function test_imap_setflag_full_answers_true_and_leaves_the_reason_on_the_stack(): void
     {
         $protocol = $this->protocolServing([

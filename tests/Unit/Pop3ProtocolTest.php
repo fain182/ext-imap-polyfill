@@ -6,13 +6,9 @@ use ImapPolyfill\Connection\Pop3\Pop3Protocol;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The POP3 client's own line handling, on both sides of the socket: what it
- * writes for a login, and what it will read back from a server.
- *
- * There is no seam to hand it a fake connection — it owns a socket and
- * dials it itself — so these hand it one end of a socket pair and play the
- * server on the other. Host-only: both behaviors are the polyfill's, not
- * the extension's.
+ * The POP3 client's own line handling: what it writes for a login, and what
+ * it will read back. It owns its socket and dials it itself, so these hand
+ * it one end of a socket pair and play the server on the other.
  */
 class Pop3ProtocolTest extends TestCase
 {
@@ -52,11 +48,7 @@ class Pop3ProtocolTest extends TestCase
         $this->assertSame("USER alice\r\nPASS s3cret\r\n", $this->serverSaw());
     }
 
-    /**
-     * A user name and a password are the two arguments this client formats
-     * into a command line that did not come from it, and in an application
-     * that logs a person in they came from a form.
-     */
+    /** User name and password are the two arguments the caller wrote. */
     public function test_a_password_carrying_a_line_break_is_refused_before_anything_is_sent(): void
     {
         fwrite($this->server, "+OK user accepted\r\n");
@@ -68,8 +60,7 @@ class Pop3ProtocolTest extends TestCase
             $this->assertSame('Command argument contains a line break', $e->getMessage());
         }
 
-        // USER went out, since it carried nothing; PASS never did, and
-        // neither did the command hiding behind it.
+        // USER carried nothing, so it went out; PASS never did.
         $this->assertSame("USER alice\r\n", $this->serverSaw());
     }
 
@@ -85,11 +76,7 @@ class Pop3ProtocolTest extends TestCase
         $this->assertSame('', $this->serverSaw());
     }
 
-    /**
-     * RFC 1939 gives a status line 512 octets. Reading one without a
-     * ceiling is reading until the server ends the line, which a server
-     * that never ends it turns into this process's whole memory.
-     */
+    /** A server that never ends a line would otherwise be read forever. */
     public function test_a_status_line_that_never_ends_is_refused(): void
     {
         fwrite($this->server, str_repeat('+OK padding ', 800));
@@ -103,8 +90,7 @@ class Pop3ProtocolTest extends TestCase
     public function test_a_connection_that_stops_mid_line_is_not_a_long_line(): void
     {
         fwrite($this->server, '+OK no newline here');
-        // Half-closed rather than closed: the client's own USER still has
-        // somewhere to go, and the read that follows it meets the end.
+        // Half-closed: the client's own USER still has somewhere to go.
         stream_socket_shutdown($this->server, STREAM_SHUT_WR);
 
         $this->expectException(\RuntimeException::class);

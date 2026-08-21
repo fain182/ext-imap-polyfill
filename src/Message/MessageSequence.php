@@ -42,24 +42,16 @@ final class MessageSequence
     private const NOT_A_NUMBER = 'Syntax error in sequence';
 
     /**
-     * How many ids one sequence may expand to, over and above the size of
-     * the folder it is expanded against.
-     *
-     * A sequence names messages, but this class answers with the numbers it
-     * spans, and the two part company on a range nothing fills: c-client
-     * walks the mailbox it has (mail_sequence marks the elements a range
-     * covers, mail_uid_sequence keeps the uids it finds), so its answer can
-     * never be longer than the folder. Expanding the range itself means
-     * "1:4294967295" is four billion ints — not a fetch, an allocation the
-     * caller asked for in one argument — and a repeated range multiplies it
-     * again, which is why this counts the whole expansion rather than each
-     * range. The allowance sits above the folder's own size because uids
-     * are sparse: a folder of three messages can legitimately be asked for
-     * "1:100000" and answer three.
+     * How many ids one sequence may expand to, over and above the folder it
+     * is expanded against. c-client walks the mailbox it has, so its answer
+     * is never longer than the folder; expanding the range itself makes
+     * "1:4294967295" four billion ints. The allowance sits above the
+     * folder's size because uids are sparse — three messages can carry
+     * uids 1, 50000 and 99999.
      */
     private const MAX_EXPANDED = 100000;
 
-    /** The refusal that names, unlike the rest, a limit of this package. */
+    /** The one refusal here that is this package's, not c-client's. */
     private const TOO_MANY = 'Sequence expands to more messages than any mailbox holds';
 
     private const NO_MAXIMUM = 'No messages, so no maximum message number';

@@ -52,23 +52,12 @@ final class ImapEngineConnection extends ImapConnection
     }
 
     /**
-     * A bare string token is written into the command line as it stands —
-     * ImapEngine's ImapCommand::compile() concatenates it and write() ends
-     * the line — so a CR or LF inside one does not travel as data: it ends
-     * this command and starts a second one nobody asked for. The arguments
-     * that reach the wire bare are the ones the caller wrote: a flag for
-     * imap_setflag_full(), a section for imap_fetchbody(), a message
-     * sequence for imap_mail_copy(). A quoted string cannot carry a line
-     * break here (Str::escape() strips control characters before quoting),
-     * and a literal is the one shape that may — it arrives as an array,
-     * which is why only strings are looked at: an APPEND message is
-     * nothing but CRLFs.
-     *
-     * Deliberate divergence, in the README's table: c-client formats these
-     * arguments into its command buffer too, and sends whatever they hold.
-     * What the refusal costs is a line break in an argument no server would
-     * have parsed as one anyway; what it buys is that a caller's string
-     * cannot become a command of its own.
+     * A bare string token is written into the command line as it stands, so
+     * a CR or LF in one — a flag, a body section, a message sequence, all of
+     * them the caller's — ends the command and starts a second one. Only
+     * strings are looked at: a literal arrives as an array, and an APPEND
+     * message is nothing but CRLFs. Divergence, in the README's table:
+     * c-client sends whatever these hold.
      *
      * @param list<string|array{0: string, 1: string}> $tokens
      */
