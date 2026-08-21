@@ -20,7 +20,7 @@ use ImapPolyfill\Connection\MessageNotFoundException;
  */
 final class Pop3Backend implements ConnectionBackend
 {
-    private const UID_MODE = UidMode::UID;
+    private const UID_MODE = UidMode::Uid;
 
     /** Fake INTERNALDATE: POP3 has none, and real ext-imap reports the epoch. */
     private const FAKE_INTERNAL_DATE = ' 1-Jan-1970 00:00:00 +0000';
@@ -148,7 +148,7 @@ final class Pop3Backend implements ConnectionBackend
         return Pop3MimeStructure::parse($this->rawMessage($msgno));
     }
 
-    public function search(SearchProgram $program, int $uidMode, string $charset = ''): array
+    public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array
     {
         $ids = [];
         foreach ($this->uidByMsgno as $msgno => $uid) {
@@ -172,7 +172,7 @@ final class Pop3Backend implements ConnectionBackend
     /**
      * POP3 has no SORT command; null hands imap_sort() back to its local sort.
      */
-    public function sort(string $program, string $charset, array $searchTokens, int $uidMode): ?array
+    public function sort(string $program, string $charset, array $searchTokens, UidMode $uidMode): ?array
     {
         return null;
     }
@@ -180,12 +180,12 @@ final class Pop3Backend implements ConnectionBackend
     /**
      * Likewise no THREAD; imap_thread() threads locally over POP3.
      */
-    public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array
+    public function thread(string $algorithm, string $charset, array $searchTokens, UidMode $uidMode): ?array
     {
         return null;
     }
 
-    public function fetch(array $items, array $ids, ?int $to, int $uidMode): array
+    public function fetch(array $items, array $ids, ?int $to, UidMode $uidMode): array
     {
         $result = [];
         foreach ($ids as $id) {
@@ -286,7 +286,7 @@ final class Pop3Backend implements ConnectionBackend
         return $this->folders($reference, $pattern);
     }
 
-    public function copy(string $sequence, string $folder, int $uidMode): void
+    public function copy(string $sequence, string $folder, UidMode $uidMode): void
     {
         throw new \RuntimeException('Copy not valid for POP3');
     }

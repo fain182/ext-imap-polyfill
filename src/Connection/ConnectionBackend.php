@@ -67,7 +67,7 @@ interface ConnectionBackend
      *
      * @return int[]
      */
-    public function search(SearchProgram $program, int $uidMode, string $charset = ''): array;
+    public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array;
 
     public function hasCapability(string $capability): bool;
 
@@ -81,7 +81,7 @@ interface ConnectionBackend
      *
      * @return int[]|null
      */
-    public function sort(string $program, string $charset, array $searchTokens, int $uidMode): ?array;
+    public function sort(string $program, string $charset, array $searchTokens, UidMode $uidMode): ?array;
 
     /**
      * Server-side threading. Returns the nested id groups of the THREAD
@@ -92,7 +92,7 @@ interface ConnectionBackend
      *
      * @return array<int, mixed>|null
      */
-    public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array;
+    public function thread(string $algorithm, string $charset, array $searchTokens, UidMode $uidMode): ?array;
 
     /**
      * A single requested item collapses to its scalar value per id instead
@@ -103,7 +103,7 @@ interface ConnectionBackend
      *
      * @return array<int, mixed>
      */
-    public function fetch(array $items, array $ids, ?int $to, int $uidMode): array;
+    public function fetch(array $items, array $ids, ?int $to, UidMode $uidMode): array;
 
     /**
      * @return array<int, int>
@@ -127,7 +127,7 @@ interface ConnectionBackend
      */
     public function subscribedFolders(string $reference, string $pattern): array;
 
-    public function copy(string $sequence, string $folder, int $uidMode): void;
+    public function copy(string $sequence, string $folder, UidMode $uidMode): void;
 
     public function noop(): void;
 

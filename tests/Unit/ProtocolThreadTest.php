@@ -23,7 +23,7 @@ class ProtocolThreadTest extends TestCase
             'TAG1 OK THREAD completed',
         ]);
 
-        $groups = $protocol->thread('REFERENCES', 'US-ASCII', ['ALL'], UidMode::MSGNO);
+        $groups = $protocol->thread('REFERENCES', 'US-ASCII', ['ALL'], UidMode::Msgno);
 
         $this->assertSame([[1], [2, 3]], $groups);
         $this->stream->assertWritten('TAG1 THREAD REFERENCES US-ASCII ALL');
@@ -36,7 +36,7 @@ class ProtocolThreadTest extends TestCase
             'TAG1 OK THREAD completed',
         ]);
 
-        $protocol->thread('REFERENCES', 'US-ASCII', ['ALL'], UidMode::UID);
+        $protocol->thread('REFERENCES', 'US-ASCII', ['ALL'], UidMode::Uid);
 
         $this->stream->assertWritten('TAG1 UID THREAD REFERENCES US-ASCII ALL');
     }
@@ -50,7 +50,7 @@ class ProtocolThreadTest extends TestCase
 
         $this->assertSame(
             [[2, 3, [4, 5], [6]]],
-            $protocol->thread('REFERENCES', 'US-ASCII', ['ALL'], UidMode::MSGNO),
+            $protocol->thread('REFERENCES', 'US-ASCII', ['ALL'], UidMode::Msgno),
         );
     }
 
@@ -65,7 +65,7 @@ class ProtocolThreadTest extends TestCase
             'TAG1 BAD Error in IMAP command THREAD',
         ]);
 
-        $this->assertNull($protocol->thread('REFERENCES', 'US-ASCII', ['ALL'], UidMode::MSGNO));
+        $this->assertNull($protocol->thread('REFERENCES', 'US-ASCII', ['ALL'], UidMode::Msgno));
     }
 
     /**
@@ -78,6 +78,6 @@ class ProtocolThreadTest extends TestCase
             'TAG1 OK THREAD completed',
         ]);
 
-        $this->assertSame([], $protocol->thread('REFERENCES', 'US-ASCII', ['ALL'], UidMode::MSGNO));
+        $this->assertSame([], $protocol->thread('REFERENCES', 'US-ASCII', ['ALL'], UidMode::Msgno));
     }
 }

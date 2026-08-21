@@ -326,7 +326,7 @@ final class Session
                     ['FLAGS', 'RFC822.SIZE'],
                     range(1, $exists),
                     null,
-                    UidMode::MSGNO,
+                    UidMode::Msgno,
                 );
 
                 foreach ($data as $message) {

@@ -24,7 +24,7 @@ class ProtocolSortTest extends TestCase
             'TAG1 OK SORT completed',
         ]);
 
-        $this->assertSame([3, 1, 2], $protocol->sort('DATE', 'US-ASCII', ['ALL'], UidMode::MSGNO));
+        $this->assertSame([3, 1, 2], $protocol->sort('DATE', 'US-ASCII', ['ALL'], UidMode::Msgno));
         $this->stream->assertWritten('TAG1 SORT (DATE) US-ASCII ALL');
     }
 
@@ -40,7 +40,7 @@ class ProtocolSortTest extends TestCase
             'TAG1 OK SORT completed',
         ]);
 
-        $protocol->sort('REVERSE SUBJECT', 'UTF-8', ['UNSEEN'], UidMode::MSGNO);
+        $protocol->sort('REVERSE SUBJECT', 'UTF-8', ['UNSEEN'], UidMode::Msgno);
 
         $this->stream->assertWritten('TAG1 SORT (REVERSE SUBJECT) UTF-8 UNSEEN');
     }
@@ -52,7 +52,7 @@ class ProtocolSortTest extends TestCase
             'TAG1 OK SORT completed',
         ]);
 
-        $this->assertSame([42, 7], $protocol->sort('ARRIVAL', 'US-ASCII', ['ALL'], UidMode::UID));
+        $this->assertSame([42, 7], $protocol->sort('ARRIVAL', 'US-ASCII', ['ALL'], UidMode::Uid));
         $this->stream->assertWritten('TAG1 UID SORT (ARRIVAL) US-ASCII ALL');
     }
 
@@ -66,7 +66,7 @@ class ProtocolSortTest extends TestCase
             'TAG1 BAD Sort/search command failed to parse',
         ]);
 
-        $this->assertNull($protocol->sort('DATE', 'US-ASCII', ['ALL'], UidMode::MSGNO));
+        $this->assertNull($protocol->sort('DATE', 'US-ASCII', ['ALL'], UidMode::Msgno));
     }
 
     /**
@@ -80,6 +80,6 @@ class ProtocolSortTest extends TestCase
             'TAG1 OK SORT completed',
         ]);
 
-        $this->assertSame([], $protocol->sort('DATE', 'US-ASCII', ['ALL'], UidMode::MSGNO));
+        $this->assertSame([], $protocol->sort('DATE', 'US-ASCII', ['ALL'], UidMode::Msgno));
     }
 }

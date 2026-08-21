@@ -23,21 +23,31 @@ use ImapPolyfill\Connection\UidTable;
  */
 final class MessageSequence
 {
-    /** @var array<int, array<string, string>> */
-    private const MESSAGES = [
-        UidMode::MSGNO => [
-            'number' => 'Sequence out of range',
-            'rangeEnd' => 'Sequence range invalid',
-            'delimiter' => 'Sequence syntax error',
-            'rangeDelimiter' => 'Sequence range syntax error',
-        ],
-        UidMode::UID => [
-            'number' => 'UID may not be zero',
-            'rangeEnd' => 'UID may not be zero',
-            'delimiter' => 'UID sequence syntax error',
-            'rangeDelimiter' => 'UID sequence range syntax error',
-        ],
-    ];
+    /**
+     * How each refusal is worded, which is the one thing the two id spaces
+     * disagree about: a number is out of range in one and may not be zero in
+     * the other. A match rather than a lookup, so a third id space cannot be
+     * added without saying what it calls these.
+     *
+     * @return array<string, string>
+     */
+    private static function refusals(UidMode $uidMode): array
+    {
+        return match ($uidMode) {
+            UidMode::Msgno => [
+                'number' => 'Sequence out of range',
+                'rangeEnd' => 'Sequence range invalid',
+                'delimiter' => 'Sequence syntax error',
+                'rangeDelimiter' => 'Sequence range syntax error',
+            ],
+            UidMode::Uid => [
+                'number' => 'UID may not be zero',
+                'rangeEnd' => 'UID may not be zero',
+                'delimiter' => 'UID sequence syntax error',
+                'rangeDelimiter' => 'UID sequence range syntax error',
+            ],
+        };
+    }
 
     /** Where no digits were read at all, both vocabularies say the same thing. */
     private const NOT_A_NUMBER = 'Syntax error in sequence';
@@ -90,7 +100,7 @@ final class MessageSequence
             }
         };
 
-        $this->walk($exists, UidMode::MSGNO, $collect);
+        $this->walk($exists, UidMode::Msgno, $collect);
 
         return $ids;
     }
@@ -126,7 +136,7 @@ final class MessageSequence
             }
         };
 
-        $this->walk($folder->highest(), UidMode::UID, $collect);
+        $this->walk($folder->highest(), UidMode::Uid, $collect);
 
         return $ids;
     }
@@ -141,7 +151,7 @@ final class MessageSequence
      *
      * @throws InvalidSequence
      */
-    private function walk(int $lastId, int $uidMode, \Closure $collect): void
+    private function walk(int $lastId, UidMode $uidMode, \Closure $collect): void
     {
         $offset = 0;
         $length = strlen($this->sequence);
@@ -168,7 +178,7 @@ final class MessageSequence
                 $after = $this->sequence[$offset] ?? '';
 
                 if ($after !== '' && $after !== ',') {
-                    throw new InvalidSequence(self::MESSAGES[$uidMode]['rangeDelimiter']);
+                    throw new InvalidSequence(self::refusals($uidMode)['rangeDelimiter']);
                 }
 
                 if ($after === ',') {
@@ -192,7 +202,7 @@ final class MessageSequence
                 continue;
             }
 
-            throw new InvalidSequence(self::MESSAGES[$uidMode]['delimiter']);
+            throw new InvalidSequence(self::refusals($uidMode)['delimiter']);
         }
     }
 
@@ -202,7 +212,7 @@ final class MessageSequence
      *
      * @throws InvalidSequence
      */
-    private function readNumber(int &$offset, int $lastId, int $uidMode, bool $isRangeEnd): ?int
+    private function readNumber(int &$offset, int $lastId, UidMode $uidMode, bool $isRangeEnd): ?int
     {
         if (($this->sequence[$offset] ?? '') === '*') {
             ++$offset;
@@ -211,7 +221,7 @@ final class MessageSequence
                 return $lastId;
             }
 
-            if ($uidMode === UidMode::MSGNO) {
+            if ($uidMode === UidMode::Msgno) {
                 throw new InvalidSequence(self::NO_MAXIMUM);
             }
 
@@ -231,8 +241,8 @@ final class MessageSequence
         $number = (int) $digits;
         $key = $isRangeEnd ? 'rangeEnd' : 'number';
 
-        if ($number < 1 || ($uidMode === UidMode::MSGNO && $number > $lastId)) {
-            throw new InvalidSequence(self::MESSAGES[$uidMode][$key]);
+        if ($number < 1 || ($uidMode === UidMode::Msgno && $number > $lastId)) {
+            throw new InvalidSequence(self::refusals($uidMode)[$key]);
         }
 
         return $number;

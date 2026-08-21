@@ -31,12 +31,12 @@ class WireArgumentTest extends TestCase
         ];
 
         yield 'a body section' => [
-            fn (Protocol $p) => $p->fetch(["BODY[1]\r\nX9 LOGOUT"], [1], null, UidMode::MSGNO),
+            fn (Protocol $p) => $p->fetch(["BODY[1]\r\nX9 LOGOUT"], [1], null, UidMode::Msgno),
             'X9 LOGOUT',
         ];
 
         yield 'a message sequence' => [
-            fn (Protocol $p) => $p->copy("1\r\nX9 EXPUNGE", 'Archive', UidMode::MSGNO),
+            fn (Protocol $p) => $p->copy("1\r\nX9 EXPUNGE", 'Archive', UidMode::Msgno),
             'X9 EXPUNGE',
         ];
     }

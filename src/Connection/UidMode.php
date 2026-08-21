@@ -3,24 +3,27 @@
 namespace ImapPolyfill\Connection;
 
 /**
- * Which id space a wire operation addresses messages in. The values are
- * opaque: only identity comparisons against these two constants are
- * meaningful (they exist as ints, not an enum, because they travel through
- * the ConnectionBackend signatures the POP3 backend implements too).
+ * Which id space a wire operation addresses messages in, as the type the
+ * polyfill carries past the imap_* boundary.
+ *
+ * An enum rather than the raw bit, so that every `match` over the two is
+ * exhaustive by construction: a third id space added here without an arm
+ * everywhere is a static-analysis error rather than an array index nobody
+ * finds until a message set is refused in the wrong words.
  */
-final class UidMode
+enum UidMode
 {
-    public const UID = 1;
+    case Uid;
 
-    public const MSGNO = 3;
+    case Msgno;
 
     /**
      * The id space an imap_* flags argument asks for. Each function spells
      * the bit differently — FT_UID, SE_UID, CP_UID, ST_UID — so the caller
      * names the one its own signature documents.
      */
-    public static function fromFlags(int $flags, int $uidBit): int
+    public static function fromFlags(int $flags, int $uidBit): self
     {
-        return ($flags & $uidBit) ? self::UID : self::MSGNO;
+        return ($flags & $uidBit) ? self::Uid : self::Msgno;
     }
 }
