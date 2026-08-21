@@ -80,6 +80,46 @@ class ImapFetchOverviewTest extends GreenmailTestCase
         $this->assertEquals($byMsgno[0], $byUid[0]);
     }
 
+    /**
+     * "*" in a uid set is the last message's uid, not the message count —
+     * the two only look alike on a folder nobody has deleted from.
+     */
+    public function test_a_star_in_a_uid_set_is_the_highest_uid(): void
+    {
+        [$folderName, $survivorUid] = $this->makeMsgnoUidMismatchFixture(
+            'OverviewUidStarBox' . uniqid(),
+            "Subject: Survivor\r\n\r\nKeep me"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $result = imap_fetch_overview($connection, '1:*', FT_UID);
+
+        $this->assertCount(1, $result);
+        $this->assertSame($survivorUid, $result[0]->uid);
+        $this->assertSame('Survivor', $result[0]->subject);
+    }
+
+    /**
+     * A uid range is not a walk over the numbers it spans: c-client walks
+     * the mailbox and keeps what falls inside, so naming the whole uid
+     * space costs a folder of one message exactly one message.
+     */
+    public function test_a_uid_range_wider_than_the_folder_answers_what_the_folder_holds(): void
+    {
+        [$folderName, $survivorUid] = $this->makeMsgnoUidMismatchFixture(
+            'OverviewUidWideBox' . uniqid(),
+            "Subject: Survivor\r\n\r\nKeep me"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $result = imap_fetch_overview($connection, '1:4294967295', FT_UID);
+
+        $this->assertCount(1, $result);
+        $this->assertSame($survivorUid, $result[0]->uid);
+    }
+
     public function test_throws_value_error_for_an_invalid_flags_bitmask(): void
     {
         $folderName = 'OverviewValBox'.uniqid();

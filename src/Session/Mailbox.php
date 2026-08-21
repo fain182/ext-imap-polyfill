@@ -287,16 +287,21 @@ final class Mailbox
             $status = $this->connection->selectOrExamine();
             $exists = $status->exists;
 
-            // c-client settles the set against the count it already holds,
-            // before anything goes out: these are the only messages on this
-            // path that are not the server's own words.
-            $ids = MessageSequence::parse($sequence)->expand($exists, $uidMode);
+            $protocol = $this->connection->backend();
+            $set = MessageSequence::parse($sequence);
+
+            // c-client settles the set before anything goes out: against the
+            // count it holds for message numbers, and against the uids it
+            // holds for uids, which is why a uid range costs the folder
+            // rather than the range.
+            $ids = $uidMode === UidMode::UID
+                ? $set->uids($exists > 0 ? $protocol->getUid() : [])
+                : $set->messageNumbers($exists);
 
             if ($ids === []) {
                 return [];
             }
 
-            $protocol = $this->connection->backend();
             $data = $protocol->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());

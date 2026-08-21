@@ -42,12 +42,11 @@ final class MessageSequence
     private const NOT_A_NUMBER = 'Syntax error in sequence';
 
     /**
-     * How many ids one sequence may expand to, over and above the folder it
-     * is expanded against. c-client walks the mailbox it has, so its answer
-     * is never longer than the folder; expanding the range itself makes
-     * "1:4294967295" four billion ints. The allowance sits above the
-     * folder's size because uids are sparse — three messages can carry
-     * uids 1, 50000 and 99999.
+     * How many message numbers one sequence may list, over and above the
+     * folder it is read against. Nothing a caller means reaches it: a msgno
+     * past the count is refused already, so only a set repeating what fits
+     * can pile up — c-client marks the messages a set names, and marking one
+     * twice costs it nothing.
      */
     private const MAX_EXPANDED = 100000;
 
@@ -66,18 +65,76 @@ final class MessageSequence
     }
 
     /**
-     * Expands the set into the numbers it names.
-     *
-     * @param int $lastId what "*" stands for: the message count in msgno
-     *   mode, the highest uid in uid mode
+     * The message numbers the set names.
      *
      * @return int[]
      *
      * @throws InvalidSequence with c-client's own wording for the refusal
      */
-    public function expand(int $lastId, int $uidMode = UidMode::MSGNO): array
+    public function messageNumbers(int $exists): array
     {
         $ids = [];
+
+        $collect = function (int $first, int $last) use ($exists, &$ids): void {
+            // A msgno is refused past the count, so a range cannot outrun
+            // the folder; a sequence repeating one can, and c-client marks
+            // the messages a set names rather than listing them, so
+            // repetition costs it nothing at all.
+            if (count($ids) + ($last - $first + 1) > max($exists, self::MAX_EXPANDED)) {
+                throw new InvalidSequence(self::TOO_MANY);
+            }
+
+            for ($id = $first; $id <= $last; ++$id) {
+                $ids[] = $id;
+            }
+        };
+
+        return $this->walk($exists, UidMode::MSGNO, $collect) ? $ids : [];
+    }
+
+    /**
+     * The uids the set names that the folder actually holds — c-client's
+     * mail_uid_sequence(), which walks the messages and keeps the ones a
+     * range covers rather than expanding the range itself. So "*" is the
+     * last message's uid, a uid nobody has is simply absent, and
+     * "1:4294967295" costs what the folder costs.
+     *
+     * @param array<int, int> $folderUids msgno => uid, as the folder holds them
+     *
+     * @return int[]
+     *
+     * @throws InvalidSequence with c-client's own wording for the refusal
+     */
+    public function uids(array $folderUids): array
+    {
+        $folderUids = array_values($folderUids);
+        $ids = [];
+
+        $collect = function (int $first, int $last) use ($folderUids, &$ids): void {
+            foreach ($folderUids as $uid) {
+                if ($uid >= $first && $uid <= $last) {
+                    $ids[] = $uid;
+                }
+            }
+        };
+
+        $highest = $folderUids === [] ? 0 : (int) end($folderUids);
+
+        return $this->walk($highest, UidMode::UID, $collect) ? $ids : [];
+    }
+
+    /**
+     * Reads the set term by term, handing each one to $collect as the range
+     * it covers — a lone number being the range of itself. False where "*"
+     * had nothing to stand for, which abandons the whole set.
+     *
+     * @param int      $lastId  what "*" stands for
+     * @param \Closure(int, int): void $collect
+     *
+     * @throws InvalidSequence
+     */
+    private function walk(int $lastId, int $uidMode, \Closure $collect): bool
+    {
         $offset = 0;
         $length = strlen($this->sequence);
 
@@ -87,7 +144,7 @@ final class MessageSequence
             // "*" over an empty folder: a msgno sequence has nothing to
             // count to and says so, a uid sequence simply names nothing.
             if ($first === null) {
-                return [];
+                return false;
             }
 
             $delimiter = $this->sequence[$offset] ?? '';
@@ -97,7 +154,7 @@ final class MessageSequence
                 $last = $this->readNumber($offset, $lastId, $uidMode, true);
 
                 if ($last === null) {
-                    return [];
+                    return false;
                 }
 
                 $after = $this->sequence[$offset] ?? '';
@@ -115,19 +172,13 @@ final class MessageSequence
                     [$first, $last] = [$last, $first];
                 }
 
-                if (count($ids) + ($last - $first + 1) > max($lastId, self::MAX_EXPANDED)) {
-                    throw new InvalidSequence(self::TOO_MANY);
-                }
-
-                for ($id = $first; $id <= $last; ++$id) {
-                    $ids[] = $id;
-                }
+                $collect($first, $last);
 
                 continue;
             }
 
             if ($delimiter === ',' || $delimiter === '') {
-                $ids[] = $first;
+                $collect($first, $first);
                 $offset += $delimiter === ',' ? 1 : 0;
 
                 continue;
@@ -136,7 +187,7 @@ final class MessageSequence
             throw new InvalidSequence(self::MESSAGES[$uidMode]['delimiter']);
         }
 
-        return $ids;
+        return true;
     }
 
     /**

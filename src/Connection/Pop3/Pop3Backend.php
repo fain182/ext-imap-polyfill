@@ -257,7 +257,7 @@ final class Pop3Backend implements ConnectionBackend
         $adding = str_starts_with($action, '+');
         $byUid = str_starts_with($command, 'UID');
 
-        foreach (MessageSequence::parse($sequence)->expand($this->exists) as $id) {
+        foreach (MessageSequence::parse($sequence)->messageNumbers($this->exists) as $id) {
             $msgno = $byUid ? $this->resolveMsgno((string) $id) : $id;
             $current = $this->flags[$msgno] ?? [];
 
