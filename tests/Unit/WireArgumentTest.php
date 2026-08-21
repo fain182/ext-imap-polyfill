@@ -81,6 +81,27 @@ class WireArgumentTest extends TestCase
         $this->stream->assertWritten("Subject: hi\r\n\r\nbody\r\n");
     }
 
+    /**
+     * The commands ImapEngine has its own method for reach the wire through
+     * the same send(), and their arguments are the caller's too — a folder
+     * name from imap_createmailbox(). Nothing is refused there, because
+     * ImapEngine hands them over as literals, whose byte count says where
+     * they end. That is the dependency behaviour the guard leans on, so it
+     * is checked rather than assumed.
+     */
+    public function test_a_folder_name_holding_a_line_break_travels_as_a_literal(): void
+    {
+        $protocol = $this->protocolServing([
+            '+ Ready for literal data',
+            'TAG1 OK CREATE completed',
+        ]);
+
+        $protocol->createFolder("Archive\r\n2025");
+
+        $this->stream->assertWritten('TAG1 CREATE {13}');
+        $this->stream->assertWritten("Archive\r\n2025");
+    }
+
     /** The user-facing half: true whatever happened, reason on the stack. */
     public function test_imap_setflag_full_answers_true_and_leaves_the_reason_on_the_stack(): void
     {

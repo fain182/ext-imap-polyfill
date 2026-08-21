@@ -6,8 +6,9 @@ use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Connection\UidTable;
 
 /**
- * A message-set string, expanded the way c-client's mail_sequence() and
- * mail_uid_sequence() expand one — including where they refuse to.
+ * A message-set string, read the way c-client's mail_sequence() and
+ * mail_uid_sequence() read one — marking the messages it names, including
+ * where they refuse to.
  *
  * They refuse in more ways than "that isn't a number", and the wording says
  * which: a first number that is zero or past the end of the folder is out of
