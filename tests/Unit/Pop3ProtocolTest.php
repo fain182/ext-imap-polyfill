@@ -8,8 +8,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * The POP3 client's own line handling: what it writes for a login, and what
- * it will read back. It owns its socket and dials it itself, so these hand
- * it one end of a socket pair and play the server on the other.
+ * it will read back. It is handed one end of a socket pair, and these play
+ * the server on the other.
  */
 class Pop3ProtocolTest extends TestCase
 {
@@ -29,8 +29,7 @@ class Pop3ProtocolTest extends TestCase
 
         [$client, $this->server] = $pair;
 
-        $this->protocol = new Pop3Protocol();
-        (new \ReflectionProperty(Pop3Protocol::class, 'stream'))->setValue($this->protocol, $client);
+        $this->protocol = new Pop3Protocol($client);
     }
 
     private function serverSaw(): string

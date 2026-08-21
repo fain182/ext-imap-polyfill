@@ -13,12 +13,21 @@ final class Pop3Protocol
     /** The ceiling on a line of the server's own talk; see readStatusLine(). */
     private const MAX_STATUS_LINE = 8192;
 
-    /** @var resource */
-    private $stream;
-
     private bool $upgraded = false;
 
-    public function connect(
+    /**
+     * @param resource $stream a socket already connected to the server, whose
+     *                         greeting has not been read yet
+     */
+    public function __construct(private $stream)
+    {
+    }
+
+    /**
+     * Dials the server and reads it far enough to be spoken to: the greeting,
+     * and the STLS upgrade where the spec allows one.
+     */
+    public static function dial(
         string $host,
         int $port,
         string $encryption,
@@ -26,7 +35,7 @@ final class Pop3Protocol
         bool $validateCert,
         float $timeout = 30.0,
         ?float $readTimeout = null,
-    ): void {
+    ): self {
         // /ssl is TLS from the first byte; /tls starts in the clear and
         // upgrades with STLS below. Both must end up encrypted: c-client
         // refuses to continue when the upgrade fails, and connecting in
@@ -55,14 +64,16 @@ final class Pop3Protocol
             throw new \RuntimeException("Can't connect to {$host},{$port}: {$errstr}");
         }
 
-        $this->stream = $stream;
-        stream_set_timeout($this->stream, (int) ($readTimeout ?? $timeout));
+        stream_set_timeout($stream, (int) ($readTimeout ?? $timeout));
 
-        $this->readSingleLine();
+        $protocol = new self($stream);
+        $protocol->readSingleLine();
 
         if ($encryption !== 'ssl') {
-            $this->upgrade($encryption === 'starttls', $notls);
+            $protocol->upgrade($encryption === 'starttls', $notls);
         }
+
+        return $protocol;
     }
 
     /**
