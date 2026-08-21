@@ -120,8 +120,8 @@ class ImapFetchOverviewTest extends GreenmailTestCase
         $this->assertSame($survivorUid, $result[0]->uid);
     }
 
-    /** The uid half of "a message named twice"; see the note in sequences(). */
-    public function test_a_uid_named_twice_is_answered_twice(): void
+    /** The uid half: a set marks the messages it names, so twice is once. */
+    public function test_a_uid_named_twice_is_answered_once(): void
     {
         [$folderName, $survivorUid] = $this->makeMsgnoUidMismatchFixture(
             'OverviewUidTwiceBox' . uniqid(),
@@ -132,9 +132,28 @@ class ImapFetchOverviewTest extends GreenmailTestCase
 
         $result = imap_fetch_overview($connection, "{$survivorUid},{$survivorUid}", FT_UID);
 
-        $this->assertCount(2, $result);
+        $this->assertCount(1, $result);
         $this->assertSame($survivorUid, $result[0]->uid);
-        $this->assertSame($survivorUid, $result[1]->uid);
+    }
+
+    /**
+     * The marks are read in the folder's order, not the order the set wrote
+     * them in: c-client walks the mailbox once and reports what is marked.
+     */
+    public function test_a_set_out_of_order_is_answered_in_the_folder_order(): void
+    {
+        $folderName = 'OverviewOrderBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $folder = $seedClient->getFolder($folderName);
+        foreach (['A', 'B', 'C'] as $subject) {
+            $folder->appendMessage("Subject: {$subject}\r\n\r\nBody");
+        }
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $result = imap_fetch_overview($connection, '3,1');
+
+        $this->assertSame(['A', 'C'], array_map(static fn ($o) => $o->subject, $result));
     }
 
     public function test_throws_value_error_for_an_invalid_flags_bitmask(): void
@@ -173,11 +192,7 @@ class ImapFetchOverviewTest extends GreenmailTestCase
         yield 'a reversed range is read as the range it means' => ['3:1', 3, null];
         yield 'a star opening a range' => ['*:1', 3, null];
 
-        // c-client marks the messages a set names rather than listing them,
-        // which would answer a message named twice once. This package lists
-        // them, so it answers twice; the count here is what the parity run
-        // compares against the extension.
-        yield 'a message named twice' => ['1,1', 2, null];
+        yield 'a message named twice is answered once' => ['1,1', 1, null];
     }
 
     #[DataProvider('sequences')]

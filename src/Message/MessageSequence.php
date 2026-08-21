@@ -18,8 +18,7 @@ use ImapPolyfill\Connection\UidTable;
  * here as c-client spells it.
  *
  * A uid is not a position in the folder, so the uid vocabulary has no upper
- * bound to be past — only zero is refused. The one refusal here that is not
- * c-client's is MAX_EXPANDED's, and it says so where it is spelled.
+ * bound to be past — only zero is refused.
  */
 final class MessageSequence
 {
@@ -52,30 +51,6 @@ final class MessageSequence
     /** Where no digits were read at all, both vocabularies say the same thing. */
     private const NOT_A_NUMBER = 'Syntax error in sequence';
 
-    /**
-     * How many ids one sequence may list, over and above the folder it is
-     * read against. Nothing a caller means reaches it.
-     */
-    private const MAX_EXPANDED = 100000;
-
-    /**
-     * c-client marks the messages a set names, so naming one twice costs it
-     * nothing and can never answer more than the folder holds. This lists
-     * them instead, so a set repeating what fits piles up — in either id
-     * space, which is why both count against the same allowance.
-     *
-     * @throws InvalidSequence
-     */
-    private static function assertWithinFolder(int $collected, int $messages): void
-    {
-        if ($collected > max($messages, self::MAX_EXPANDED)) {
-            throw new InvalidSequence(self::TOO_MANY);
-        }
-    }
-
-    /** The one refusal here that is this package's, not c-client's. */
-    private const TOO_MANY = 'Sequence expands to more messages than any mailbox holds';
-
     private const NO_MAXIMUM = 'No messages, so no maximum message number';
 
     private function __construct(private readonly string $sequence)
@@ -96,27 +71,28 @@ final class MessageSequence
      */
     public function messageNumbers(int $exists): array
     {
-        $ids = [];
+        $marked = [];
 
-        $collect = function (int $first, int $last) use ($exists, &$ids): void {
-            self::assertWithinFolder(count($ids) + ($last - $first + 1), $exists);
-
+        $collect = function (int $first, int $last) use (&$marked): void {
             for ($id = $first; $id <= $last; ++$id) {
-                $ids[] = $id;
+                $marked[$id] = true;
             }
         };
 
         $this->walk($exists, UidMode::Msgno, $collect);
+
+        $ids = array_keys($marked);
+        sort($ids);
 
         return $ids;
     }
 
     /**
      * The uids the set names that the folder actually holds — c-client's
-     * mail_uid_sequence(), which walks the messages and keeps the ones a
-     * range covers rather than expanding the range itself. So "*" is the
-     * last message's uid, a uid nobody has is simply absent, and
-     * "1:4294967295" costs what the folder costs.
+     * mail_uid_sequence(), which marks the messages a range covers and
+     * leaves the walking to whoever reads the marks. So "*" is the last
+     * message's uid, a uid nobody has is simply absent, one named twice is
+     * answered once, and "1:4294967295" costs what the folder costs.
      *
      * @return int[]
      *
@@ -124,31 +100,30 @@ final class MessageSequence
      */
     public function uids(UidTable $folder): array
     {
-        $ids = [];
+        $marked = [];
 
-        $collect = function (int $first, int $last) use ($folder, &$ids): void {
+        $collect = function (int $first, int $last) use ($folder, &$marked): void {
             if ($first === $last) {
                 if ($folder->holds($first)) {
-                    $ids[] = $first;
+                    $marked[$first] = true;
                 }
-
-                self::assertWithinFolder(count($ids), count($folder->uids()));
 
                 return;
             }
 
             foreach ($folder->uids() as $uid) {
                 if ($uid >= $first && $uid <= $last) {
-                    $ids[] = $uid;
+                    $marked[$uid] = true;
                 }
             }
-
-            self::assertWithinFolder(count($ids), count($folder->uids()));
         };
 
         $this->walk($folder->highest(), UidMode::Uid, $collect);
 
-        return $ids;
+        return array_values(array_filter(
+            $folder->uids(),
+            static fn (int $uid): bool => isset($marked[$uid]),
+        ));
     }
 
     /**

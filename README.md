@@ -125,10 +125,7 @@ on the wire where the extension sends it: an argument that travels unquoted
 — a flag, a message sequence, a body section, a POP3 user name or password —
 holding a CR or LF, which would end the command and start a second one in a
 session already logged in. The function answers the way it answers any other
-failure, with `Command argument contains a line break` on the error stack. A
-message-number set is refused too once it repeats what fits past 100,000
-entries: c-client marks the messages a set names, so repeating one costs it
-nothing and costs this package an array.
+failure, with `Command argument contains a line break` on the error stack.
 
 **What throws**, rather than returning `false`: `imap_scan()`,
 `imap_scanmailbox()` and `imap_listscan()`, which speak a command no reachable

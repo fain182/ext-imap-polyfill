@@ -3,7 +3,6 @@
 namespace ImapPolyfill\Tests\Unit;
 
 use ImapPolyfill\Connection\UidTable;
-use ImapPolyfill\Message\InvalidSequence;
 use ImapPolyfill\Message\MessageSequence;
 use PHPUnit\Framework\TestCase;
 
@@ -64,25 +63,32 @@ class MessageSequenceTest extends TestCase
         $this->assertSame([1, 2, 3], MessageSequence::parse('1:*')->messageNumbers(3));
     }
 
-    /** The count bounds each range, so only a set repeating one can pile up. */
-    public function test_a_set_repeating_what_fits_is_refused(): void
+    /** c-client marks the messages a set names, so naming one twice marks it once. */
+    public function test_a_message_named_twice_is_named_once(): void
     {
-        $sequence = implode(',', array_fill(0, 40, '1:3000'));
+        $folder = $this->folder(100, 20000, 4000000);
 
-        $this->expectException(InvalidSequence::class);
-        $this->expectExceptionMessage('Sequence expands to more messages than any mailbox holds');
-
-        MessageSequence::parse($sequence)->messageNumbers(3000);
+        $this->assertSame([100], MessageSequence::parse('100,100')->uids($folder));
+        $this->assertSame([100, 20000], MessageSequence::parse('1:20000,100')->uids($folder));
+        $this->assertSame([1, 2], MessageSequence::parse('1,2,1')->messageNumbers(3));
     }
 
-    /** The same allowance, in the id space that reads the folder itself. */
-    public function test_a_uid_set_repeating_what_fits_is_refused(): void
+    /** Marked, then read in the folder's order rather than the set's. */
+    public function test_the_answer_is_in_the_folder_order(): void
+    {
+        $this->assertSame([100, 4000000], MessageSequence::parse('4000000,100')->uids($this->folder(100, 20000, 4000000)));
+        $this->assertSame([1, 3], MessageSequence::parse('3,1')->messageNumbers(3));
+    }
+
+    /**
+     * A set repeating what fits costs what the folder costs, since marking
+     * a message twice marks it once: no allowance to run out of.
+     */
+    public function test_a_set_repeating_what_fits_costs_the_folder(): void
     {
         $sequence = implode(',', array_fill(0, 40000, '1:*'));
 
-        $this->expectException(InvalidSequence::class);
-        $this->expectExceptionMessage('Sequence expands to more messages than any mailbox holds');
-
-        MessageSequence::parse($sequence)->uids($this->folder(100, 20000, 4000000));
+        $this->assertCount(3, MessageSequence::parse($sequence)->uids($this->folder(100, 20000, 4000000)));
+        $this->assertCount(3, MessageSequence::parse($sequence)->messageNumbers(3));
     }
 }
