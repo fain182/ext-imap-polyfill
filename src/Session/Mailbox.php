@@ -5,6 +5,7 @@ namespace ImapPolyfill\Session;
 use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\MessageNotFoundException;
 use ImapPolyfill\Connection\UidMode;
+use ImapPolyfill\Connection\UidTable;
 use ImapPolyfill\Mailbox\MailboxReference;
 use ImapPolyfill\Message\BodyStructure;
 use ImapPolyfill\Message\HeaderInfo;
@@ -86,7 +87,7 @@ final class Mailbox
      * the folder, so it is not checked this way. A selection that fails
      * outright is another matter, and is reported as any failure is.
      */
-    private function selectionCovering(int $messageNum, int $uidMode, string $function): FolderState|false
+    private function selectionCovering(int $messageNum, UidMode $uidMode, string $function): FolderState|false
     {
         $status = $this->selectedFolder();
 
@@ -94,7 +95,7 @@ final class Mailbox
             return false;
         }
 
-        if ($uidMode !== UidMode::UID && $messageNum > $status->exists) {
+        if ($uidMode !== UidMode::Uid && $messageNum > $status->exists) {
             return $this->absent($function, $uidMode);
         }
 
@@ -127,10 +128,10 @@ final class Mailbox
      *
      * @return false
      */
-    private function absent(string $function, int $uidMode): bool
+    private function absent(string $function, UidMode $uidMode): bool
     {
         trigger_error(
-            $uidMode === UidMode::UID
+            $uidMode === UidMode::Uid
                 ? "{$function}(): UID does not exist"
                 : "{$function}(): Bad message number",
             E_USER_WARNING,
@@ -178,7 +179,7 @@ final class Mailbox
      * and — because a UID was never checked against the count up front —
      * a rejected FETCH whose uid the folder turns out not to have.
      */
-    private function fetchItem(int $messageNum, string $item, int $uidMode, string $function): string|false
+    private function fetchItem(int $messageNum, string $item, UidMode $uidMode, string $function): string|false
     {
         if ($this->selectionCovering($messageNum, $uidMode, $function) === false) {
             return false;
@@ -187,7 +188,7 @@ final class Mailbox
         try {
             $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
-            if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
+            if ($uidMode === UidMode::Uid && $this->uidIsAbsent($messageNum)) {
                 return $this->absent($function, $uidMode);
             }
 
@@ -235,7 +236,7 @@ final class Mailbox
             throw new \ValueError('imap_headerinfo(): Argument #4 ($subject_length) must be between 0 and 1024');
         }
 
-        if ($this->selectionCovering($messageNum, UidMode::MSGNO, 'imap_headerinfo') === false) {
+        if ($this->selectionCovering($messageNum, UidMode::Msgno, 'imap_headerinfo') === false) {
             return false;
         }
 
@@ -244,7 +245,7 @@ final class Mailbox
                 HeaderInfo::FETCH_ITEMS,
                 [$messageNum],
                 null,
-                UidMode::MSGNO,
+                UidMode::Msgno,
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -287,16 +288,22 @@ final class Mailbox
             $status = $this->connection->selectOrExamine();
             $exists = $status->exists;
 
-            // c-client settles the set against the count it already holds,
-            // before anything goes out: these are the only messages on this
-            // path that are not the server's own words.
-            $ids = MessageSequence::parse($sequence)->expand($exists, $uidMode);
+            $protocol = $this->connection->backend();
+            $set = MessageSequence::parse($sequence);
+
+            // c-client settles the set before anything goes out: against the
+            // count it holds for message numbers, and against the uids it
+            // holds for uids, which is why a uid range costs the folder
+            // rather than the range.
+            $folder = new UidTable($uidMode === UidMode::Uid ? $protocol->getUid() : []);
+            $ids = $uidMode === UidMode::Uid
+                ? $set->uids($folder)
+                : $set->messageNumbers($exists);
 
             if ($ids === []) {
                 return [];
             }
 
-            $protocol = $this->connection->backend();
             $data = $protocol->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -314,10 +321,8 @@ final class Mailbox
             }
 
             $message = $data[$id];
-            $uid = $uidMode === UidMode::UID ? $id : (int) $message['UID'];
-            $msgno = $uidMode === UidMode::UID
-                ? $protocol->getMessageNumber((string) $id)
-                : $id;
+            $uid = $uidMode === UidMode::Uid ? $id : (int) $message['UID'];
+            $msgno = $uidMode === UidMode::Uid ? $folder->msgnoOf($id) : $id;
 
             $result[] = Overview::build(
                 $message['RFC822.HEADER'],
@@ -414,7 +419,7 @@ final class Mailbox
         // section every caller reaches for first.
         if ($wireSection !== '1' && preg_match('/^\d+(?:\.\d+)*$/', $wireSection) === 1) {
             try {
-                $structure = $this->connection->backend()->fetchBodyStructure($messageNum, $uidMode === UidMode::UID);
+                $structure = $this->connection->backend()->fetchBodyStructure($messageNum, $uidMode === UidMode::Uid);
             } catch (\Throwable $e) {
                 ErrorStack::push($e->getMessage());
 
@@ -470,14 +475,14 @@ final class Mailbox
         // section, unlike imap_fetchbody(): there is no msgno/uid
         // equivalent of BODYSTRUCTURE for one section, so this is always
         // a msgno, never a uid (no FT_UID here, unlike imap_fetchbody()).
-        if ($this->selectionCovering($messageNum, UidMode::MSGNO, 'imap_bodystruct') === false) {
+        if ($this->selectionCovering($messageNum, UidMode::Msgno, 'imap_bodystruct') === false) {
             return false;
         }
 
         try {
             $parsed = $this->connection->backend()->fetchBodyStructure($messageNum, false);
         } catch (MessageNotFoundException) {
-            return $this->absent('imap_bodystruct', UidMode::MSGNO);
+            return $this->absent('imap_bodystruct', UidMode::Msgno);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -518,7 +523,7 @@ final class Mailbox
             return false;
         }
 
-        if ($uidMode === UidMode::UID && $this->uidIsAbsent($messageNum)) {
+        if ($uidMode === UidMode::Uid && $this->uidIsAbsent($messageNum)) {
             return $this->absent('imap_savebody', $uidMode);
         }
 
@@ -770,7 +775,7 @@ final class Mailbox
                 HeaderInfo::FETCH_ITEMS,
                 $ids,
                 null,
-                UidMode::MSGNO,
+                UidMode::Msgno,
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -854,7 +859,7 @@ final class Mailbox
             }
 
             if ($program !== null) {
-                $ids = $this->connection->backend()->search($program, UidMode::MSGNO);
+                $ids = $this->connection->backend()->search($program, UidMode::Msgno);
 
                 if ($ids === []) {
                     return [];
@@ -867,7 +872,7 @@ final class Mailbox
                 ['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
                 $ids,
                 null,
-                UidMode::MSGNO,
+                UidMode::Msgno,
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -931,7 +936,7 @@ final class Mailbox
                     'REFERENCES',
                     'US-ASCII',
                     ['ALL'],
-                    $byUid ? UidMode::UID : UidMode::MSGNO,
+                    $byUid ? UidMode::Uid : UidMode::Msgno,
                 );
 
                 if ($groups !== null) {
@@ -946,7 +951,7 @@ final class Mailbox
                 ['UID', 'INTERNALDATE', 'RFC822.HEADER'],
                 $ids,
                 null,
-                UidMode::MSGNO,
+                UidMode::Msgno,
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());

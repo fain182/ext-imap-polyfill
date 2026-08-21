@@ -11,6 +11,7 @@ use DirectoryTree\ImapEngine\Connection\Tokens\Token;
 use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\Imap\ImapEngineConnection;
 use ImapPolyfill\Message\SearchProgram;
+use ImapPolyfill\Support\CommandArgument;
 
 /**
  * The ConnectionBackend an \IMAP\Connection speaks IMAP through, and the
@@ -161,12 +162,12 @@ final class Protocol implements ConnectionBackend
     /**
      * @return int[]
      */
-    public function search(SearchProgram $program, int $uidMode, string $charset = ''): array
+    public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array
     {
         // The criteria go out as written: they have been checked against
         // the vocabulary c-client would accept, and the server does the rest.
         $tokens = $program->tokens;
-        $command = $uidMode === UidMode::UID ? 'UID SEARCH' : 'SEARCH';
+        $command = $uidMode === UidMode::Uid ? 'UID SEARCH' : 'SEARCH';
 
         // CHARSET comes before the criteria, as in c-client's imap_search():
         // without it the server has no way to read a term whose bytes fall
@@ -198,10 +199,10 @@ final class Protocol implements ConnectionBackend
      *
      * @return int[]|null
      */
-    public function sort(string $program, string $charset, array $searchTokens, int $uidMode): ?array
+    public function sort(string $program, string $charset, array $searchTokens, UidMode $uidMode): ?array
     {
         $tokens = $this->delegated(
-            $uidMode === UidMode::UID ? 'UID SORT' : 'SORT',
+            $uidMode === UidMode::Uid ? 'UID SORT' : 'SORT',
             'SORT',
             ["({$program})", self::astring($charset), ...$searchTokens],
         );
@@ -225,10 +226,10 @@ final class Protocol implements ConnectionBackend
      *
      * @return array<int, mixed>|null
      */
-    public function thread(string $algorithm, string $charset, array $searchTokens, int $uidMode): ?array
+    public function thread(string $algorithm, string $charset, array $searchTokens, UidMode $uidMode): ?array
     {
         $tokens = $this->delegated(
-            $uidMode === UidMode::UID ? 'UID THREAD' : 'THREAD',
+            $uidMode === UidMode::Uid ? 'UID THREAD' : 'THREAD',
             'THREAD',
             [$algorithm, self::astring($charset), ...$searchTokens],
         );
@@ -278,7 +279,7 @@ final class Protocol implements ConnectionBackend
      *
      * @return array<int, mixed>
      */
-    public function fetch(array $items, array $ids, ?int $to, int $uidMode): array
+    public function fetch(array $items, array $ids, ?int $to, UidMode $uidMode): array
     {
         $set = $to === null
             ? implode(',', $ids)
@@ -303,12 +304,16 @@ final class Protocol implements ConnectionBackend
             $this->uidTable = null;
         }
 
+        if ($exists === 0) {
+            return $this->uidTable = [];
+        }
+
         if ($this->uidTable !== null) {
             return $this->uidTable;
         }
 
         /** @var array<int, int> $uids */
-        $uids = $this->fetchSet('1:*', ['UID'], UidMode::MSGNO);
+        $uids = $this->fetchSet('1:*', ['UID'], UidMode::Msgno);
 
         return $this->uidTable = $uids;
     }
@@ -351,10 +356,10 @@ final class Protocol implements ConnectionBackend
         return $this->folderList('LSUB', $reference, $pattern);
     }
 
-    public function copy(string $sequence, string $folder, int $uidMode): void
+    public function copy(string $sequence, string $folder, UidMode $uidMode): void
     {
         $this->connection->sendAndCollect(
-            $uidMode === UidMode::UID ? 'UID COPY' : 'COPY',
+            $uidMode === UidMode::Uid ? 'UID COPY' : 'COPY',
             [$sequence, Str::literal($folder)],
         );
     }
@@ -434,7 +439,7 @@ final class Protocol implements ConnectionBackend
      */
     public function fetchBodyStructure(int $messageNum, bool $byUid): array
     {
-        $data = $this->fetch(['BODYSTRUCTURE'], [$messageNum], null, $byUid ? UidMode::UID : UidMode::MSGNO);
+        $data = $this->fetch(['BODYSTRUCTURE'], [$messageNum], null, $byUid ? UidMode::Uid : UidMode::Msgno);
 
         // An empty response is the server saying the message is not there,
         // which the caller answers for; a response that came back without
@@ -575,10 +580,10 @@ final class Protocol implements ConnectionBackend
      *
      * @return array<int, mixed>
      */
-    private function fetchSet(string $set, array $items, int $uidMode): array
+    private function fetchSet(string $set, array $items, UidMode $uidMode): array
     {
         $responses = $this->connection->sendAndCollect(
-            $uidMode === UidMode::UID ? 'UID FETCH' : 'FETCH',
+            $uidMode === UidMode::Uid ? 'UID FETCH' : 'FETCH',
             [$set, Str::list($items)],
         );
 
@@ -598,7 +603,7 @@ final class Protocol implements ConnectionBackend
             }
 
             $pairs = self::pairs($data);
-            $key = $uidMode === UidMode::UID ? (int) ($pairs['UID'] ?? 0) : (int) (string) $response->type();
+            $key = $uidMode === UidMode::Uid ? (int) ($pairs['UID'] ?? 0) : (int) (string) $response->type();
 
             if ($key === 0) {
                 continue;
@@ -693,6 +698,12 @@ final class Protocol implements ConnectionBackend
      */
     private static function astring(string $value): string
     {
+        // Str::literal() answers a two-part literal, an array, for a value
+        // holding a line break — which is the one this refuses anyway, and
+        // refusing it here is what keeps that shape out of a return typed
+        // string.
+        CommandArgument::assertOneCommand($value);
+
         return preg_match('/^[^\x00-\x20\x7F(){%*"\\\\\]]+$/', $value) === 1 ? $value : Str::literal($value);
     }
 

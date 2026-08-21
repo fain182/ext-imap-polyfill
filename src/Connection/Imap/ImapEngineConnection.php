@@ -13,6 +13,7 @@ use DirectoryTree\ImapEngine\Connection\Responses\UntaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
 use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\CommandFailedException;
+use ImapPolyfill\Support\CommandArgument;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -47,6 +48,24 @@ final class ImapEngineConnection extends ImapConnection
         $this->assertTaggedResponse($tag);
 
         return $this->result->responses()->untagged();
+    }
+
+    /**
+     * Every command goes out through here, ImapEngine's own included, which
+     * is the only place the check catches all of them. A literal arrives as
+     * an array and is left alone: an APPEND message is nothing but CRLFs.
+     *
+     * @param list<string|array{0: string, 1: string}> $tokens
+     */
+    public function send(string $name, array $tokens = [], ?string &$tag = null): void
+    {
+        foreach ($tokens as $token) {
+            if (is_string($token)) {
+                CommandArgument::assertOneCommand($token);
+            }
+        }
+
+        parent::send($name, $tokens, $tag);
     }
 
     /**

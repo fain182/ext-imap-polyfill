@@ -29,9 +29,22 @@ Strict layering; each layer only talks to the next:
 - **`src/Message/*`** — builders producing the exact stdClass shapes of the real extension (property names, casing, conditional presence).
 - **`src/Support/ErrorStack.php`** — process-global static state, deliberately: the real extension has one global error stack (`imap_errors()` takes no connection). `imap_errors()` drains it *and* clears the last error, because in `php_imap.c` both functions read the same stack.
 
+## What a comment is for
+
+This codebase leans on comments, which makes it worth saying which ones earn
+their place. A comment that asserts something falsifiable — "some servers
+refuse this", "this is the only caller" — is a test nobody wrote: it can go
+quietly wrong and nothing notices. One that describes the shape of a value or
+the values it may hold is a type nobody declared (see `UidTable`, and the
+enum note below). One that explains what an identifier means is a name that
+lost an argument. What is left is what the code genuinely cannot say: why an
+operation sits at *this* layer rather than one above, what c-client or
+php_imap.c does differently, what a dependency's behaviour is relied on. Those
+are the ones to write, and they are worth writing at length.
+
 ## Error-handling contract (do not "fix" it)
 
-Wrappers replicate ext-imap, not modern taste: catch `\Throwable`, push the message to `ErrorStack`, and return whatever the real function returns on failure — which varies deliberately (`false` for most fetches, `[]` for `imap_fetch_overview`, `true` always for `imap_setflag_full`/`imap_expunge`/`imap_delete`, `0` for `imap_msgno`). Invalid flag bitmasks throw `ValueError` with messages copied from `php_imap.c`'s `zend_argument_value_error` calls. Any call on a closed connection throws `ValueError` via `Connection::ensureOpen()` (`imap_is_open` is the one exception). Divergences from the real extension are documented in comments at the point of divergence and in the README's Coverage divergences table.
+Wrappers replicate ext-imap, not modern taste: catch `\Throwable`, push the message to `ErrorStack`, and return whatever the real function returns on failure — which varies deliberately (`false` for most fetches, `[]` for `imap_fetch_overview`, `true` always for `imap_setflag_full`/`imap_expunge`/`imap_delete`, `0` for `imap_msgno`). Invalid flag bitmasks throw `ValueError` with messages copied from `php_imap.c`'s `zend_argument_value_error` calls. Any call on a closed connection throws `ValueError` via `Connection::ensureOpen()` (`imap_is_open` is the one exception). Divergences from the real extension are documented in comments at the point of divergence and in the README's Coverage divergences table. A divergence you had to *invent* — a limit, a refusal, a wording the extension has no equivalent for — is usually the wrong fix: `MessageSequence` grew an allowance against a uid range that expanded to four billion ids, and the allowance was only needed because the class listed the ids a set spans where `mail_sequence()` marks the messages it names. Porting the mechanism removed the divergence, the DoS, and two behaviours (a message named twice, and the order the answer comes back in) nobody had noticed were wrong.
 
 What lands on the stack matters as much as when. A rejected command records the server's own response text — no tag, no status, no echo of the command — because that is what c-client hands `mm_log()`; `Imap\ImapEngineConnection` re-raises every failure as `CommandFailedException` for exactly that reason, and the same class fills the `imap_alerts()` stack from untagged `[ALERT]` responses (php_imap.c's `mm_notify`). Both overrides look like plumbing and are contract.
 
@@ -47,6 +60,11 @@ Integration tests are **characterization tests of the real extension** and must 
 
 - Fresh uniquely-named folder per test via `GreenmailTestCase::makeFolder()`; never depend on shared state.
 - **A test passes against either fixture unless it says otherwise** — see `make cross-check` in CONTRIBUTING.md for the tagging rule. It is worth the trouble: it is what caught `imap_uid()` over POP3 returning the server's UIDL string cast to int, which is the message number on Greenmail and garbage anywhere else.
+- **Let parity settle what you don't know.** Where the extension's behaviour is
+  the question, pin what this package currently does in a parity-safe test and
+  push: a red `parity` job is the answer, and a green one is coverage you now
+  have. Guessing and writing the guess into an assertion is the one thing to
+  avoid — that is how a divergence becomes a documented feature.
 - **Don't hardcode one server version's behavior.** An `imap_sort(SORTSUBJECT)` test once asserted Greenmail's raw-subject ordering and broke the day upstream implemented RFC 5256 base subjects. Assert the contract instead — compare against what the server itself answers (`SeedClient::sorted()`), or pin the command sent with a `FakeStream` unit test.
 - `DovecotTestCase` is standalone on purpose: it shares no base with `GreenmailTestCase`, since the two differ in hierarchy separator (`/` vs `.`), POP3 service and preexisting folders. Put a test there only when Greenmail cannot host it at all; everything else stays on Greenmail.
 - `makeMsgnoUidMismatchFixture()` when testing UID-flag code paths, so uid≠msgno and the test can't pass by coincidence.

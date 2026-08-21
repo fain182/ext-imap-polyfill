@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Connection\Pop3;
 
+use ImapPolyfill\Support\CommandArgument;
+
 /**
  * Minimal RFC1939 POP3 client over a raw socket: just the commands this
  * polyfill's ConnectionBackend needs (USER/PASS, STAT, RETR, TOP, DELE,
@@ -10,12 +12,24 @@ namespace ImapPolyfill\Connection\Pop3;
  */
 final class Pop3Protocol
 {
-    /** @var resource */
-    private $stream;
+    /** The ceiling on a line of the server's own talk; see readStatusLine(). */
+    private const MAX_STATUS_LINE = 8192;
 
     private bool $upgraded = false;
 
-    public function connect(
+    /**
+     * @param resource $stream a socket already connected to the server, whose
+     *                         greeting has not been read yet
+     */
+    public function __construct(private $stream)
+    {
+    }
+
+    /**
+     * Dials the server and reads it far enough to be spoken to: the greeting,
+     * and the STLS upgrade where the spec allows one.
+     */
+    public static function dial(
         string $host,
         int $port,
         string $encryption,
@@ -23,7 +37,7 @@ final class Pop3Protocol
         bool $validateCert,
         float $timeout = 30.0,
         ?float $readTimeout = null,
-    ): void {
+    ): self {
         // /ssl is TLS from the first byte; /tls starts in the clear and
         // upgrades with STLS below. Both must end up encrypted: c-client
         // refuses to continue when the upgrade fails, and connecting in
@@ -52,14 +66,16 @@ final class Pop3Protocol
             throw new \RuntimeException("Can't connect to {$host},{$port}: {$errstr}");
         }
 
-        $this->stream = $stream;
-        stream_set_timeout($this->stream, (int) ($readTimeout ?? $timeout));
+        stream_set_timeout($stream, (int) ($readTimeout ?? $timeout));
 
-        $this->readSingleLine();
+        $protocol = new self($stream);
+        $protocol->readSingleLine();
 
         if ($encryption !== 'ssl') {
-            $this->upgrade($encryption === 'starttls', $notls);
+            $protocol->upgrade($encryption === 'starttls', $notls);
         }
+
+        return $protocol;
     }
 
     /**
@@ -88,12 +104,16 @@ final class Pop3Protocol
     /**
      * RFC 2595 STLS. Throws rather than carrying on unencrypted: an upgrade
      * that failed halfway is the one outcome the switch exists to prevent.
+     *
+     * The method is the IMAP side's, so a spec gets the same TLS versions
+     * whichever protocol it names; ANY_CLIENT is that set plus SSLv2 and
+     * SSLv3.
      */
     private function startTls(): void
     {
         $this->command('STLS');
 
-        $crypto = @stream_socket_enable_crypto($this->stream, true, STREAM_CRYPTO_METHOD_ANY_CLIENT);
+        $crypto = @stream_socket_enable_crypto($this->stream, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
 
         if ($crypto !== true) {
             throw new \RuntimeException('Unable to negotiate TLS with this server');
@@ -123,22 +143,16 @@ final class Pop3Protocol
      */
     private function capa(): array
     {
-        fwrite($this->stream, "CAPA\r\n");
+        $this->writeLine('CAPA');
 
-        $status = fgets($this->stream);
-
-        if ($status === false) {
-            throw new \RuntimeException('POP3 connection closed unexpectedly');
-        }
-
-        if (!str_starts_with($status, '+OK')) {
+        if (!str_starts_with($this->readStatusLine(), '+OK')) {
             return [];
         }
 
         $capabilities = [];
 
-        while (($raw = fgets($this->stream)) !== false) {
-            $line = rtrim($raw, "\r\n");
+        while (true) {
+            $line = $this->readStatusLine();
 
             if ($line === '.') {
                 break;
@@ -217,7 +231,7 @@ final class Pop3Protocol
 
     private function command(string $line): string
     {
-        fwrite($this->stream, $line."\r\n");
+        $this->writeLine($line);
 
         return $this->readSingleLine();
     }
@@ -227,7 +241,7 @@ final class Pop3Protocol
      */
     private function multilineCommand(string $line): array
     {
-        fwrite($this->stream, $line."\r\n");
+        $this->writeLine($line);
         $this->readSingleLine();
 
         $lines = [];
@@ -246,15 +260,17 @@ final class Pop3Protocol
         return $lines;
     }
 
+    /** The only place this class writes a line, so the rule holds for the next command too. */
+    private function writeLine(string $line): void
+    {
+        CommandArgument::assertOneCommand($line);
+
+        fwrite($this->stream, $line."\r\n");
+    }
+
     private function readSingleLine(): string
     {
-        $line = fgets($this->stream);
-
-        if ($line === false) {
-            throw new \RuntimeException('POP3 connection closed unexpectedly');
-        }
-
-        $line = rtrim($line, "\r\n");
+        $line = $this->readStatusLine();
 
         if (str_starts_with($line, '+OK')) {
             return trim(substr($line, 3));
@@ -265,5 +281,28 @@ final class Pop3Protocol
         }
 
         throw new \RuntimeException('Unexpected POP3 response: '.$line);
+    }
+
+    /**
+     * One line of the server's own talk, with a ceiling on it: fgets()
+     * without one reads until the server ends the line. RFC 1939 gives a
+     * status line 512 octets. multilineCommand() reads message data without
+     * a ceiling on purpose — a line of a message is as long as it is.
+     */
+    private function readStatusLine(): string
+    {
+        $line = fgets($this->stream, self::MAX_STATUS_LINE + 1);
+
+        if ($line === false) {
+            throw new \RuntimeException('POP3 connection closed unexpectedly');
+        }
+
+        if (!str_ends_with($line, "\n")) {
+            throw new \RuntimeException(strlen($line) === self::MAX_STATUS_LINE
+                ? 'POP3 status line too long'
+                : 'POP3 connection closed unexpectedly');
+        }
+
+        return rtrim($line, "\r\n");
     }
 }

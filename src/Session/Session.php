@@ -189,10 +189,8 @@ final class Session
 
         $attempts = 1 + max(0, $retries);
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
-            $protocol = new \ImapPolyfill\Connection\Pop3\Pop3Protocol();
-
             try {
-                $protocol->connect(
+                $protocol = \ImapPolyfill\Connection\Pop3\Pop3Protocol::dial(
                     $spec->host,
                     $spec->port,
                     $spec->encryption(),
@@ -328,7 +326,7 @@ final class Session
                     ['FLAGS', 'RFC822.SIZE'],
                     range(1, $exists),
                     null,
-                    UidMode::MSGNO,
+                    UidMode::Msgno,
                 );
 
                 foreach ($data as $message) {
