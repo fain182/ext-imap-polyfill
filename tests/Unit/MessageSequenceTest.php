@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
+use ImapPolyfill\Connection\UidTable;
 use ImapPolyfill\Message\InvalidSequence;
 use ImapPolyfill\Message\MessageSequence;
 use PHPUnit\Framework\TestCase;
@@ -13,12 +14,20 @@ use PHPUnit\Framework\TestCase;
  */
 class MessageSequenceTest extends TestCase
 {
-    /** A folder of three messages whose uids are nowhere near their msgnos. */
-    private const UIDS = [1 => 100, 2 => 20000, 3 => 4000000];
+    /** A folder whose uids are nowhere near the message numbers holding them. */
+    private function folder(int ...$uids): UidTable
+    {
+        $byMsgno = [];
+        foreach ($uids as $index => $uid) {
+            $byMsgno[$index + 1] = $uid;
+        }
+
+        return new UidTable($byMsgno);
+    }
 
     public function test_a_uid_range_answers_the_uids_the_folder_holds(): void
     {
-        $this->assertSame([100, 20000], MessageSequence::parse('1:20000')->uids(self::UIDS));
+        $this->assertSame([100, 20000], MessageSequence::parse('1:20000')->uids($this->folder(100, 20000, 4000000)));
     }
 
     /** The whole uid space costs what the folder costs, not four billion. */
@@ -26,26 +35,26 @@ class MessageSequenceTest extends TestCase
     {
         $this->assertSame(
             [100, 20000, 4000000],
-            MessageSequence::parse('1:4294967295')->uids(self::UIDS),
+            MessageSequence::parse('1:4294967295')->uids($this->folder(100, 20000, 4000000)),
         );
     }
 
     /** "*" is the last message's uid, not the message count. */
     public function test_a_star_stands_for_the_highest_uid(): void
     {
-        $this->assertSame([20000, 4000000], MessageSequence::parse('20000:*')->uids(self::UIDS));
-        $this->assertSame([4000000], MessageSequence::parse('*')->uids(self::UIDS));
+        $this->assertSame([20000, 4000000], MessageSequence::parse('20000:*')->uids($this->folder(100, 20000, 4000000)));
+        $this->assertSame([4000000], MessageSequence::parse('*')->uids($this->folder(100, 20000, 4000000)));
     }
 
     public function test_a_uid_nobody_has_drops_out_of_the_list(): void
     {
-        $this->assertSame([100], MessageSequence::parse('100,99999')->uids(self::UIDS));
+        $this->assertSame([100], MessageSequence::parse('100,99999')->uids($this->folder(100, 20000, 4000000)));
     }
 
     public function test_an_empty_folder_names_nothing(): void
     {
-        $this->assertSame([], MessageSequence::parse('1:*')->uids([]));
-        $this->assertSame([], MessageSequence::parse('1:5')->uids([]));
+        $this->assertSame([], MessageSequence::parse('1:*')->uids($this->folder()));
+        $this->assertSame([], MessageSequence::parse('1:5')->uids($this->folder()));
     }
 
     public function test_message_numbers_are_the_ones_the_set_names(): void

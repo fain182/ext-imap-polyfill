@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Message;
 
 use ImapPolyfill\Connection\UidMode;
+use ImapPolyfill\Connection\UidTable;
 
 /**
  * A message-set string, expanded the way c-client's mail_sequence() and
@@ -101,37 +102,31 @@ final class MessageSequence
      * last message's uid, a uid nobody has is simply absent, and
      * "1:4294967295" costs what the folder costs.
      *
-     * @param array<int, int> $folderUids msgno => uid, as the folder holds them
-     *
      * @return int[]
      *
      * @throws InvalidSequence with c-client's own wording for the refusal
      */
-    public function uids(array $folderUids): array
+    public function uids(UidTable $folder): array
     {
-        // A range meets every message, as mail_uid_sequence() does; a lone
-        // uid asks about one, and walking the folder per term to answer it
-        // costs terms x mailbox.
-        $present = array_flip($folderUids);
         $ids = [];
 
-        $collect = function (int $first, int $last) use ($folderUids, $present, &$ids): void {
+        $collect = function (int $first, int $last) use ($folder, &$ids): void {
             if ($first === $last) {
-                if (isset($present[$first])) {
+                if ($folder->holds($first)) {
                     $ids[] = $first;
                 }
 
                 return;
             }
 
-            foreach ($folderUids as $uid) {
+            foreach ($folder->uids() as $uid) {
                 if ($uid >= $first && $uid <= $last) {
                     $ids[] = $uid;
                 }
             }
         };
 
-        $this->walk((int) end($folderUids), UidMode::UID, $collect);
+        $this->walk($folder->highest(), UidMode::UID, $collect);
 
         return $ids;
     }

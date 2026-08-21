@@ -5,6 +5,7 @@ namespace ImapPolyfill\Session;
 use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\MessageNotFoundException;
 use ImapPolyfill\Connection\UidMode;
+use ImapPolyfill\Connection\UidTable;
 use ImapPolyfill\Mailbox\MailboxReference;
 use ImapPolyfill\Message\BodyStructure;
 use ImapPolyfill\Message\HeaderInfo;
@@ -294,9 +295,9 @@ final class Mailbox
             // count it holds for message numbers, and against the uids it
             // holds for uids, which is why a uid range costs the folder
             // rather than the range.
-            $folderUids = $uidMode === UidMode::UID ? $protocol->getUid() : [];
+            $folder = new UidTable($uidMode === UidMode::UID ? $protocol->getUid() : []);
             $ids = $uidMode === UidMode::UID
-                ? $set->uids($folderUids)
+                ? $set->uids($folder)
                 : $set->messageNumbers($exists);
 
             if ($ids === []) {
@@ -304,10 +305,6 @@ final class Mailbox
             }
 
             $data = $protocol->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode);
-
-            // msgno => uid reversed is the lookup the loop below needs; the
-            // backend would answer it by walking the table per message.
-            $msgnos = array_flip($folderUids);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -325,7 +322,7 @@ final class Mailbox
 
             $message = $data[$id];
             $uid = $uidMode === UidMode::UID ? $id : (int) $message['UID'];
-            $msgno = $uidMode === UidMode::UID ? $msgnos[$id] : $id;
+            $msgno = $uidMode === UidMode::UID ? $folder->msgnoOf($id) : $id;
 
             $result[] = Overview::build(
                 $message['RFC822.HEADER'],
