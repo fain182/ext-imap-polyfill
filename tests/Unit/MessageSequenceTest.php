@@ -74,4 +74,15 @@ class MessageSequenceTest extends TestCase
 
         MessageSequence::parse($sequence)->messageNumbers(3000);
     }
+
+    /** The same allowance, in the id space that reads the folder itself. */
+    public function test_a_uid_set_repeating_what_fits_is_refused(): void
+    {
+        $sequence = implode(',', array_fill(0, 40000, '1:*'));
+
+        $this->expectException(InvalidSequence::class);
+        $this->expectExceptionMessage('Sequence expands to more messages than any mailbox holds');
+
+        MessageSequence::parse($sequence)->uids($this->folder(100, 20000, 4000000));
+    }
 }

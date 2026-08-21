@@ -53,13 +53,25 @@ final class MessageSequence
     private const NOT_A_NUMBER = 'Syntax error in sequence';
 
     /**
-     * How many message numbers one sequence may list, over and above the
-     * folder it is read against. Nothing a caller means reaches it: a msgno
-     * past the count is refused already, so only a set repeating what fits
-     * can pile up — c-client marks the messages a set names, and marking one
-     * twice costs it nothing.
+     * How many ids one sequence may list, over and above the folder it is
+     * read against. Nothing a caller means reaches it.
      */
     private const MAX_EXPANDED = 100000;
+
+    /**
+     * c-client marks the messages a set names, so naming one twice costs it
+     * nothing and can never answer more than the folder holds. This lists
+     * them instead, so a set repeating what fits piles up — in either id
+     * space, which is why both count against the same allowance.
+     *
+     * @throws InvalidSequence
+     */
+    private static function assertWithinFolder(int $collected, int $messages): void
+    {
+        if ($collected > max($messages, self::MAX_EXPANDED)) {
+            throw new InvalidSequence(self::TOO_MANY);
+        }
+    }
 
     /** The one refusal here that is this package's, not c-client's. */
     private const TOO_MANY = 'Sequence expands to more messages than any mailbox holds';
@@ -87,13 +99,7 @@ final class MessageSequence
         $ids = [];
 
         $collect = function (int $first, int $last) use ($exists, &$ids): void {
-            // A msgno is refused past the count, so a range cannot outrun
-            // the folder; a sequence repeating one can, and c-client marks
-            // the messages a set names rather than listing them, so
-            // repetition costs it nothing at all.
-            if (count($ids) + ($last - $first + 1) > max($exists, self::MAX_EXPANDED)) {
-                throw new InvalidSequence(self::TOO_MANY);
-            }
+            self::assertWithinFolder(count($ids) + ($last - $first + 1), $exists);
 
             for ($id = $first; $id <= $last; ++$id) {
                 $ids[] = $id;
@@ -126,6 +132,8 @@ final class MessageSequence
                     $ids[] = $first;
                 }
 
+                self::assertWithinFolder(count($ids), count($folder->uids()));
+
                 return;
             }
 
@@ -134,6 +142,8 @@ final class MessageSequence
                     $ids[] = $uid;
                 }
             }
+
+            self::assertWithinFolder(count($ids), count($folder->uids()));
         };
 
         $this->walk($folder->highest(), UidMode::Uid, $collect);

@@ -11,6 +11,7 @@ use DirectoryTree\ImapEngine\Connection\Tokens\Token;
 use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\Imap\ImapEngineConnection;
 use ImapPolyfill\Message\SearchProgram;
+use ImapPolyfill\Support\CommandArgument;
 
 /**
  * The ConnectionBackend an \IMAP\Connection speaks IMAP through, and the
@@ -697,6 +698,12 @@ final class Protocol implements ConnectionBackend
      */
     private static function astring(string $value): string
     {
+        // Str::literal() answers a two-part literal, an array, for a value
+        // holding a line break — which is the one this refuses anyway, and
+        // refusing it here is what keeps that shape out of a return typed
+        // string.
+        CommandArgument::assertOneCommand($value);
+
         return preg_match('/^[^\x00-\x20\x7F(){%*"\\\\\]]+$/', $value) === 1 ? $value : Str::literal($value);
     }
 

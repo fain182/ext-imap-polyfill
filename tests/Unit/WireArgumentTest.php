@@ -4,6 +4,7 @@ namespace ImapPolyfill\Tests\Unit;
 
 use ImapPolyfill\Connection\Protocol;
 use ImapPolyfill\Connection\UidMode;
+use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Tests\SpeaksToAFakeServer;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -38,6 +39,14 @@ class WireArgumentTest extends TestCase
         yield 'a message sequence' => [
             fn (Protocol $p) => $p->copy("1\r\nX9 EXPUNGE", 'Archive', UidMode::Msgno),
             'X9 EXPUNGE',
+        ];
+
+        // An astring is quoted where it has to be, and a value holding a
+        // line break is quoted as a literal — a shape this refusal keeps
+        // out of the one place that answers a plain string.
+        yield 'a search charset' => [
+            fn (Protocol $p) => $p->search(SearchProgram::parse('ALL'), UidMode::Msgno, "UTF-8\r\nX9 LOGOUT"),
+            'X9 LOGOUT',
         ];
     }
 

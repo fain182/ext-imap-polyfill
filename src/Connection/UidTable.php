@@ -38,9 +38,13 @@ final class UidTable
         return $this->msgnos[$uid];
     }
 
-    /** What "*" stands for in a uid set: 0 where the folder has no messages. */
+    /**
+     * What "*" stands for in a uid set: 0 where the folder has no messages.
+     * Read with max() rather than off the end, since nothing in RFC 3501
+     * makes a server answer a FETCH in message-number order.
+     */
     public function highest(): int
     {
-        return $this->uids === [] ? 0 : $this->uids[count($this->uids) - 1];
+        return $this->uids === [] ? 0 : max($this->uids);
     }
 }

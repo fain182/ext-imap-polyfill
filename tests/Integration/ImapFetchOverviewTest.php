@@ -120,6 +120,23 @@ class ImapFetchOverviewTest extends GreenmailTestCase
         $this->assertSame($survivorUid, $result[0]->uid);
     }
 
+    /** The uid half of "a message named twice"; see the note in sequences(). */
+    public function test_a_uid_named_twice_is_answered_twice(): void
+    {
+        [$folderName, $survivorUid] = $this->makeMsgnoUidMismatchFixture(
+            'OverviewUidTwiceBox' . uniqid(),
+            "Subject: Survivor\r\n\r\nKeep me"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $result = imap_fetch_overview($connection, "{$survivorUid},{$survivorUid}", FT_UID);
+
+        $this->assertCount(2, $result);
+        $this->assertSame($survivorUid, $result[0]->uid);
+        $this->assertSame($survivorUid, $result[1]->uid);
+    }
+
     public function test_throws_value_error_for_an_invalid_flags_bitmask(): void
     {
         $folderName = 'OverviewValBox'.uniqid();
@@ -155,6 +172,12 @@ class ImapFetchOverviewTest extends GreenmailTestCase
         yield 'a trailing comma is allowed' => ['1,', 1, null];
         yield 'a reversed range is read as the range it means' => ['3:1', 3, null];
         yield 'a star opening a range' => ['*:1', 3, null];
+
+        // c-client marks the messages a set names rather than listing them,
+        // which would answer a message named twice once. This package lists
+        // them, so it answers twice; the count here is what the parity run
+        // compares against the extension.
+        yield 'a message named twice' => ['1,1', 2, null];
     }
 
     #[DataProvider('sequences')]
