@@ -260,12 +260,7 @@ final class Pop3Protocol
         return $lines;
     }
 
-    /**
-     * One command, one line — the only place this class writes one, so the
-     * rule holds for whatever command is added next. USER's and PASS's
-     * arguments are the two it does not write itself, and a CR or LF in one
-     * of those is refused rather than sent, where pop3.c sends them.
-     */
+    /** The only place this class writes a line, so the rule holds for the next command too. */
     private function writeLine(string $line): void
     {
         CommandArgument::assertOneCommand($line);
@@ -303,8 +298,6 @@ final class Pop3Protocol
         }
 
         if (!str_ends_with($line, "\n")) {
-            // fgets stops at the ceiling or at the end of the connection,
-            // and only the second is something c-client has a word for.
             throw new \RuntimeException(strlen($line) === self::MAX_STATUS_LINE
                 ? 'POP3 status line too long'
                 : 'POP3 connection closed unexpectedly');

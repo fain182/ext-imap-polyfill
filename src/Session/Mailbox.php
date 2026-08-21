@@ -305,9 +305,8 @@ final class Mailbox
 
             $data = $protocol->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode);
 
-            // The uid table is msgno => uid, which is the answer to "which
-            // message is this uid" already in hand: asking the backend again
-            // would walk the same table once per message.
+            // msgno => uid reversed is the lookup the loop below needs; the
+            // backend would answer it by walking the table per message.
             $msgnos = array_flip($folderUids);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());

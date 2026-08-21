@@ -8,11 +8,8 @@ use ImapPolyfill\Connection\Protocol;
 
 /**
  * A connection whose server is a queue of replies, for the wire behaviour no
- * fixture can produce — a command a server refuses, an announcement it never
+ * fixture can produce: a command a server refuses, an announcement it never
  * makes, a byte that would end the command carrying it.
- *
- * Skipped under the real extension, which speaks its own wire and would
- * never reach this one.
  */
 trait SpeaksToAFakeServer
 {

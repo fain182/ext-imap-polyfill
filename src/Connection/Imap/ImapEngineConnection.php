@@ -51,17 +51,9 @@ final class ImapEngineConnection extends ImapConnection
     }
 
     /**
-     * Every command ImapEngine sends passes through here, this package's and
-     * its own alike, which is why the arguments are checked here rather than
-     * on the way in: a folder name reaching CREATE through ImapEngine's own
-     * method is as much the caller's string as a flag reaching STORE through
-     * sendAndCollect().
-     *
-     * A bare string token is written into the command line as it stands, so
-     * a CR or LF in one ends the command and starts a second one. Only
-     * strings are looked at: a literal arrives as an array, and an APPEND
-     * message is nothing but CRLFs. c-client sends whatever these hold; the
-     * README says where this package refuses to.
+     * Every command goes out through here, ImapEngine's own included, which
+     * is the only place the check catches all of them. A literal arrives as
+     * an array and is left alone: an APPEND message is nothing but CRLFs.
      *
      * @param list<string|array{0: string, 1: string}> $tokens
      */

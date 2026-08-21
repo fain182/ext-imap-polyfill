@@ -109,9 +109,9 @@ final class MessageSequence
      */
     public function uids(array $folderUids): array
     {
-        // A range has to meet every message, the way mail_uid_sequence()
-        // does; a lone uid is a question about one, and asking the folder
-        // for it once beats walking it again per term.
+        // A range meets every message, as mail_uid_sequence() does; a lone
+        // uid asks about one, and walking the folder per term to answer it
+        // costs terms x mailbox.
         $present = array_flip($folderUids);
         $ids = [];
 
@@ -139,8 +139,7 @@ final class MessageSequence
     /**
      * Reads the set term by term, handing each one to $collect as the range
      * it covers — a lone number being the range of itself. A "*" with
-     * nothing to stand for abandons the whole set, which by then can only
-     * be an empty one: the folder it is read against has no messages.
+     * nothing to stand for abandons the set, which by then is empty anyway.
      *
      * @param int      $lastId  what "*" stands for
      * @param \Closure(int, int): void $collect
