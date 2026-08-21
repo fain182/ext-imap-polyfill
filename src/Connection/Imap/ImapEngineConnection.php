@@ -56,8 +56,8 @@ final class ImapEngineConnection extends ImapConnection
      * a CR or LF in one — a flag, a body section, a message sequence, all of
      * them the caller's — ends the command and starts a second one. Only
      * strings are looked at: a literal arrives as an array, and an APPEND
-     * message is nothing but CRLFs. Divergence, in the README's table:
-     * c-client sends whatever these hold.
+     * message is nothing but CRLFs. c-client sends whatever these hold; the
+     * README says where this package refuses to.
      *
      * @param list<string|array{0: string, 1: string}> $tokens
      */

@@ -219,7 +219,7 @@ final class Pop3Protocol
     /**
      * One command, one line — which is why a CR or LF in USER's or PASS's
      * argument, the two this class does not write itself, is refused rather
-     * than sent. Divergence, in the README's table: pop3.c sends them.
+     * than sent, where pop3.c sends them.
      */
     private function command(string $line): string
     {

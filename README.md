@@ -115,12 +115,22 @@ behaves as it did — that is what the parity suite is for.
 | Function | Divergence |
 |---|---|
 | `imap_check`, `imap_mailboxmsginfo` | the `Mailbox` host reads back as you wrote it in the spec; the extension reports the name DNS resolved it to |
-| `imap_fetch_overview` with `FT_UID` | a uid range wider than both the folder and 100,000 messages answers `[]`, with `Sequence expands to more messages than any mailbox holds` on the error stack: the extension walks the mailbox rather than the range, so `1:4294967295` costs it nothing and would cost this package four billion numbers |
 | `imap_open` with `/tls` | negotiates the best TLS version both ends support, so it connects where the extension's `/tls` fails outright — that one asks for TLS 1.0 and nothing else |
 | `imap_open` with `/secure`, `OP_SECURE`, `/authuser=` | always refused: they ask for an authentication that keeps the password off the wire, and this package only speaks `LOGIN`. The extension refuses too unless the server offers a SASL mechanism it can use |
-| `imap_setflag_full`, `imap_clearflag_full`, `imap_delete`, `imap_undelete`, `imap_mail_copy`, `imap_mail_move`, `imap_fetchbody`, `imap_savebody`, `imap_open` over POP3 | an argument that goes on the wire unquoted — a flag, a message sequence, a body section, a POP3 user name or password — is refused when it holds a CR or LF, since the line break would end the command and start a second one in a session already logged in. The extension sends the bytes. The answer is each function's usual one for a failure, with `Command argument contains a line break` on the error stack |
 | `imap_timeout` | `IMAP_READTIMEOUT` and `IMAP_WRITETIMEOUT` are one value: setting either sets both, since a PHP socket has a single timeout for both directions |
 | `imap_utf8` | returns precomposed UTF-8 (`café`, U+00E9) where the extension returns the decomposed form (`cafe` + U+0301); the two do not compare equal |
+
+**Refused rather than sent** are two things the extension puts on the wire,
+and the only places this package is deliberately stricter than it. An
+argument that travels unquoted — a flag, a message sequence, a body section,
+a POP3 user name or password — is refused when it holds a CR or LF, which
+would end the command and start a second one in a session already logged in.
+And a uid range wider than both the folder and 100,000 messages is refused
+rather than expanded into every number it spans: c-client walks the mailbox
+instead, so `1:4294967295` costs it nothing and would cost this package four
+billion of them. Both answer the way that function answers any other failure,
+with the reason on the error stack (`Command argument contains a line break`,
+`Sequence expands to more messages than any mailbox holds`).
 
 **What throws**, rather than returning `false`: `imap_scan()`,
 `imap_scanmailbox()` and `imap_listscan()`, which speak a command no reachable
