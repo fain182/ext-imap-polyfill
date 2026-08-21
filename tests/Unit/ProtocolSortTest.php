@@ -2,10 +2,9 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
-use DirectoryTree\ImapEngine\Connection\Streams\FakeStream;
-use ImapPolyfill\Connection\Imap\ImapEngineConnection;
 use ImapPolyfill\Connection\Protocol;
 use ImapPolyfill\Connection\UidMode;
+use ImapPolyfill\Tests\SpeaksToAFakeServer;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -16,29 +15,7 @@ use PHPUnit\Framework\TestCase;
  */
 class ProtocolSortTest extends TestCase
 {
-    private FakeStream $stream;
-
-    protected function setUp(): void
-    {
-        if (extension_loaded('imap')) {
-            $this->markTestSkipped('Exercises the polyfill\'s own wire layer, which real ext-imap does not use.');
-        }
-    }
-
-    /**
-     * @param string[] $responses
-     */
-    private function protocolServing(array $responses): Protocol
-    {
-        $this->stream = new FakeStream();
-        $this->stream->open();
-        $this->stream->feed(['* OK IMAP4rev1 ready', ...$responses]);
-
-        $connection = new ImapEngineConnection($this->stream);
-        $connection->connect('fake.example.com');
-
-        return new Protocol($connection, 'fake.example.com');
-    }
+    use SpeaksToAFakeServer;
 
     public function test_msgno_sort_sends_the_criteria_charset_and_search_program(): void
     {

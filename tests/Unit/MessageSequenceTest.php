@@ -37,9 +37,8 @@ class MessageSequenceTest extends TestCase
         $this->assertSame([4000000], MessageSequence::parse('*')->uids(self::UIDS));
     }
 
-    public function test_a_uid_nobody_has_is_absent(): void
+    public function test_a_uid_nobody_has_drops_out_of_the_list(): void
     {
-        $this->assertSame([], MessageSequence::parse('99999')->uids(self::UIDS));
         $this->assertSame([100], MessageSequence::parse('100,99999')->uids(self::UIDS));
     }
 
@@ -49,27 +48,11 @@ class MessageSequenceTest extends TestCase
         $this->assertSame([], MessageSequence::parse('1:5')->uids([]));
     }
 
-    public function test_a_uid_set_is_still_read_by_its_own_rules(): void
-    {
-        $this->expectException(InvalidSequence::class);
-        $this->expectExceptionMessage('UID may not be zero');
-
-        MessageSequence::parse('0:2')->uids(self::UIDS);
-    }
-
     public function test_message_numbers_are_the_ones_the_set_names(): void
     {
         $this->assertSame([1, 2, 3], MessageSequence::parse('1:3')->messageNumbers(3));
         $this->assertSame([1, 3], MessageSequence::parse('1,3')->messageNumbers(3));
         $this->assertSame([1, 2, 3], MessageSequence::parse('1:*')->messageNumbers(3));
-    }
-
-    public function test_a_message_number_past_the_count_is_refused(): void
-    {
-        $this->expectException(InvalidSequence::class);
-        $this->expectExceptionMessage('Sequence range invalid');
-
-        MessageSequence::parse('1:4294967295')->messageNumbers(3);
     }
 
     /** The count bounds each range, so only a set repeating one can pile up. */

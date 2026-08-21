@@ -2,10 +2,9 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
-use DirectoryTree\ImapEngine\Connection\Streams\FakeStream;
-use ImapPolyfill\Connection\Imap\ImapEngineConnection;
 use ImapPolyfill\Connection\Protocol;
 use ImapPolyfill\Connection\UidMode;
+use ImapPolyfill\Tests\SpeaksToAFakeServer;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -19,29 +18,7 @@ use PHPUnit\Framework\TestCase;
  */
 class WireArgumentTest extends TestCase
 {
-    private FakeStream $stream;
-
-    protected function setUp(): void
-    {
-        if (extension_loaded('imap')) {
-            $this->markTestSkipped('Exercises the polyfill\'s own wire layer, which real ext-imap does not use.');
-        }
-    }
-
-    /**
-     * @param string[] $responses replies the fake server sends after its greeting
-     */
-    private function protocolServing(array $responses): Protocol
-    {
-        $this->stream = new FakeStream();
-        $this->stream->open();
-        $this->stream->feed(['* OK IMAP4rev1 ready', ...$responses]);
-
-        $connection = new ImapEngineConnection($this->stream);
-        $connection->connect('fake.example.com');
-
-        return new Protocol($connection, 'fake.example.com');
-    }
+    use SpeaksToAFakeServer;
 
     /**
      * @return iterable<string, array{\Closure(Protocol): void, string}>

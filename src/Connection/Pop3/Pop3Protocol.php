@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Connection\Pop3;
 
+use ImapPolyfill\Support\CommandArgument;
+
 /**
  * Minimal RFC1939 POP3 client over a raw socket: just the commands this
  * polyfill's ConnectionBackend needs (USER/PASS, STAT, RETR, TOP, DELE,
@@ -141,7 +143,7 @@ final class Pop3Protocol
      */
     private function capa(): array
     {
-        fwrite($this->stream, "CAPA\r\n");
+        $this->writeLine('CAPA');
 
         if (!str_starts_with($this->readStatusLine(), '+OK')) {
             return [];
@@ -150,7 +152,7 @@ final class Pop3Protocol
         $capabilities = [];
 
         while (true) {
-            $line = rtrim($this->readStatusLine(), "\r\n");
+            $line = $this->readStatusLine();
 
             if ($line === '.') {
                 break;
@@ -227,18 +229,9 @@ final class Pop3Protocol
         }
     }
 
-    /**
-     * One command, one line — which is why a CR or LF in USER's or PASS's
-     * argument, the two this class does not write itself, is refused rather
-     * than sent, where pop3.c sends them.
-     */
     private function command(string $line): string
     {
-        if (strpbrk($line, "\r\n\0") !== false) {
-            throw new \RuntimeException('Command argument contains a line break');
-        }
-
-        fwrite($this->stream, $line."\r\n");
+        $this->writeLine($line);
 
         return $this->readSingleLine();
     }
@@ -248,7 +241,7 @@ final class Pop3Protocol
      */
     private function multilineCommand(string $line): array
     {
-        fwrite($this->stream, $line."\r\n");
+        $this->writeLine($line);
         $this->readSingleLine();
 
         $lines = [];
@@ -267,9 +260,22 @@ final class Pop3Protocol
         return $lines;
     }
 
+    /**
+     * One command, one line — the only place this class writes one, so the
+     * rule holds for whatever command is added next. USER's and PASS's
+     * arguments are the two it does not write itself, and a CR or LF in one
+     * of those is refused rather than sent, where pop3.c sends them.
+     */
+    private function writeLine(string $line): void
+    {
+        CommandArgument::assertOneCommand($line);
+
+        fwrite($this->stream, $line."\r\n");
+    }
+
     private function readSingleLine(): string
     {
-        $line = rtrim($this->readStatusLine(), "\r\n");
+        $line = $this->readStatusLine();
 
         if (str_starts_with($line, '+OK')) {
             return trim(substr($line, 3));
@@ -297,11 +303,13 @@ final class Pop3Protocol
         }
 
         if (!str_ends_with($line, "\n")) {
-            throw new \RuntimeException(strlen($line) >= self::MAX_STATUS_LINE
+            // fgets stops at the ceiling or at the end of the connection,
+            // and only the second is something c-client has a word for.
+            throw new \RuntimeException(strlen($line) === self::MAX_STATUS_LINE
                 ? 'POP3 status line too long'
                 : 'POP3 connection closed unexpectedly');
         }
 
-        return $line;
+        return rtrim($line, "\r\n");
     }
 }

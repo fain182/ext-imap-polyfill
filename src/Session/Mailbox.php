@@ -294,8 +294,9 @@ final class Mailbox
             // count it holds for message numbers, and against the uids it
             // holds for uids, which is why a uid range costs the folder
             // rather than the range.
+            $folderUids = $uidMode === UidMode::UID ? $protocol->getUid() : [];
             $ids = $uidMode === UidMode::UID
-                ? $set->uids($exists > 0 ? $protocol->getUid() : [])
+                ? $set->uids($folderUids)
                 : $set->messageNumbers($exists);
 
             if ($ids === []) {
@@ -303,6 +304,11 @@ final class Mailbox
             }
 
             $data = $protocol->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode);
+
+            // The uid table is msgno => uid, which is the answer to "which
+            // message is this uid" already in hand: asking the backend again
+            // would walk the same table once per message.
+            $msgnos = array_flip($folderUids);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -320,9 +326,7 @@ final class Mailbox
 
             $message = $data[$id];
             $uid = $uidMode === UidMode::UID ? $id : (int) $message['UID'];
-            $msgno = $uidMode === UidMode::UID
-                ? $protocol->getMessageNumber((string) $id)
-                : $id;
+            $msgno = $uidMode === UidMode::UID ? $msgnos[$id] : $id;
 
             $result[] = Overview::build(
                 $message['RFC822.HEADER'],

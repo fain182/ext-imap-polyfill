@@ -89,7 +89,9 @@ final class MessageSequence
             }
         };
 
-        return $this->walk($exists, UidMode::MSGNO, $collect) ? $ids : [];
+        $this->walk($exists, UidMode::MSGNO, $collect);
+
+        return $ids;
     }
 
     /**
@@ -107,10 +109,21 @@ final class MessageSequence
      */
     public function uids(array $folderUids): array
     {
-        $folderUids = array_values($folderUids);
+        // A range has to meet every message, the way mail_uid_sequence()
+        // does; a lone uid is a question about one, and asking the folder
+        // for it once beats walking it again per term.
+        $present = array_flip($folderUids);
         $ids = [];
 
-        $collect = function (int $first, int $last) use ($folderUids, &$ids): void {
+        $collect = function (int $first, int $last) use ($folderUids, $present, &$ids): void {
+            if ($first === $last) {
+                if (isset($present[$first])) {
+                    $ids[] = $first;
+                }
+
+                return;
+            }
+
             foreach ($folderUids as $uid) {
                 if ($uid >= $first && $uid <= $last) {
                     $ids[] = $uid;
@@ -118,22 +131,23 @@ final class MessageSequence
             }
         };
 
-        $highest = $folderUids === [] ? 0 : (int) end($folderUids);
+        $this->walk((int) end($folderUids), UidMode::UID, $collect);
 
-        return $this->walk($highest, UidMode::UID, $collect) ? $ids : [];
+        return $ids;
     }
 
     /**
      * Reads the set term by term, handing each one to $collect as the range
-     * it covers — a lone number being the range of itself. False where "*"
-     * had nothing to stand for, which abandons the whole set.
+     * it covers — a lone number being the range of itself. A "*" with
+     * nothing to stand for abandons the whole set, which by then can only
+     * be an empty one: the folder it is read against has no messages.
      *
      * @param int      $lastId  what "*" stands for
      * @param \Closure(int, int): void $collect
      *
      * @throws InvalidSequence
      */
-    private function walk(int $lastId, int $uidMode, \Closure $collect): bool
+    private function walk(int $lastId, int $uidMode, \Closure $collect): void
     {
         $offset = 0;
         $length = strlen($this->sequence);
@@ -144,7 +158,7 @@ final class MessageSequence
             // "*" over an empty folder: a msgno sequence has nothing to
             // count to and says so, a uid sequence simply names nothing.
             if ($first === null) {
-                return false;
+                return;
             }
 
             $delimiter = $this->sequence[$offset] ?? '';
@@ -154,7 +168,7 @@ final class MessageSequence
                 $last = $this->readNumber($offset, $lastId, $uidMode, true);
 
                 if ($last === null) {
-                    return false;
+                    return;
                 }
 
                 $after = $this->sequence[$offset] ?? '';
@@ -186,8 +200,6 @@ final class MessageSequence
 
             throw new InvalidSequence(self::MESSAGES[$uidMode]['delimiter']);
         }
-
-        return true;
     }
 
     /**

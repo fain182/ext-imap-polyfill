@@ -13,6 +13,7 @@ use DirectoryTree\ImapEngine\Connection\Responses\UntaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
 use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\CommandFailedException;
+use ImapPolyfill\Support\CommandArgument;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -42,8 +43,6 @@ final class ImapEngineConnection extends ImapConnection
      */
     public function sendAndCollect(string $command, array $tokens = []): ResponseCollection
     {
-        self::assertOneCommand($tokens);
-
         $this->send($command, $tokens, $tag);
 
         $this->assertTaggedResponse($tag);
@@ -52,22 +51,29 @@ final class ImapEngineConnection extends ImapConnection
     }
 
     /**
+     * Every command ImapEngine sends passes through here, this package's and
+     * its own alike, which is why the arguments are checked here rather than
+     * on the way in: a folder name reaching CREATE through ImapEngine's own
+     * method is as much the caller's string as a flag reaching STORE through
+     * sendAndCollect().
+     *
      * A bare string token is written into the command line as it stands, so
-     * a CR or LF in one — a flag, a body section, a message sequence, all of
-     * them the caller's — ends the command and starts a second one. Only
+     * a CR or LF in one ends the command and starts a second one. Only
      * strings are looked at: a literal arrives as an array, and an APPEND
      * message is nothing but CRLFs. c-client sends whatever these hold; the
      * README says where this package refuses to.
      *
      * @param list<string|array{0: string, 1: string}> $tokens
      */
-    private static function assertOneCommand(array $tokens): void
+    public function send(string $name, array $tokens = [], ?string &$tag = null): void
     {
         foreach ($tokens as $token) {
-            if (is_string($token) && strpbrk($token, "\r\n\0") !== false) {
-                throw new \RuntimeException('Command argument contains a line break');
+            if (is_string($token)) {
+                CommandArgument::assertOneCommand($token);
             }
         }
+
+        parent::send($name, $tokens, $tag);
     }
 
     /**
