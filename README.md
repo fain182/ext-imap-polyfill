@@ -138,13 +138,10 @@ does for any other failure, with `Command argument contains a line break` on
 the error stack. Worth grepping your own calls for while you migrate:
 `imap_setflag_full`, `imap_clearflag_full`, `imap_delete`, `imap_undelete`,
 `imap_mail_copy`, `imap_mail_move`, `imap_fetchbody`, `imap_savebody`,
-`imap_search`, `imap_getacl`, `imap_setacl`, and `imap_open` over POP3.
-
-**What does not change.** `imap_open()` still dials whatever host the spec
-names, so a spec built from user input still reaches inside your network.
-`imap_mail()` still writes the headers it is given to `sendmail` verbatim, so
-a CR in a `$to` or a `$subject` still adds headers and recipients. Both are
-the extension's behaviour, kept.
+`imap_search`, `imap_getacl`, `imap_setacl`, and `imap_open` over POP3. It
+covers what goes on the wire as part of a command, so it is not a reason to
+stop validating what you pass `imap_mail()`, which hands `sendmail` the
+headers it is given here exactly as the extension does.
 
 ### Notes on individual functions
 
