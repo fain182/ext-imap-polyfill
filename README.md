@@ -106,6 +106,28 @@ POP3 is supported too, and runs through the same parity checks.
 `imap_utf8`,
 `imap_utf8_to_mutf7`
 
+### Command injection
+
+Some arguments go on the wire unquoted, because unquoted is what they are
+there: a flag, a message sequence, a body section, a search charset, a POP3
+user name or password. An application that builds one of those from input it
+did not write — a message number off a query string, a flag off a form — is
+injectable under the extension, which sends the bytes it is given: the line
+break ends the command, and what follows is read as a second one, in a
+session that has already logged in.
+
+This package refuses such an argument instead, and the call answers the way
+it answers any other failure, with `Command argument contains a line break`
+on the error stack. Worth grepping your own calls for while you migrate:
+`imap_setflag_full`, `imap_clearflag_full`, `imap_delete`, `imap_undelete`,
+`imap_mail_copy`, `imap_mail_move`, `imap_fetchbody`, `imap_savebody`,
+`imap_search`, `imap_getacl`, `imap_setacl`, and `imap_open` over POP3.
+
+It is the only place this package is stricter than the extension, and it is
+not a licence to stop validating: `imap_mail()` writes the headers it is
+given to `sendmail` verbatim, exactly as the extension does, so a CR in a
+`$to` or a `$subject` adds headers and recipients here too.
+
 ### Notes on individual functions
 
 Your code has already run against the extension, so the only thing worth
@@ -119,13 +141,6 @@ behaves as it did — that is what the parity suite is for.
 | `imap_open` with `/secure`, `OP_SECURE`, `/authuser=` | always refused: they ask for an authentication that keeps the password off the wire, and this package only speaks `LOGIN`. The extension refuses too unless the server offers a SASL mechanism it can use |
 | `imap_timeout` | `IMAP_READTIMEOUT` and `IMAP_WRITETIMEOUT` are one value: setting either sets both, since a PHP socket has a single timeout for both directions |
 | `imap_utf8` | returns precomposed UTF-8 (`café`, U+00E9) where the extension returns the decomposed form (`cafe` + U+0301); the two do not compare equal |
-
-**Refused rather than sent** is the one thing this package declines to put
-on the wire where the extension sends it: an argument that travels unquoted
-— a flag, a message sequence, a body section, a POP3 user name or password —
-holding a CR or LF, which would end the command and start a second one in a
-session already logged in. The function answers the way it answers any other
-failure, with `Command argument contains a line break` on the error stack.
 
 **What throws**, rather than returning `false`: `imap_scan()`,
 `imap_scanmailbox()` and `imap_listscan()`, which speak a command no reachable
