@@ -17,7 +17,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        php: ['8.1', '8.2', '8.3', '8.4', '8.5', '8.6']
+    # 8.6 has no release yet — GA is November 2026 — so setup-php resolves it
+    # to a nightly build of php-src's master branch. It is on the matrix for
+    # the warning rather than the verdict: what breaks under a moving target
+    # is usually php-src's that week and not this package's, and a leg that
+    # can go red on somebody else's commit would make every push here
+    # advisory. Failing it softly still surfaces the break in the run, which
+    # is the whole reason to test against an unreleased version. Delete this
+    # line when 8.6 ships and the leg becomes one like the others.
+    continue-on-error: ${{ matrix.php == '8.6' }}
     steps:
       - uses: actions/checkout@v7
 
