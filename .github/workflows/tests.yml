@@ -129,3 +129,35 @@ jobs:
 
       - name: Run the extension's own tests
         run: make phpt
+
+  # `make cross-check` points the Greenmail-targeted suite at Dovecot instead,
+  # skipping the tests tagged greenmail-only. It answers a question the other
+  # jobs cannot: whether a test, or the polyfill itself, has grown attached to
+  # one server's behaviour — which is how the POP3 uid bug surfaced, where
+  # imap_uid() returned a UIDL string cast to int that happens to be the
+  # message number on Greenmail and is nonsense anywhere else. It was an audit
+  # to run by hand before a release, so it held only as well as the discipline
+  # around it; here it holds on every push. PHP 8.5 for the same reason the
+  # phpt job takes it — the version a codebase reaching for this package is on
+  # — since what this checks is orthogonal to the language version.
+  cross-check:
+    name: "Cross-check vs second server (Dovecot)"
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # As in the "test" job: ext-imap off, or bootstrap.php defers to the real
+      # extension and this stops exercising the polyfill at all.
+      - name: Set up PHP 8.5
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: ':imap'
+          coverage: none
+
+      - name: Composer install
+        run: make install
+
+      - name: Cross-check against Dovecot
+        run: make cross-check
