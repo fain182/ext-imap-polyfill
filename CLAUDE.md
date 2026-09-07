@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A drop-in polyfill for PHP's `imap_*` functions (removed from core in 8.4), backed by directorytree/imapengine. `bootstrap.php` is a no-op when the real `ext-imap` is loaded; otherwise it defines the same global constants and functions. Fidelity to the real extension — down to error-path return values, `ValueError` messages, and stdClass property names/casing — is the whole point of the project.
 
+The fidelity target is ext-imap as PHP bundled it, linked against stock UW-imap c-client — not the patched forks some distributions shipped. A capability the bundled extension lacked (XOAUTH2/OAUTHBEARER authentication is the standing example) is out of scope even when a modern server wants it: adding it is an invented divergence, and the audience is existing code being kept alive, not new code written against Gmail/O365.
+
 ## Commands
 
 `CONTRIBUTING.md` is the single source for the make targets, the two fixtures and their ports, and how `make parity` and `make cross-check` work. Read it first; don't restate it here, or the two drift.
