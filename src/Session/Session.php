@@ -452,7 +452,11 @@ final class Session
 
         // A different login is a different session, whatever the host:
         // mail_usable_network_stream() will not recycle a stream across one.
-        if ($prefix !== $this->connection->mailboxPrefix() || $credentials->user !== $this->connection->user()) {
+        // Nor does mail_open() recycle a POP3 stream at all, its driver
+        // lacking DR_RECYCLE: the session is closed, committing the DELEs an
+        // expunge sent, and a new one numbers the messages afresh with no
+        // flags set.
+        if ($isPop3 || $prefix !== $this->connection->mailboxPrefix() || $credentials->user !== $this->connection->user()) {
             $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $retries);
 
             if ($status === false) {
