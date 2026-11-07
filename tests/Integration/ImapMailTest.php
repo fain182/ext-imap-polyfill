@@ -115,7 +115,9 @@ class ImapMailTest extends TestCase
 
             return [$output, (string) file_get_contents($captureFile)];
         } finally {
-            @unlink($captureFile);
+            if (is_file($captureFile)) {
+                unlink($captureFile);
+            }
         }
     }
 }

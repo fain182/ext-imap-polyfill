@@ -33,7 +33,14 @@ abstract class DovecotTestCase extends TestCase
 
     protected function setUp(): void
     {
-        $socket = @fsockopen(self::host(), self::port(), $errno, $errstr, 2);
+        // A refused probe is the answer here, not something to report.
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            $socket = fsockopen(self::host(), self::port(), $errno, $errstr, 2);
+        } finally {
+            restore_error_handler();
+        }
 
         if ($socket === false) {
             $this->markTestSkipped(sprintf(

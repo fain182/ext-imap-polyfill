@@ -38,7 +38,9 @@ class ImapSavebodyTest extends GreenmailTestCase
             $this->assertTrue(imap_savebody($connection, $path, 1, '1'));
             $this->assertSame('Hello body', file_get_contents($path));
         } finally {
-            @unlink($path);
+            if (is_file($path)) {
+                unlink($path);
+            }
         }
     }
 
@@ -78,7 +80,9 @@ class ImapSavebodyTest extends GreenmailTestCase
             $this->assertStringContainsString('Subject: Whole', $saved);
             $this->assertStringContainsString('Entire body', $saved);
         } finally {
-            @unlink($path);
+            if (is_file($path)) {
+                unlink($path);
+            }
         }
     }
 
@@ -101,7 +105,9 @@ class ImapSavebodyTest extends GreenmailTestCase
             $this->assertTrue(imap_savebody($connection, $path, 1, '0'));
             $this->assertSame("Subject: Hi\r\n", file_get_contents($path));
         } finally {
-            @unlink($path);
+            if (is_file($path)) {
+                unlink($path);
+            }
         }
     }
 
@@ -120,7 +126,9 @@ class ImapSavebodyTest extends GreenmailTestCase
             $this->assertTrue(imap_savebody($connection, $path, $survivorUid, '1', FT_UID));
             $this->assertSame('Survivor body', file_get_contents($path));
         } finally {
-            @unlink($path);
+            if (is_file($path)) {
+                unlink($path);
+            }
         }
     }
 
@@ -155,7 +163,9 @@ class ImapSavebodyTest extends GreenmailTestCase
             $this->assertTrue(imap_savebody($connection, $path, $uid, '1', FT_UID));
             $this->assertSame('Appended body', file_get_contents($path));
         } finally {
-            @unlink($path);
+            if (is_file($path)) {
+                unlink($path);
+            }
         }
     }
 
