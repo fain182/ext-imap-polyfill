@@ -110,14 +110,13 @@ final class MessageBodies
      */
     public static function read(string $raw, string $base, string $user, string $password): array
     {
-        $spec = static fn (string $folder = '') => $base.$folder;
         $folder = 'Bodies'.bin2hex(random_bytes(4));
 
-        $admin = imap_open($spec(), $user, $password);
-        imap_createmailbox($admin, $spec($folder));
-        imap_append($admin, $spec($folder), $raw);
+        $admin = imap_open($base, $user, $password);
+        imap_createmailbox($admin, $base.$folder);
+        imap_append($admin, $base.$folder, $raw);
 
-        $connection = imap_open($spec($folder), $user, $password);
+        $connection = imap_open($base.$folder, $user, $password);
         imap_errors();
 
         $structure = imap_fetchstructure($connection, 1);

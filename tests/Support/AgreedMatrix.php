@@ -17,12 +17,9 @@ final class AgreedMatrix
 {
     /**
      * The callback gets each server's spec base, `{host:port/flags}`, to
-     * append folder names to. The flags differ per server and are decided
-     * here rather than by the callers: Dovecot announces STARTTLS, c-client
-     * upgrades whenever it is offered, and its unqualified upgrade speaks
-     * only TLS 1.0, so Dovecot needs /tls-sslv23 (see DovecotTestCase). On
-     * Greenmail, which announces nothing, the same switch would make the
-     * upgrade compulsory and the connection fail.
+     * append folder names to. Dovecot needs /tls-sslv23 for the STARTTLS it
+     * announces (see DovecotTestCase::mailboxSpec()); Greenmail announces
+     * nothing, and there the same switch would make the upgrade compulsory.
      *
      * @param callable(string): array<string, array<string, mixed>> $measure keyed group => cell => outcome
      * @param string                                               $label   sprintf template taking cell then group
