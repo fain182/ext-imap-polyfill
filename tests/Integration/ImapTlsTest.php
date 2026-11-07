@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
 use PHPUnit\Framework\Attributes\Group;
 
 /**
@@ -12,6 +13,8 @@ use PHPUnit\Framework\Attributes\Group;
  */
 final class ImapTlsTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     /**
      * The imaps port belongs to the Greenmail fixture; the Dovecot one
      * runs with ssl = no, since c-client upgrades to STARTTLS whenever a
@@ -63,12 +66,10 @@ final class ImapTlsTest extends GreenmailTestCase
      */
     public function test_ssl_without_novalidate_cert_refuses_the_self_signed_fixture(): void
     {
-        $connection = @imap_open(
+        $this->assertOpenFails(
             sprintf('{%s:%d/imap/ssl}INBOX', self::host(), self::imapsPort()),
             self::user(),
             self::password(),
         );
-
-        $this->assertFalse($connection);
     }
 }

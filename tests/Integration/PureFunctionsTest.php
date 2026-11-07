@@ -473,7 +473,7 @@ final class PureFunctionsTest extends TestCase
     #[DataProvider('writtenAddressFields')]
     public function test_the_address_string_is_written_not_copied(string $header, ?string $expected): void
     {
-        $parsed = @imap_rfc822_parse_headers("From: {$header}\r\n\r\n");
+        $parsed = imap_rfc822_parse_headers("From: {$header}\r\n\r\n");
 
         $this->assertSame($expected, $parsed->fromaddress ?? null);
 
@@ -539,7 +539,7 @@ final class PureFunctionsTest extends TestCase
     {
         imap_errors();
 
-        @imap_rfc822_parse_headers("From: a@@b.com\r\nTo: c@@d.com\r\n");
+        imap_rfc822_parse_headers("From: a@@b.com\r\nTo: c@@d.com\r\n");
 
         $this->assertSame([
             'Missing or invalid host name after @',

@@ -211,8 +211,8 @@ final class Pop3MailboxTest extends GreenmailTestCase
     {
         $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
-        $this->assertFalse(@imap_mail_copy($connection, '1', 'INBOX.Other'));
-        $this->assertFalse(@imap_mail_move($connection, '1', 'INBOX.Other'));
+        $this->assertFalse(imap_mail_copy($connection, '1', 'INBOX.Other'));
+        $this->assertFalse(imap_mail_move($connection, '1', 'INBOX.Other'));
 
         imap_close($connection);
     }
@@ -221,7 +221,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
     {
         $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
-        $this->assertFalse(@imap_append($connection, 'INBOX', "Subject: x\r\n\r\nbody"));
+        $this->assertFalse(imap_append($connection, 'INBOX', "Subject: x\r\n\r\nbody"));
 
         imap_close($connection);
     }
@@ -230,9 +230,9 @@ final class Pop3MailboxTest extends GreenmailTestCase
     {
         $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
-        $this->assertFalse(@imap_createmailbox($connection, 'INBOX.Sub'));
-        $this->assertFalse(@imap_deletemailbox($connection, 'INBOX.Sub'));
-        $this->assertFalse(@imap_renamemailbox($connection, 'INBOX', 'INBOX.Renamed'));
+        $this->assertFalse(imap_createmailbox($connection, 'INBOX.Sub'));
+        $this->assertFalse(imap_deletemailbox($connection, 'INBOX.Sub'));
+        $this->assertFalse(imap_renamemailbox($connection, 'INBOX', 'INBOX.Renamed'));
 
         imap_close($connection);
     }

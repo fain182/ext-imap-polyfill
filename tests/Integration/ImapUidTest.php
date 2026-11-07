@@ -2,8 +2,12 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 class ImapUidTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     public function test_returns_the_uid_for_a_message_number(): void
     {
         $folderName = 'UidBox' . uniqid();
@@ -24,7 +28,10 @@ class ImapUidTest extends GreenmailTestCase
 
         $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
-        $this->assertFalse(@imap_uid($connection, 999));
+        $this->assertSame(
+            [false, ['imap_uid(): Bad message number']],
+            $this->capturingWarnings(static fn () => imap_uid($connection, 999)),
+        );
     }
 
     public function test_follows_an_expunge_and_an_append_that_leave_the_count_unchanged(): void

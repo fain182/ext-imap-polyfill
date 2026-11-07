@@ -32,4 +32,16 @@ trait CapturesWarnings
 
         return [$result, $messages];
     }
+
+    /**
+     * An imap_open() that fails answers false and raises the one warning
+     * php_imap.c raises whatever the reason, naming the spec as given.
+     */
+    protected function assertOpenFails(string $spec, string $user, string $password, int $flags = 0, int $retries = 0): void
+    {
+        $this->assertSame(
+            [false, ["imap_open(): Couldn't open stream {$spec}"]],
+            $this->capturingWarnings(static fn () => imap_open($spec, $user, $password, $flags, $retries)),
+        );
+    }
 }

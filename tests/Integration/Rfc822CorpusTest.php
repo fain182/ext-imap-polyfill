@@ -59,7 +59,7 @@ final class Rfc822CorpusTest extends TestCase
     #[DataProvider('addressLists')]
     public function test_address_list_parsing(string $input, array $expected): void
     {
-        $parsed = @imap_rfc822_parse_adrlist($input, 'default.host');
+        $parsed = imap_rfc822_parse_adrlist($input, 'default.host');
 
         // Fields c-client left unset are absent rather than null, and it
         // sets them in its own order — get_object_vars keeps both visible.
@@ -75,7 +75,7 @@ final class Rfc822CorpusTest extends TestCase
     #[DataProvider('mimeHeaders')]
     public function test_mime_header_decoding(string $input, array|false $expected): void
     {
-        $decoded = @imap_mime_header_decode($input);
+        $decoded = imap_mime_header_decode($input);
 
         if ($expected === false) {
             $this->assertFalse($decoded);
