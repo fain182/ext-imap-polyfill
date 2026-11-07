@@ -11,15 +11,12 @@ namespace ImapPolyfill\Connection;
  * it over, EXISTS grows it with entries whose uid is not yet known, EXPUNGE
  * takes out the entry it names and closes the gap. That is what keeps
  * message number k and the uid held at k describing the same message
- * whatever arrived in between — a snapshot compared against the count
- * cannot tell an expunge followed by an append from nothing at all.
+ * whatever arrived in between.
  */
 final class MessageCache
 {
-    /** @var list<?int> uid per message, in message-number order; null where not yet known */
-    private array $uids = [];
-
-    private bool $counted = false;
+    /** @var list<?int>|null uid per message, in message-number order, null where not yet known; null until a count arrives */
+    private ?array $uids = null;
 
     private int $recent = 0;
 
@@ -28,21 +25,23 @@ final class MessageCache
 
     public function reset(): void
     {
-        $this->table = null;
-        $this->uids = [];
-        $this->counted = false;
+        $this->uids = null;
         $this->recent = 0;
+        $this->table = null;
     }
 
     public function exists(int $count): void
     {
-        $this->table = null;
-        $this->counted = true;
-        $held = count($this->uids);
+        $held = $this->uids ?? [];
 
-        $this->uids = $count >= $held
-            ? [...$this->uids, ...array_fill(0, $count - $held, null)]
-            : array_slice($this->uids, 0, $count);
+        if ($this->uids !== null && $count === count($held)) {
+            return;
+        }
+
+        $this->table = null;
+        $this->uids = $count >= count($held)
+            ? array_pad($held, $count, null)
+            : array_slice($held, 0, $count);
     }
 
     public function recent(int $count): void
@@ -52,15 +51,10 @@ final class MessageCache
 
     public function expunged(int $msgno): void
     {
-        // Between a reset and the new folder's EXISTS the cache describes no
-        // folder at all, so an EXPUNGE still in flight for the one being left
-        // has nothing here to take out.
-        if (!$this->counted) {
-            return;
-        }
+        $held = count($this->uids ?? []);
 
-        if ($msgno < 1 || $msgno > count($this->uids)) {
-            throw new \RuntimeException("Expunge of non-existent message {$msgno} of ".count($this->uids));
+        if ($this->uids === null || $msgno < 1 || $msgno > $held) {
+            throw new \RuntimeException("Expunge of non-existent message {$msgno} of {$held}");
         }
 
         $this->table = null;
@@ -73,7 +67,7 @@ final class MessageCache
      */
     public function count(): ?int
     {
-        return $this->counted ? count($this->uids) : null;
+        return $this->uids === null ? null : count($this->uids);
     }
 
     public function recentCount(): int
@@ -88,8 +82,13 @@ final class MessageCache
      */
     public function unknownUids(): array
     {
+        // A table is only ever built once every uid is known.
+        if ($this->table !== null) {
+            return [];
+        }
+
         $unknown = [];
-        foreach ($this->uids as $index => $uid) {
+        foreach ($this->uids ?? [] as $index => $uid) {
             if ($uid === null) {
                 $unknown[] = $index + 1;
             }
@@ -100,7 +99,7 @@ final class MessageCache
 
     public function learnUid(int $msgno, int $uid): void
     {
-        if (array_key_exists($msgno - 1, $this->uids)) {
+        if ($this->uids !== null && array_key_exists($msgno - 1, $this->uids)) {
             $this->table = null;
             $this->uids[$msgno - 1] = $uid;
         }
@@ -113,18 +112,12 @@ final class MessageCache
      */
     public function uidTable(): UidTable
     {
-        return $this->table ??= new UidTable($this->uidsByMsgno());
-    }
+        if ($this->table !== null) {
+            return $this->table;
+        }
 
-    /**
-     * msgno => uid for every message, which needs every uid to be known.
-     *
-     * @return array<int, int>
-     */
-    public function uidsByMsgno(): array
-    {
         $byMsgno = [];
-        foreach ($this->uids as $index => $uid) {
+        foreach ($this->uids ?? [] as $index => $uid) {
             if ($uid === null) {
                 throw new \LogicException('uid of message '.($index + 1).' asked for before it was learned');
             }
@@ -132,6 +125,6 @@ final class MessageCache
             $byMsgno[$index + 1] = $uid;
         }
 
-        return $byMsgno;
+        return $this->table = new UidTable($byMsgno);
     }
 }

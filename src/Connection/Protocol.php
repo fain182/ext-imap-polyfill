@@ -85,36 +85,24 @@ final class Protocol implements ConnectionBackend
             }
         }
 
-        $this->connection->messages()->reset();
+        $messages = $this->connection->messages();
+        $messages->reset();
 
+        // The counts arrive as untagged EXISTS and RECENT, which the message
+        // cache has already absorbed by the time the command completes.
         $responses = $this->connection->sendAndCollect(
             $readOnly ? 'EXAMINE' : 'SELECT',
             [Str::literal($folder)],
         );
 
-        $exists = null;
-        $recent = 0;
         $flags = [];
 
         foreach ($responses as $response) {
-            $type = (string) $response->type();
-
-            if ($type === 'FLAGS') {
+            if ((string) $response->type() === 'FLAGS') {
                 $advertised = $response->tokenAt(2);
                 foreach ($advertised instanceof Data ? $advertised->tokens() : [] as $flag) {
                     $flags[] = (string) $flag;
                 }
-                continue;
-            }
-
-            // "* 3 EXISTS" / "* 1 RECENT": the count is the response type slot.
-            $keyword = (string) ($response->tokenAt(2) ?? '');
-            if ($keyword === 'EXISTS') {
-                $exists = (int) $type;
-                continue;
-            }
-            if ($keyword === 'RECENT') {
-                $recent = (int) $type;
             }
         }
 
@@ -122,15 +110,14 @@ final class Protocol implements ConnectionBackend
         // IMAP4rev1 and IMAP4rev2, so its absence is a parse that went wrong
         // rather than a server being terse — and a folder that answers zero
         // messages reads as a working polyfill on an empty one.
-        if ($exists === null) {
-            throw new \RuntimeException('no EXISTS in '.($readOnly ? 'EXAMINE' : 'SELECT').' response');
-        }
+        $count = $messages->count()
+            ?? throw new \RuntimeException('no EXISTS in '.($readOnly ? 'EXAMINE' : 'SELECT').' response');
 
         $this->selectedFolder = $folder;
         $this->selectedReadOnly = $readOnly;
         $this->selectedFlags = $flags;
 
-        return new FolderState($exists, $recent, $flags);
+        return new FolderState($count, $messages->recentCount(), $flags);
     }
 
     /**

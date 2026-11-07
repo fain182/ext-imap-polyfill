@@ -261,10 +261,6 @@ final class ImapEngineConnection extends ImapConnection
         return $reply;
     }
 
-    /**
-     * The selected folder's message cache, which every untagged response
-     * edits as it arrives.
-     */
     public function messages(): MessageCache
     {
         return $this->messages ??= new MessageCache();
@@ -284,7 +280,10 @@ final class ImapEngineConnection extends ImapConnection
         match ($keyword) {
             'EXISTS' => $this->messages()->exists($number),
             'RECENT' => $this->messages()->recent($number),
-            'EXPUNGE' => $this->messages()->expunged($number),
+            // Between a reset and the new folder's EXISTS the cache describes
+            // no folder, so an EXPUNGE still in flight for the one being left
+            // has nothing there to take out.
+            'EXPUNGE' => $this->messages()->count() === null ? null : $this->messages()->expunged($number),
             default => null,
         };
     }

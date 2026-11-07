@@ -115,7 +115,7 @@ final class Pop3Backend implements ConnectionBackend
      */
     public function expunge(): void
     {
-        foreach (array_reverse($this->messages->uidsByMsgno(), true) as $msgno => $uid) {
+        foreach (array_reverse($this->messages->uidTable()->byMsgno(), true) as $msgno => $uid) {
             if (in_array('\\Deleted', $this->flags[$uid] ?? [], true)) {
                 $this->protocol->dele($uid);
                 $this->messages->expunged($msgno);
@@ -160,7 +160,7 @@ final class Pop3Backend implements ConnectionBackend
 
     public function fetchBodyStructure(int $messageNum, bool $byUid): array
     {
-        $uid = $byUid ? $this->knownUid($messageNum) : $this->uidOf($messageNum);
+        $uid = $byUid ? $this->knownUid($messageNum) : $this->messages->uidTable()->uidOf($messageNum);
 
         return Pop3MimeStructure::parse($this->rawMessage($uid));
     }
@@ -168,7 +168,7 @@ final class Pop3Backend implements ConnectionBackend
     public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array
     {
         $ids = [];
-        foreach ($this->messages->uidsByMsgno() as $msgno => $uid) {
+        foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
             if (Pop3SearchEvaluator::matches($program, $this->rawMessage($uid), $this->flags[$uid] ?? [])) {
                 $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
@@ -206,7 +206,7 @@ final class Pop3Backend implements ConnectionBackend
     {
         $result = [];
         foreach ($ids as $id) {
-            $uid = $uidMode === self::UID_MODE ? $this->knownUid($id) : $this->uidOf($id);
+            $uid = $uidMode === self::UID_MODE ? $this->knownUid($id) : $this->messages->uidTable()->uidOf($id);
             $message = $this->rawMessage($uid);
 
             $entry = [];
@@ -275,7 +275,7 @@ final class Pop3Backend implements ConnectionBackend
             : $set->messageNumbers((int) $this->messages->count());
 
         foreach ($ids as $id) {
-            $uid = $byUid ? $id : $this->uidOf($id);
+            $uid = $byUid ? $id : $this->messages->uidTable()->uidOf($id);
             $current = $this->flags[$uid] ?? [];
 
             foreach ($flagNames as $flag) {
@@ -320,7 +320,7 @@ final class Pop3Backend implements ConnectionBackend
     public function folderStatus(string $folder, array $items): array
     {
         $unseen = 0;
-        foreach ($this->messages->uidsByMsgno() as $uid) {
+        foreach ($this->messages->uidTable()->uids() as $uid) {
             if (!in_array('\\Seen', $this->flags[$uid] ?? [], true)) {
                 $unseen++;
             }
@@ -367,24 +367,15 @@ final class Pop3Backend implements ConnectionBackend
         return $this->rawMessageCache[$uid] ??= new RawMessage($this->protocol->retr($uid));
     }
 
-    private function uidOf(int $msgno): int
-    {
-        if ($msgno < 1 || $msgno > (int) $this->messages->count()) {
-            throw new MessageNotFoundException("Message {$msgno} not found");
-        }
-
-        return $this->messages->uidTable()->uidOf($msgno);
-    }
-
     /**
      * @throws MessageNotFoundException
      */
-    private function knownUid(int|string $uid): int
+    private function knownUid(int $uid): int
     {
-        if (!$this->messages->uidTable()->holds((int) $uid)) {
+        if (!$this->messages->uidTable()->holds($uid)) {
             throw new MessageNotFoundException("Message with uid {$uid} not found");
         }
 
-        return (int) $uid;
+        return $uid;
     }
 }
