@@ -21,38 +21,36 @@ final class UnhappyPaths
      * Builders for a connection in a state where the calls below have
      * nothing to work with.
      *
-     * @return array<string, callable(string, int, string, string): (\IMAP\Connection|false)>
+     * @return array<string, callable(string, string, string): (\IMAP\Connection|false)>
      */
     public static function scenarios(): array
     {
         return [
             // Nothing wrong with the connection: the folder is simply empty,
             // so every message number is past the end.
-            'empty folder' => static function (string $host, int $port, string $user, string $password) {
-                $spec = self::spec($host, $port);
+            'empty folder' => static function (string $base, string $user, string $password) {
                 $folder = 'Unhappy'.bin2hex(random_bytes(5));
-                $admin = imap_open($spec, $user, $password);
-                imap_createmailbox($admin, $spec.$folder);
+                $admin = imap_open($base, $user, $password);
+                imap_createmailbox($admin, $base.$folder);
 
-                return imap_open($spec.$folder, $user, $password);
+                return imap_open($base.$folder, $user, $password);
             },
 
             // The folder went away under an open connection, so the server
             // itself will refuse what the client still thinks it can ask.
-            'folder deleted underneath' => static function (string $host, int $port, string $user, string $password) {
-                $spec = self::spec($host, $port);
+            'folder deleted underneath' => static function (string $base, string $user, string $password) {
                 $folder = 'Unhappy'.bin2hex(random_bytes(5));
-                $admin = imap_open($spec, $user, $password);
-                imap_createmailbox($admin, $spec.$folder);
-                $connection = imap_open($spec.$folder, $user, $password);
-                imap_deletemailbox($admin, $spec.$folder);
+                $admin = imap_open($base, $user, $password);
+                imap_createmailbox($admin, $base.$folder);
+                $connection = imap_open($base.$folder, $user, $password);
+                imap_deletemailbox($admin, $base.$folder);
 
                 return $connection;
             },
 
             // Closed by the caller, and then used anyway.
-            'closed connection' => static function (string $host, int $port, string $user, string $password) {
-                $connection = imap_open(self::spec($host, $port), $user, $password);
+            'closed connection' => static function (string $base, string $user, string $password) {
+                $connection = imap_open($base, $user, $password);
                 imap_close($connection);
 
                 return $connection;
@@ -100,6 +98,10 @@ final class UnhappyPaths
      * The error stack is drained first, so what is reported was put there
      * by this call and not by the scenario that set the connection up.
      *
+     * Return values are compared by shape, not by content: a header string
+     * or a status object carries the server's own wording and the folder's
+     * generated name, neither of which is the point here.
+     *
      * @return array<string, mixed>
      */
     public static function outcome(callable $probe, \IMAP\Connection $connection): array
@@ -114,16 +116,5 @@ final class UnhappyPaths
         }
 
         return ['returns' => $returned, 'errors' => imap_errors() !== false];
-    }
-
-    /**
-     * Return values are compared by shape, not by content: a header string
-     * or a status object carries the server's own wording and the folder's
-     * generated name, neither of which is the point here.
-     */
-
-    private static function spec(string $host, int $port): string
-    {
-        return sprintf('{%s:%d/imap/novalidate-cert}', $host, $port);
     }
 }

@@ -108,20 +108,15 @@ final class MessageBodies
      *
      * @return array<string, mixed>
      */
-    public static function read(string $raw, string $host, int $port, string $user, string $password): array
+    public static function read(string $raw, string $base, string $user, string $password): array
     {
-        // The same flags GreenmailTestCase::flags() honours, so pointing
-        // the suite at a server with a real certificate does not fail
-        // here alone.
-        $flags = getenv('IMAP_POLYFILL_TEST_FLAGS') ?: '/imap/novalidate-cert';
-        $spec = static fn (string $folder = '') => sprintf('{%s:%d%s}%s', $host, $port, $flags, $folder);
         $folder = 'Bodies'.bin2hex(random_bytes(4));
 
-        $admin = imap_open($spec(), $user, $password);
-        imap_createmailbox($admin, $spec($folder));
-        imap_append($admin, $spec($folder), $raw);
+        $admin = imap_open($base, $user, $password);
+        imap_createmailbox($admin, $base.$folder);
+        imap_append($admin, $base.$folder, $raw);
 
-        $connection = imap_open($spec($folder), $user, $password);
+        $connection = imap_open($base.$folder, $user, $password);
         imap_errors();
 
         $structure = imap_fetchstructure($connection, 1);

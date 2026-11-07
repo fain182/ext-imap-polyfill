@@ -29,11 +29,11 @@ $user = getenv('IMAP_POLYFILL_TEST_USER') ?: 'testuser';
 $password = getenv('IMAP_POLYFILL_TEST_PASSWORD') ?: 'testpass';
 
 [$matrix, $excluded] = AgreedMatrix::of(
-    static function (string $host, int $port) use ($user, $password): array {
+    static function (string $base) use ($user, $password): array {
         $matrix = [];
 
         foreach (MessageBodies::messages() as $label => $raw) {
-            $matrix[$label] = MessageBodies::read($raw, $host, $port, $user, $password);
+            $matrix[$label] = MessageBodies::read($raw, $base, $user, $password);
         }
 
         return $matrix;

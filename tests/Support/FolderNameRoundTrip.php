@@ -42,52 +42,47 @@ final class FolderNameRoundTrip
      *
      * @return array<string, mixed>
      */
-    public static function carry(string $name, string $host, int $port, string $user, string $password): array
+    public static function carry(string $name, string $base, string $user, string $password): array
     {
-        // The same flags GreenmailTestCase::flags() honours, so pointing
-        // the suite at a server with a real certificate does not fail
-        // here alone.
-        $flags = getenv('IMAP_POLYFILL_TEST_FLAGS') ?: '/imap/novalidate-cert';
-        $spec = static fn (string $folder = '') => sprintf('{%s:%d%s}%s', $host, $port, $flags, $folder);
         $encode = static fn (string $utf8): string => (string) mb_convert_encoding($utf8, 'UTF7-IMAP', 'UTF-8');
 
         $suffix = bin2hex(random_bytes(4));
         $created = $encode($name.$suffix);
         $renamed = $encode($name.$suffix.'Renamed');
 
-        $connection = imap_open($spec(), $user, $password);
+        $connection = imap_open($base, $user, $password);
         imap_errors();
 
         $steps = [];
 
-        $steps['create'] = FixtureExport::shape(imap_createmailbox($connection, $spec($created)));
+        $steps['create'] = FixtureExport::shape(imap_createmailbox($connection, $base.$created));
 
         // The name as the server hands it back: byte-identical to what was
         // asked for, or the caller cannot ask for it again.
-        $listed = imap_list($connection, $spec(), '*') ?: [];
-        $steps['listed as given'] = FixtureExport::shape(in_array($spec($created), $listed, true));
+        $listed = imap_list($connection, $base, '*') ?: [];
+        $steps['listed as given'] = FixtureExport::shape(in_array($base.$created, $listed, true));
 
-        $mailboxes = imap_getmailboxes($connection, $spec(), '*') ?: [];
+        $mailboxes = imap_getmailboxes($connection, $base, '*') ?: [];
         $names = array_map(static fn (\stdClass $box): string => $box->name, $mailboxes);
-        $steps['getmailboxes as given'] = FixtureExport::shape(in_array($spec($created), $names, true));
+        $steps['getmailboxes as given'] = FixtureExport::shape(in_array($base.$created, $names, true));
 
-        $status = imap_status($connection, $spec($created), SA_MESSAGES);
+        $status = imap_status($connection, $base.$created, SA_MESSAGES);
         $steps['status'] = FixtureExport::shape($status !== false ? ($status->messages ?? null) : false);
 
         $steps['append'] = FixtureExport::shape(
-            imap_append($connection, $spec($created), "Subject: Carried\r\nFrom: joe@example.com\r\n\r\nBody")
+            imap_append($connection, $base.$created, "Subject: Carried\r\nFrom: joe@example.com\r\n\r\nBody")
         );
 
-        $opened = imap_open($spec($created), $user, $password);
+        $opened = imap_open($base.$created, $user, $password);
         $steps['open'] = FixtureExport::shape($opened !== false);
         $steps['num_msg'] = FixtureExport::shape($opened !== false ? imap_num_msg($opened) : false);
 
-        $steps['rename'] = FixtureExport::shape(imap_renamemailbox($connection, $spec($created), $spec($renamed)));
+        $steps['rename'] = FixtureExport::shape(imap_renamemailbox($connection, $base.$created, $base.$renamed));
 
-        $listed = imap_list($connection, $spec(), '*') ?: [];
-        $steps['listed under the new name'] = FixtureExport::shape(in_array($spec($renamed), $listed, true));
+        $listed = imap_list($connection, $base, '*') ?: [];
+        $steps['listed under the new name'] = FixtureExport::shape(in_array($base.$renamed, $listed, true));
 
-        $steps['delete'] = FixtureExport::shape(imap_deletemailbox($connection, $spec($renamed)));
+        $steps['delete'] = FixtureExport::shape(imap_deletemailbox($connection, $base.$renamed));
 
         return $steps;
     }

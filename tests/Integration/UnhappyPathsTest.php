@@ -48,8 +48,7 @@ final class UnhappyPathsTest extends GreenmailTestCase
     public function test_matches_the_real_extension(string $scenario, string $call, array $expected): void
     {
         $connection = UnhappyPaths::scenarios()[$scenario](
-            self::host(),
-            self::port(),
+            self::mailboxSpec(''),
             self::user(),
             self::password(),
         );
