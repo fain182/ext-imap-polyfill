@@ -128,18 +128,26 @@ class ImapSavebodyTest extends GreenmailTestCase
      * The message this connection appended into its own selected folder is
      * there for it at once: c-client counts it from the untagged EXISTS the
      * APPEND brings back, without an imap_num_msg() in between to ask.
+     *
+     * The folder is empty when the connection opens it, but its first uid is
+     * already spent, so the appended message is msgno 1 with a uid that is not.
      */
     public function test_ft_uid_saves_a_message_appended_into_the_selected_folder(): void
     {
         $folderName = 'SaveBodyAppendBox'.uniqid();
-        $this->makeFolder($folderName);
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Throwaway\r\n\r\nDiscard me");
+        $seedClient->openFolder($folderName);
+        $seedClient->command('STORE', ['1', '+FLAGS.SILENT', '(\\Deleted)']);
+        $seedClient->expunge();
+
         $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
         $this->assertTrue(imap_append($connection, self::mailboxSpec($folderName), "Subject: Appended\r\nContent-Type: text/plain\r\n\r\nAppended body"));
 
-        $observer = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
-        $uid = imap_uid($observer, 1);
-        imap_close($observer);
+        $seedClient->openFolder($folderName, true);
+        $uid = $seedClient->uids()[1];
+        $this->assertNotSame(1, $uid);
 
         $path = tempnam(sys_get_temp_dir(), 'imap_savebody_');
 

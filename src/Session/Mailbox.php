@@ -146,18 +146,14 @@ final class Mailbox
      * c-client settles that from the uid cache it already holds, before it
      * builds any command, so a uid that is not there is answered as absent
      * however malformed the rest of the call was. This is the same question
-     * asked the other way round: only on the path where the fetch already
-     * failed, so the happy path stays one round trip.
+     * asked the other way round.
      */
     private function uidIsAbsent(int $uid, FolderState $selection): bool
     {
         // An empty folder has no uids, and asking it for the ones it has is
-        // itself an error on some servers ("1:*" over nothing).
-        //
-        // The selection's count, not Connection::numMessages(): that one is
-        // imap_num_msg()'s cache and moves only when it is read, while the
-        // selection follows every untagged EXISTS — including the one an
-        // APPEND into this very folder brings back, as c-client's nmsgs does.
+        // itself an error on some servers ("1:*" over nothing). Counted from
+        // the selection, which follows every untagged EXISTS, an APPEND's
+        // into this folder included, as c-client's nmsgs does.
         if ($selection->exists < 1) {
             return true;
         }
