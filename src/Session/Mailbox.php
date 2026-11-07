@@ -423,6 +423,8 @@ final class Mailbox
         if ($wireSection !== '1' && preg_match('/^\d+(?:\.\d+)*$/', $wireSection) === 1) {
             try {
                 $structure = $this->connection->backend()->fetchBodyStructure($messageNum, $uidMode === UidMode::Uid);
+            } catch (MessageNotFoundException) {
+                return $this->absent($function, $uidMode);
             } catch (\Throwable $e) {
                 ErrorStack::push($e->getMessage());
 
