@@ -43,6 +43,9 @@ final class Pop3Backend implements ConnectionBackend
      */
     private readonly MessageCache $messages;
 
+    /** pop3.c's uid_last: the session's highest server number, which an expunge does not lower. */
+    private int $uidLast = 0;
+
     /** @var array<int, string[]> uid => IMAP flag names set on it, session-scoped */
     private array $flags = [];
 
@@ -88,6 +91,7 @@ final class Pop3Backend implements ConnectionBackend
 
         if ($this->messages->count() === null) {
             $count = $this->protocol->stat();
+            $this->uidLast = $count;
             $this->messages->exists($count);
 
             for ($msgno = 1; $msgno <= $count; $msgno++) {
@@ -332,7 +336,7 @@ final class Pop3Backend implements ConnectionBackend
             'messages' => $count,
             'recent' => $count,
             'unseen' => $unseen,
-            'uidnext' => $count + 1,
+            'uidnext' => $this->uidLast + 1,
             'uidvalidity' => 1,
         ];
     }

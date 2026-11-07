@@ -191,6 +191,22 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    public function test_uidnext_stays_past_the_highest_server_number_after_an_expunge(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Pop3 Uidnext\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        imap_delete($connection, '1');
+        imap_expunge($connection);
+
+        $status = imap_status($connection, self::pop3MailboxSpec(), SA_UIDNEXT);
+        $this->assertSame($count + 1, $status->uidnext);
+
+        imap_close($connection);
+    }
+
     public function test_close_without_expunge_deletes_nothing(): void
     {
         $client = self::seedClient();
