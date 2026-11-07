@@ -11,10 +11,8 @@ updates:
       minor-and-patch:
         update-types: ["minor", "patch"]
 
-  # composer.json. No lock file is committed, so CI already installs the newest
-  # release each constraint allows; what is left for Dependabot is a release
-  # outside a constraint. `widen` adds it to the range instead of raising the
-  # floor, which in a library would take the older releases away from users.
+  # `widen` extends a constraint to a new release instead of raising its
+  # floor, which in a library would drop the older releases for users.
   - package-ecosystem: "composer"
     directory: "/"
     schedule:
