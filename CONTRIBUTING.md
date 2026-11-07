@@ -13,7 +13,7 @@ make install-lowest    # re-resolve to the oldest versions composer.json allows
 
 Docker or Podman is required from `test-integration` onwards; `docker-compose.yml` describes the same setup for compose tooling.
 
-`make install-lowest` exists because `composer.lock` is committed: every other command installs that one pinned set, so nothing would otherwise test the *bottom* of a constraint. It rewrites the lock to the oldest releases allowed — imapengine 1.25.5 rather than the pinned patch — and the test targets pick those up, which is how CI checks that `^1.25.5` means what it claims. It is the one command here that leaves the tree dirty: `git checkout composer.lock && make install` puts it back.
+No `composer.lock` is committed, since it never reaches the projects that depend on this library. `make install` resolves the newest releases `composer.json` allows into a local, gitignored lock (`composer update` refreshes it), and `make install-lowest` rewrites that lock to the oldest ones, which the test targets then pick up.
 
 ## The two fixtures
 
