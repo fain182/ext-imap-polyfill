@@ -52,14 +52,22 @@ final class Pop3Protocol
             ],
         ]);
 
-        $stream = @stream_socket_client(
-            "{$scheme}{$host}:{$port}",
-            $errno,
-            $errstr,
-            $timeout,
-            STREAM_CLIENT_CONNECT,
-            $context,
-        );
+        // Not "@": an error handler that does not honour it would see a
+        // warning the real extension never raises. See TimedStream.
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            $stream = stream_socket_client(
+                "{$scheme}{$host}:{$port}",
+                $errno,
+                $errstr,
+                $timeout,
+                STREAM_CLIENT_CONNECT,
+                $context,
+            );
+        } finally {
+            restore_error_handler();
+        }
 
         if ($stream === false) {
             // Same "host,port" shape as c-client's tcp_open error.
@@ -113,7 +121,15 @@ final class Pop3Protocol
     {
         $this->command('STLS');
 
-        $crypto = @stream_socket_enable_crypto($this->stream, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+        // The failure is the exception below; PHP's own warning about the
+        // handshake is not something the extension ever raises.
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            $crypto = stream_socket_enable_crypto($this->stream, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+        } finally {
+            restore_error_handler();
+        }
 
         if ($crypto !== true) {
             throw new \RuntimeException('Unable to negotiate TLS with this server');

@@ -19,7 +19,17 @@ final class TimedStream extends ImapStream
     /** @param array<string, mixed> $options */
     public function open(string $transport, string $host, int $port, int $timeout, array $options = []): bool
     {
-        $opened = parent::open($transport, $host, $port, $timeout, $options);
+        // The engine dials with "@", which an error handler that does not
+        // honour it — most of the ones a framework installs — sees anyway:
+        // a warning the real extension never raises, about a failure the
+        // exception below already reports.
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            $opened = parent::open($transport, $host, $port, $timeout, $options);
+        } finally {
+            restore_error_handler();
+        }
 
         // A single socket timeout covers both directions, so c-client's
         // two have to become one; see Timeouts::socketSeconds() for which.
