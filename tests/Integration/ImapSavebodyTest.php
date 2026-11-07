@@ -177,9 +177,18 @@ class ImapSavebodyTest extends GreenmailTestCase
 
         $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
-        $this->assertSame(
-            [false, ['imap_savebody(/nonexistent-dir/imap_savebody_test): Failed to open stream: No such file or directory']],
-            $this->capturingWarnings(static fn () => imap_savebody($connection, '/nonexistent-dir/imap_savebody_test', 1, '1')),
+        [$result, $warnings] = $this->capturingWarnings(
+            static fn () => imap_savebody($connection, '/nonexistent-dir/imap_savebody_test', 1, '1'),
+        );
+
+        $this->assertFalse($result);
+        // The stream layer's wording is PHP's, not the extension's: up to
+        // PHP 8.5 it names the path between the parentheses, from 8.6 it
+        // leaves them empty.
+        $this->assertCount(1, $warnings);
+        $this->assertMatchesRegularExpression(
+            '#^imap_savebody\((/nonexistent-dir/imap_savebody_test)?\): Failed to open stream: No such file or directory$#',
+            $warnings[0],
         );
     }
 
