@@ -1,0 +1,13 @@
+/.env.example      export-ignore
+/.gitattributes    export-ignore
+/.github           export-ignore
+/.gitignore        export-ignore
+/CLAUDE.md         export-ignore
+/CONTRIBUTING.md   export-ignore
+/Dockerfile.parity export-ignore
+/Makefile          export-ignore
+/composer.lock     export-ignore
+/docker-compose.yml export-ignore
+/phpstan.neon      export-ignore
+/phpunit.xml       export-ignore
+/tests             export-ignore
