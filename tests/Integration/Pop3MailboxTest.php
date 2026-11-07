@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 /**
  * POP3 message reading, flags/delete, search, and structure. Greenmail's
  * POP3 service only ever exposes a single shared INBOX (see
@@ -10,6 +12,8 @@ namespace ImapPolyfill\Tests\Integration;
  */
 final class Pop3MailboxTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     public function test_headerinfo_body_and_fetchbody(): void
     {
         $client = self::seedClient();
@@ -253,6 +257,21 @@ final class Pop3MailboxTest extends GreenmailTestCase
         $this->assertSame(1, imap_uid($connection, 1));
 
         imap_close($connection);
+    }
+
+    public function test_a_reopen_that_cannot_log_in_closes_the_stream(): void
+    {
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $spec = self::pop3MailboxSpec('INBOX', '/user=nosuchuser');
+
+        $this->assertSame(
+            [false, ["imap_reopen(): Couldn't re-open stream"]],
+            $this->capturingWarnings(static fn () => imap_reopen($connection, $spec)),
+        );
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('IMAP\Connection is already closed');
+        imap_num_msg($connection);
     }
 
     public function test_close_without_expunge_deletes_nothing(): void

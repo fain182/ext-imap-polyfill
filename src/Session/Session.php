@@ -495,19 +495,26 @@ final class Session
     }
 
     /**
-     * Opens a second connection from the credentials imap_open() kept, hands
-     * it to the existing IMAP\Connection in place of the one it holds, and
+     * Ends the session the IMAP\Connection holds, opens another from the
+     * credentials imap_open() kept, hands it over in place of the old one, and
      * selects the spec's folder on it — the whole of what c-client's
      * mail_open() does to a stream it is reopening elsewhere, and to one
      * whose socket is gone.
      */
     private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, Credentials $credentials, bool $readOnly, int $retries): FolderState|false
     {
+        $this->connection->disconnect();
+
         $backend = $isPop3
             ? self::connectPop3($spec, $mailbox, $credentials, $retries)
             : self::connectImap($spec, $credentials, $retries);
 
+        // mail_open() answers NIL with the old stream already gone, and
+        // php_imap.c leaves the IMAP\Connection without one.
         if ($backend === false) {
+            $this->connection->close();
+            trigger_error("imap_reopen(): Couldn't re-open stream", E_USER_WARNING);
+
             return false;
         }
 

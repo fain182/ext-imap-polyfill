@@ -121,18 +121,25 @@ final class Connection
     }
 
     /**
-     * Swaps in a connection to somewhere else, for an imap_reopen() whose
-     * spec names another server. The old one is closed first: c-client
-     * reuses the stream, so only one connection is ever live.
+     * Ends the session this stream holds, as mail_open() flushes a stream it
+     * cannot recycle before it dials the next one: a POP3 server that locks
+     * the maildrop would refuse a second session while the first is alive.
      */
-    public function reconnect(ConnectionBackend $backend, string $mailboxPrefix, string $user, string $folder, bool $readOnly, bool $anonymous = false): void
+    public function disconnect(): void
     {
         try {
             $this->backend->disconnect();
         } catch (\Throwable) {
             // The old connection is being discarded either way.
         }
+    }
 
+    /**
+     * Swaps in the connection imap_reopen() dialled once disconnect() had
+     * ended the one before it.
+     */
+    public function reconnect(ConnectionBackend $backend, string $mailboxPrefix, string $user, string $folder, bool $readOnly, bool $anonymous = false): void
+    {
         $this->backend = $backend;
         $this->mailboxPrefix = $mailboxPrefix;
         $this->user = $user;
