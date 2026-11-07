@@ -217,4 +217,21 @@ class ImapFetchbodyTest extends GreenmailTestCase
         $this->assertFalse($result);
         $this->assertSame(['imap_fetchbody(): UID does not exist'], $warnings);
     }
+
+    /**
+     * A section past '1' makes the structure probe run first; that probe
+     * must answer an absent uid as absent too.
+     */
+    public function test_warns_for_a_uid_that_does_not_exist_with_a_later_section(): void
+    {
+        $folderName = 'FetchBodyWarnBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("Subject: Present\r\n\r\nBody");
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        [$result, $warnings] = $this->capturingWarnings(fn () => imap_fetchbody($connection, 99999, '2', FT_UID));
+
+        $this->assertFalse($result);
+        $this->assertSame(['imap_fetchbody(): UID does not exist'], $warnings);
+    }
 }

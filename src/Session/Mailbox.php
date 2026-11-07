@@ -146,14 +146,15 @@ final class Mailbox
      * c-client settles that from the uid cache it already holds, before it
      * builds any command, so a uid that is not there is answered as absent
      * however malformed the rest of the call was. This is the same question
-     * asked the other way round: only on the path where the fetch already
-     * failed, so the happy path stays one round trip.
+     * asked the other way round.
      */
-    private function uidIsAbsent(int $uid): bool
+    private function uidIsAbsent(int $uid, FolderState $selection): bool
     {
         // An empty folder has no uids, and asking it for the ones it has is
-        // itself an error on some servers ("1:*" over nothing).
-        if ($this->connection->numMessages() < 1) {
+        // itself an error on some servers ("1:*" over nothing). Counted from
+        // the selection, which follows every untagged EXISTS, an APPEND's
+        // into this folder included, as c-client's nmsgs does.
+        if ($selection->exists < 1) {
             return true;
         }
 
@@ -181,14 +182,16 @@ final class Mailbox
      */
     private function fetchItem(int $messageNum, string $item, UidMode $uidMode, string $function): string|false
     {
-        if ($this->selectionCovering($messageNum, $uidMode, $function) === false) {
+        $selection = $this->selectionCovering($messageNum, $uidMode, $function);
+
+        if ($selection === false) {
             return false;
         }
 
         try {
             $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
-            if ($uidMode === UidMode::Uid && $this->uidIsAbsent($messageNum)) {
+            if ($uidMode === UidMode::Uid && $this->uidIsAbsent($messageNum, $selection)) {
                 return $this->absent($function, $uidMode);
             }
 
@@ -420,6 +423,8 @@ final class Mailbox
         if ($wireSection !== '1' && preg_match('/^\d+(?:\.\d+)*$/', $wireSection) === 1) {
             try {
                 $structure = $this->connection->backend()->fetchBodyStructure($messageNum, $uidMode === UidMode::Uid);
+            } catch (MessageNotFoundException) {
+                return $this->absent($function, $uidMode);
             } catch (\Throwable $e) {
                 ErrorStack::push($e->getMessage());
 
@@ -519,11 +524,13 @@ final class Mailbox
         // settles it: from the counts and the uid table it already holds.
         // Opening first would truncate a file the caller asked to fill with
         // a message that was never there.
-        if ($this->selectionCovering($messageNum, $uidMode, 'imap_savebody') === false) {
+        $selection = $this->selectionCovering($messageNum, $uidMode, 'imap_savebody');
+
+        if ($selection === false) {
             return false;
         }
 
-        if ($uidMode === UidMode::Uid && $this->uidIsAbsent($messageNum)) {
+        if ($uidMode === UidMode::Uid && $this->uidIsAbsent($messageNum, $selection)) {
             return $this->absent('imap_savebody', $uidMode);
         }
 
