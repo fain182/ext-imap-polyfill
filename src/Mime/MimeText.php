@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Mime;
 
+use ImapPolyfill\Support\Diagnostics;
 use ImapPolyfill\Support\ErrorStack;
 
 final class MimeText
@@ -199,20 +200,12 @@ final class MimeText
      * it does not know: c-client looks the name up in its own table and,
      * finding nothing there, hands the bytes back as they are.
      *
-     * iconv reports that same "no such charset" through the error system
-     * instead, so the diagnostic is caught here rather than left for a
-     * user's error handler — one that does not honour "@" would otherwise
-     * see a complaint the real extension never makes.
+     * iconv reports that same "no such charset" as a warning instead, one
+     * the real extension never raises.
      */
     private static function toUtf8From(string $charset, string $bytes): string
     {
-        set_error_handler(static fn (): bool => true);
-
-        try {
-            $converted = iconv($charset, 'UTF-8//IGNORE', $bytes);
-        } finally {
-            restore_error_handler();
-        }
+        $converted = Diagnostics::discard(static fn () => iconv($charset, 'UTF-8//IGNORE', $bytes));
 
         return $converted !== false ? $converted : $bytes;
     }

@@ -7,7 +7,7 @@ use ImapPolyfill\Message\SearchProgram;
 /**
  * The wire operations an \IMAP\Connection needs from whatever protocol it
  * actually speaks. IMAP\Connection owns connection-level state (selected
- * folder, read-only flag, cached counters) and is otherwise a thin delegator
+ * folder, read-only flag, half-open) and is otherwise a thin delegator
  * to one implementation of this interface per protocol (see
  * Connection\Protocol, Connection\Pop3\Pop3Backend).
  */
@@ -106,11 +106,11 @@ interface ConnectionBackend
     public function fetch(array $items, array $ids, ?int $to, UidMode $uidMode): array;
 
     /**
-     * @return array<int, int>
+     * The selected folder's uids, which every question about a uid — which
+     * message it names, whether the folder has it, what "*" stands for — is
+     * asked of.
      */
-    public function getUid(): array;
-
-    public function getMessageNumber(string $uid): int;
+    public function uidTable(): UidTable;
 
     /**
      * @param string[] $args

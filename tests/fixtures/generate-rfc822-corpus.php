@@ -119,7 +119,7 @@ $mimeHeaders = [
 
 $addresses = [];
 foreach ($addressLists as $label => $input) {
-    $parsed = @imap_rfc822_parse_adrlist($input, 'default.host');
+    $parsed = imap_rfc822_parse_adrlist($input, 'default.host');
     $addresses[$label] = [
         'input' => $input,
         'expected' => array_map(static fn (\stdClass $a): array => get_object_vars($a), $parsed),
@@ -128,7 +128,7 @@ foreach ($addressLists as $label => $input) {
 
 $mime = [];
 foreach ($mimeHeaders as $label => $input) {
-    $decoded = @imap_mime_header_decode($input);
+    $decoded = imap_mime_header_decode($input);
     $mime[$label] = [
         'input' => $input,
         'expected' => $decoded === false

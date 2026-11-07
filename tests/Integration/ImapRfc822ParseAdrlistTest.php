@@ -93,7 +93,7 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     #[\PHPUnit\Framework\Attributes\DataProvider('quotedPersonalNames')]
     public function test_quoted_personal_names_match_the_real_extension(string $list, array $expected): void
     {
-        $parsed = @imap_rfc822_parse_adrlist($list, 'default.host');
+        $parsed = imap_rfc822_parse_adrlist($list, 'default.host');
 
         $this->assertCount(count($expected), $parsed);
 
@@ -166,7 +166,7 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     #[\PHPUnit\Framework\Attributes\DataProvider('phrasesWithoutAnAddress')]
     public function test_a_phrase_falls_back_to_being_the_mailbox(string $list, array $expected): void
     {
-        $parsed = @imap_rfc822_parse_adrlist($list, 'default.host');
+        $parsed = imap_rfc822_parse_adrlist($list, 'default.host');
 
         $this->assertCount(count($expected), $parsed);
 
@@ -224,7 +224,7 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     ): void {
         imap_errors();
 
-        $parsed = @imap_rfc822_parse_adrlist($list, 'default.host');
+        $parsed = imap_rfc822_parse_adrlist($list, 'default.host');
 
         $this->assertSame($expected, get_object_vars($parsed[0]));
         $this->assertSame($error === false ? [] : [$error], imap_errors() ?: []);
@@ -242,7 +242,7 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     {
         imap_errors();
 
-        $parsed = @imap_rfc822_parse_adrlist('j(e', 'default.host');
+        $parsed = imap_rfc822_parse_adrlist('j(e', 'default.host');
 
         $this->assertSame(
             [['mailbox' => 'j', 'host' => 'default.host']],
@@ -278,7 +278,7 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     {
         imap_errors();
 
-        $this->assertCount($entries, @imap_rfc822_parse_adrlist($list, 'default.host'));
+        $this->assertCount($entries, imap_rfc822_parse_adrlist($list, 'default.host'));
         $this->assertSame($error === false ? [] : [$error], imap_errors() ?: []);
     }
 
@@ -286,10 +286,10 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     {
         imap_errors();
 
-        $this->assertSame([], @imap_rfc822_parse_adrlist('(only a comment)', 'default.host'));
+        $this->assertSame([], imap_rfc822_parse_adrlist('(only a comment)', 'default.host'));
         $this->assertSame([], imap_errors() ?: []);
 
-        $this->assertSame([], @imap_rfc822_parse_adrlist('(u', 'default.host'));
+        $this->assertSame([], imap_rfc822_parse_adrlist('(u', 'default.host'));
         $this->assertSame(['Unterminated comment: (u'], imap_errors());
     }
 
@@ -302,10 +302,10 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     {
         imap_errors();
 
-        @imap_rfc822_parse_adrlist('"Undisclosed Recipients" <>', 'default.host');
+        imap_rfc822_parse_adrlist('"Undisclosed Recipients" <>', 'default.host');
         $this->assertSame(['Unexpected characters at end of address: <>'], imap_errors());
 
-        @imap_rfc822_parse_adrlist('Undisclosed Recipients <>', 'default.host');
+        imap_rfc822_parse_adrlist('Undisclosed Recipients <>', 'default.host');
         $this->assertSame(['Must use comma to separate addresses: Recipients <>'], imap_errors());
     }
 
@@ -318,7 +318,7 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
      */
     public function test_a_personal_name_needs_no_space_before_the_angle_bracket(): void
     {
-        $parsed = @imap_rfc822_parse_adrlist('=?X-IAS-German?B?bXlHb3Y=?=<info@bla.bla>', 'default.host');
+        $parsed = imap_rfc822_parse_adrlist('=?X-IAS-German?B?bXlHb3Y=?=<info@bla.bla>', 'default.host');
 
         $this->assertCount(1, $parsed);
         $this->assertSame(
@@ -414,7 +414,7 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     {
         imap_errors();
 
-        $parsed = @imap_rfc822_parse_adrlist('Joe (the (big', 'default.host');
+        $parsed = imap_rfc822_parse_adrlist('Joe (the (big', 'default.host');
 
         $this->assertSame(
             [['mailbox' => 'Joe', 'host' => 'default.host']],
@@ -463,7 +463,7 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
     {
         imap_errors();
 
-        $parsed = @imap_rfc822_parse_adrlist($list, 'default.host');
+        $parsed = imap_rfc822_parse_adrlist($list, 'default.host');
 
         $this->assertSame($expected, array_map(get_object_vars(...), $parsed));
         $this->assertSame([$error], imap_errors());
@@ -477,7 +477,7 @@ final class ImapRfc822ParseAdrlistTest extends TestCase
      */
     public function test_a_comment_becomes_the_name_when_the_domain_is_missing(): void
     {
-        $parsed = @imap_rfc822_parse_adrlist('<joe@(the host))example.com>', 'default.host');
+        $parsed = imap_rfc822_parse_adrlist('<joe@(the host))example.com>', 'default.host');
 
         $this->assertSame(
             ['mailbox' => 'joe', 'host' => '.SYNTAX-ERROR.', 'personal' => 'the host'],

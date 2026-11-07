@@ -2,12 +2,16 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 /**
  * imap_getacl()/imap_setacl() against a server that advertises ACL (RFC
  * 4314), which Greenmail does not: it answers BAD to every ACL command.
  */
 final class DovecotAclTest extends DovecotTestCase
 {
+    use CapturesWarnings;
+
     public function test_getacl_reports_the_owners_rights(): void
     {
         $folderName = 'DcAcl'.random_int(10000, 99999);
@@ -58,7 +62,10 @@ final class DovecotAclTest extends DovecotTestCase
     {
         $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
 
-        $this->assertFalse(@imap_getacl($connection, 'NoSuchFolder'.random_int(10000, 99999)));
+        $this->assertSame(
+            [false, ['c-client imap_getacl failed']],
+            $this->capturingWarnings(static fn () => imap_getacl($connection, 'NoSuchFolder'.random_int(10000, 99999))),
+        );
 
         imap_close($connection);
     }

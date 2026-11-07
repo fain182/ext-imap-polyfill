@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -12,6 +13,8 @@ use PHPUnit\Framework\TestCase;
  */
 class ImapMailComposeTest extends TestCase
 {
+    use CapturesWarnings;
+
     public function test_composes_a_simple_text_message(): void
     {
         $result = imap_mail_compose([
@@ -209,7 +212,10 @@ class ImapMailComposeTest extends TestCase
 
     public function test_rejects_a_remail_value_ending_with_a_bare_crlf(): void
     {
-        $this->assertFalse(@imap_mail_compose(['remail' => "X-Orig: relay\r\n"], [['contents.data' => 'x']]));
+        $this->assertSame(
+            [false, ['imap_mail_compose(): header injection attempt in remail']],
+            $this->capturingWarnings(static fn () => imap_mail_compose(['remail' => "X-Orig: relay\r\n"], [['contents.data' => 'x']])),
+        );
     }
 
     public function test_message_rfc822_body_ignores_contents_data(): void
@@ -281,7 +287,10 @@ class ImapMailComposeTest extends TestCase
 
     public function test_returns_false_for_a_multipart_body_without_components(): void
     {
-        $this->assertFalse(@imap_mail_compose([], [['type' => TYPEMULTIPART]]));
+        $this->assertSame(
+            [false, ['imap_mail_compose(): Cannot generate multipart e-mail without components.']],
+            $this->capturingWarnings(static fn () => imap_mail_compose([], [['type' => TYPEMULTIPART]])),
+        );
     }
 
     public function test_returns_false_and_warns_on_a_header_injection_attempt(): void

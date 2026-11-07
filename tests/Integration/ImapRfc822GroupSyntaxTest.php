@@ -149,7 +149,7 @@ final class ImapRfc822GroupSyntaxTest extends TestCase
     {
         imap_errors();
 
-        @imap_rfc822_parse_adrlist($list, 'default.host');
+        imap_rfc822_parse_adrlist($list, 'default.host');
 
         $this->assertSame([$error], imap_errors());
     }
@@ -160,7 +160,7 @@ final class ImapRfc822GroupSyntaxTest extends TestCase
     #[\PHPUnit\Framework\Attributes\DataProvider('addressLists')]
     public function test_group_syntax_matches_the_real_extension(string $list, array $expected): void
     {
-        $parsed = @imap_rfc822_parse_adrlist($list, 'default.host');
+        $parsed = imap_rfc822_parse_adrlist($list, 'default.host');
 
         $this->assertCount(count($expected), $parsed);
 

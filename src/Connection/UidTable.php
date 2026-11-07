@@ -9,23 +9,33 @@ namespace ImapPolyfill\Connection;
  */
 final class UidTable
 {
-    /** @var list<int> */
-    private array $uids;
-
     /** @var array<int, int> uid => msgno */
     private array $msgnos;
 
-    /** @param array<int, int> $byMsgno msgno => uid, as a backend reports it */
-    public function __construct(array $byMsgno)
+    /** @param array<int, int> $byMsgno msgno => uid */
+    public function __construct(private readonly array $byMsgno)
     {
-        $this->uids = array_values($byMsgno);
         $this->msgnos = array_flip($byMsgno);
+    }
+
+    /**
+     * @throws MessageNotFoundException
+     */
+    public function uidOf(int $msgno): int
+    {
+        return $this->byMsgno[$msgno] ?? throw new MessageNotFoundException("Message {$msgno} not found");
+    }
+
+    /** @return array<int, int> msgno => uid, in message-number order */
+    public function byMsgno(): array
+    {
+        return $this->byMsgno;
     }
 
     /** @return list<int> */
     public function uids(): array
     {
-        return $this->uids;
+        return array_values($this->byMsgno);
     }
 
     public function holds(int $uid): bool
@@ -45,6 +55,6 @@ final class UidTable
      */
     public function highest(): int
     {
-        return $this->uids === [] ? 0 : max($this->uids);
+        return $this->byMsgno === [] ? 0 : max($this->byMsgno);
     }
 }

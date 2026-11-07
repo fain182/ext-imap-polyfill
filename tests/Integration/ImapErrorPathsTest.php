@@ -4,6 +4,7 @@ namespace ImapPolyfill\Tests\Integration;
 
 use PHPUnit\Framework\Attributes\Group;
 
+use ImapPolyfill\Tests\CapturesWarnings;
 use ImapPolyfill\Tests\ResetsErrorStack;
 
 /**
@@ -14,6 +15,7 @@ use ImapPolyfill\Tests\ResetsErrorStack;
  */
 class ImapErrorPathsTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
     use ResetsErrorStack;
 
     public function test_imap_num_msg_returns_the_cached_count_when_the_folder_disappears(): void
@@ -46,14 +48,20 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $connection = $this->openConnectionToFolderThatThenDisappears('FetchHeaderErrBox'.uniqid());
 
-        $this->assertFalse(imap_fetchheader($connection, 1));
+        $this->assertSame(
+            [false, ['imap_fetchheader(): Bad message number']],
+            $this->capturingWarnings(static fn () => imap_fetchheader($connection, 1)),
+        );
     }
 
     public function test_imap_headerinfo_returns_false_when_the_folder_disappears(): void
     {
         $connection = $this->openConnectionToFolderThatThenDisappears('HeaderinfoErrBox'.uniqid());
 
-        $this->assertFalse(imap_headerinfo($connection, 1));
+        $this->assertSame(
+            [false, ['imap_headerinfo(): Bad message number']],
+            $this->capturingWarnings(static fn () => imap_headerinfo($connection, 1)),
+        );
     }
 
     public function test_imap_fetch_overview_returns_empty_array_when_the_folder_disappears(): void
@@ -78,14 +86,20 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $connection = $this->openConnectionToFolderThatThenDisappears('StructErrBox'.uniqid());
 
-        $this->assertFalse(imap_fetchstructure($connection, 1));
+        $this->assertSame(
+            [false, ['imap_fetchstructure(): Bad message number']],
+            $this->capturingWarnings(static fn () => imap_fetchstructure($connection, 1)),
+        );
     }
 
     public function test_imap_fetchbody_returns_false_when_the_folder_disappears(): void
     {
         $connection = $this->openConnectionToFolderThatThenDisappears('FetchBodyErrBox'.uniqid());
 
-        $this->assertFalse(imap_fetchbody($connection, 1, '1'));
+        $this->assertSame(
+            [false, ['imap_fetchbody(): Bad message number']],
+            $this->capturingWarnings(static fn () => imap_fetchbody($connection, 1, '1')),
+        );
     }
 
     public function test_imap_list_returns_false_when_nothing_matches(): void
@@ -190,7 +204,10 @@ class ImapErrorPathsTest extends GreenmailTestCase
     {
         $connection = $this->openConnectionToFolderThatThenDisappears('UidConnErrBox'.uniqid());
 
-        $this->assertFalse(imap_uid($connection, 1));
+        $this->assertSame(
+            [false, ['imap_uid(): Bad message number']],
+            $this->capturingWarnings(static fn () => imap_uid($connection, 1)),
+        );
     }
 
     public function test_imap_msgno_returns_zero_when_the_folder_disappears(): void

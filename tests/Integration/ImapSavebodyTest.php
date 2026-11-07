@@ -38,7 +38,9 @@ class ImapSavebodyTest extends GreenmailTestCase
             $this->assertTrue(imap_savebody($connection, $path, 1, '1'));
             $this->assertSame('Hello body', file_get_contents($path));
         } finally {
-            @unlink($path);
+            if (is_file($path)) {
+                unlink($path);
+            }
         }
     }
 
@@ -78,7 +80,9 @@ class ImapSavebodyTest extends GreenmailTestCase
             $this->assertStringContainsString('Subject: Whole', $saved);
             $this->assertStringContainsString('Entire body', $saved);
         } finally {
-            @unlink($path);
+            if (is_file($path)) {
+                unlink($path);
+            }
         }
     }
 
@@ -101,7 +105,9 @@ class ImapSavebodyTest extends GreenmailTestCase
             $this->assertTrue(imap_savebody($connection, $path, 1, '0'));
             $this->assertSame("Subject: Hi\r\n", file_get_contents($path));
         } finally {
-            @unlink($path);
+            if (is_file($path)) {
+                unlink($path);
+            }
         }
     }
 
@@ -120,7 +126,9 @@ class ImapSavebodyTest extends GreenmailTestCase
             $this->assertTrue(imap_savebody($connection, $path, $survivorUid, '1', FT_UID));
             $this->assertSame('Survivor body', file_get_contents($path));
         } finally {
-            @unlink($path);
+            if (is_file($path)) {
+                unlink($path);
+            }
         }
     }
 
@@ -155,7 +163,9 @@ class ImapSavebodyTest extends GreenmailTestCase
             $this->assertTrue(imap_savebody($connection, $path, $uid, '1', FT_UID));
             $this->assertSame('Appended body', file_get_contents($path));
         } finally {
-            @unlink($path);
+            if (is_file($path)) {
+                unlink($path);
+            }
         }
     }
 
@@ -167,7 +177,19 @@ class ImapSavebodyTest extends GreenmailTestCase
 
         $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
-        $this->assertFalse(@imap_savebody($connection, '/nonexistent-dir/imap_savebody_test', 1, '1'));
+        [$result, $warnings] = $this->capturingWarnings(
+            static fn () => imap_savebody($connection, '/nonexistent-dir/imap_savebody_test', 1, '1'),
+        );
+
+        $this->assertFalse($result);
+        // The stream layer's wording is PHP's, not the extension's: up to
+        // PHP 8.5 it names the path between the parentheses, from 8.6 it
+        // leaves them empty.
+        $this->assertCount(1, $warnings);
+        $this->assertMatchesRegularExpression(
+            '#^imap_savebody\((/nonexistent-dir/imap_savebody_test)?\): Failed to open stream: No such file or directory$#',
+            $warnings[0],
+        );
     }
 
     public function test_throws_value_error_for_a_non_positive_message_number(): void

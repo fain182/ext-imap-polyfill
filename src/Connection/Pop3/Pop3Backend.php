@@ -4,6 +4,8 @@ namespace ImapPolyfill\Connection\Pop3;
 
 use ImapPolyfill\Connection\ConnectionBackend;
 use ImapPolyfill\Connection\FolderState;
+use ImapPolyfill\Connection\MessageCache;
+use ImapPolyfill\Connection\UidTable;
 use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\SearchProgram;
@@ -26,31 +28,36 @@ final class Pop3Backend implements ConnectionBackend
     private const FAKE_INTERNAL_DATE = ' 1-Jan-1970 00:00:00 +0000';
 
     /**
-     * @var array<int, int> msgno => uid, refreshed on every select
+     * The session's messages, filled from STAT once and then edited only by
+     * expunge(): a POP3 server keeps its own numbering for the whole session,
+     * DELE or not, so nothing it reports later could renumber them.
      *
-     * c-client's POP3 driver numbers messages 1..n and uses that number as
-     * the uid; it never reads the server's UIDL string. Taking the UIDL
-     * instead looks equivalent against a server whose UIDL happens to be the
-     * message number (Greenmail answers "1 1", "2 2"), and falls apart
-     * against one whose UIDL is an opaque token: Dovecot's
-     * "000000016a759b25" cast to int is 16, so imap_uid() invented a number
-     * and imap_msgno() could not find it again.
+     * c-client's POP3 driver uses the server's message number as the uid; it
+     * never reads the server's UIDL string. Taking the UIDL instead looks
+     * equivalent against a server whose UIDL happens to be the message number
+     * (Greenmail answers "1 1", "2 2"), and falls apart against one whose UIDL
+     * is an opaque token: Dovecot's "000000016a759b25" cast to int is 16, so
+     * imap_uid() invented a number and imap_msgno() could not find it again.
+     * Once an expunge has renumbered the messages, the uid is also the number
+     * every command to the server still has to name the message by.
      */
-    private array $uidByMsgno = [];
+    private readonly MessageCache $messages;
 
-    /** @var array<int, string[]> msgno => IMAP flag names set on it, session-scoped */
+    /** pop3.c's uid_last: the session's highest server number, which an expunge does not lower. */
+    private int $uidLast = 0;
+
+    /** @var array<int, string[]> uid => IMAP flag names set on it, session-scoped */
     private array $flags = [];
 
-    /** @var array<int, RawMessage> RETR cache for the lifetime of the connection */
+    /** @var array<int, RawMessage> uid => RETR answer, for the lifetime of the connection */
     private array $rawMessageCache = [];
-
-    private int $exists = 0;
 
     public function __construct(
         private readonly Pop3Protocol $protocol,
         private readonly string $host,
         private readonly string $mailboxSpec,
     ) {
+        $this->messages = new MessageCache();
     }
 
     public function driverName(): string
@@ -82,16 +89,22 @@ final class Pop3Backend implements ConnectionBackend
             throw new \RuntimeException("Can't open mailbox {$this->mailboxSpec}: invalid remote specification");
         }
 
-        $this->exists = $this->protocol->stat();
-        $this->uidByMsgno = $this->exists === 0 ? [] : array_combine(
-            range(1, $this->exists),
-            range(1, $this->exists),
-        );
+        if ($this->messages->count() === null) {
+            $count = $this->protocol->stat();
+            $this->uidLast = $count;
+            $this->messages->exists($count);
+
+            for ($msgno = 1; $msgno <= $count; $msgno++) {
+                $this->messages->learnUid($msgno, $msgno);
+            }
+        }
+
+        $count = (int) $this->messages->count();
 
         // POP3 has no concept of a message having been seen in a previous
         // session; every message the server still has is "recent" (matches
         // real ext-imap's observed imap_status()/imap_check() output).
-        return new FolderState($this->exists, $this->exists);
+        return new FolderState($count, $count);
     }
 
     public function host(): string
@@ -99,11 +112,19 @@ final class Pop3Backend implements ConnectionBackend
         return $this->host;
     }
 
+    /**
+     * DELE goes out here and not when \Deleted is set, as pop3_expunge()
+     * sends it: until then a deleted message is still there to read, and a
+     * session closed without expunging deletes nothing at all.
+     */
     public function expunge(): void
     {
-        // No-op: DELE already removes the message from STAT/LIST/UIDL as
-        // soon as store() issues it (RFC1939), there is no separate wire
-        // command left to send.
+        foreach (array_reverse($this->messages->uidTable()->byMsgno(), true) as $msgno => $uid) {
+            if (in_array('\\Deleted', $this->flags[$uid] ?? [], true)) {
+                $this->protocol->dele($uid);
+                $this->messages->expunged($msgno);
+            }
+        }
     }
 
     public function disconnect(): void
@@ -143,16 +164,16 @@ final class Pop3Backend implements ConnectionBackend
 
     public function fetchBodyStructure(int $messageNum, bool $byUid): array
     {
-        $msgno = $byUid ? $this->resolveMsgno($messageNum) : $messageNum;
+        $uid = $byUid ? $this->knownUid($messageNum) : $this->messages->uidTable()->uidOf($messageNum);
 
-        return Pop3MimeStructure::parse($this->rawMessage($msgno));
+        return Pop3MimeStructure::parse($this->rawMessage($uid));
     }
 
     public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array
     {
         $ids = [];
-        foreach ($this->uidByMsgno as $msgno => $uid) {
-            if (Pop3SearchEvaluator::matches($program, $this->rawMessage($msgno), $this->flags[$msgno] ?? [])) {
+        foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
+            if (Pop3SearchEvaluator::matches($program, $this->rawMessage($uid), $this->flags[$uid] ?? [])) {
                 $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
         }
@@ -189,12 +210,12 @@ final class Pop3Backend implements ConnectionBackend
     {
         $result = [];
         foreach ($ids as $id) {
-            $msgno = $uidMode === self::UID_MODE ? $this->resolveMsgno($id) : $id;
-            $message = $this->rawMessage($msgno);
+            $uid = $uidMode === self::UID_MODE ? $this->knownUid($id) : $this->messages->uidTable()->uidOf($id);
+            $message = $this->rawMessage($uid);
 
             $entry = [];
             foreach ($items as $item) {
-                $entry[$item] = $this->fetchItem($item, $msgno, $message);
+                $entry[$item] = $this->fetchItem($item, $uid, $message);
             }
 
             // Mirrors the IMAP backend's fetch() response shape: a single
@@ -207,14 +228,15 @@ final class Pop3Backend implements ConnectionBackend
         return $result;
     }
 
-    private function fetchItem(string $item, int $msgno, RawMessage $message): mixed
+    private function fetchItem(string $item, int $uid, RawMessage $message): mixed
     {
         return match (true) {
-            $item === 'FLAGS' => $this->flags[$msgno] ?? [],
+            // pop3_open() marks every message of the session recent.
+            $item === 'FLAGS' => ['\\Recent', ...($this->flags[$uid] ?? [])],
             $item === 'INTERNALDATE' => self::FAKE_INTERNAL_DATE,
             $item === 'RFC822.SIZE' => (string) strlen($message->getRaw()),
             $item === 'RFC822.HEADER' => $message->getRawHeader()."\r\n",
-            $item === 'UID' => $this->uidByMsgno[$msgno] ?? '',
+            $item === 'UID' => (string) $uid,
             str_starts_with($item, 'BODY.PEEK[') || str_starts_with($item, 'BODY[') => $this->fetchSection($item, $message),
             // Not a condition a caller can be in: every item the polyfill
             // asks for has an arm above. Answering '' for the rest would
@@ -240,14 +262,9 @@ final class Pop3Backend implements ConnectionBackend
         };
     }
 
-    public function getUid(): array
+    public function uidTable(): UidTable
     {
-        return $this->uidByMsgno;
-    }
-
-    public function getMessageNumber(string $uid): int
-    {
-        return $this->resolveMsgno($uid);
+        return $this->messages->uidTable();
     }
 
     public function store(string $command, array $args): void
@@ -257,9 +274,14 @@ final class Pop3Backend implements ConnectionBackend
         $adding = str_starts_with($action, '+');
         $byUid = str_starts_with($command, 'UID');
 
-        foreach (MessageSequence::parse($sequence)->messageNumbers($this->exists) as $id) {
-            $msgno = $byUid ? $this->resolveMsgno((string) $id) : $id;
-            $current = $this->flags[$msgno] ?? [];
+        $set = MessageSequence::parse($sequence);
+        $ids = $byUid
+            ? $set->uids($this->messages->uidTable())
+            : $set->messageNumbers((int) $this->messages->count());
+
+        foreach ($ids as $id) {
+            $uid = $byUid ? $id : $this->messages->uidTable()->uidOf($id);
+            $current = $this->flags[$uid] ?? [];
 
             foreach ($flagNames as $flag) {
                 $current = $adding
@@ -267,12 +289,7 @@ final class Pop3Backend implements ConnectionBackend
                     : array_values(array_diff($current, [$flag]));
             }
 
-            $this->flags[$msgno] = $current;
-
-            if ($adding && in_array('\\Deleted', $flagNames, true)) {
-                $this->protocol->dele($msgno);
-                $this->exists--;
-            }
+            $this->flags[$uid] = $current;
         }
     }
 
@@ -292,8 +309,8 @@ final class Pop3Backend implements ConnectionBackend
     }
 
     /**
-     * POP3 has no CHECK, and this backend re-STATs on every select anyway,
-     * so its counts are never stale to begin with.
+     * POP3 has no CHECK, and nothing a server says during a session can
+     * change what the session holds, so there is no count to bring up to date.
      */
     public function check(): void
     {
@@ -308,17 +325,19 @@ final class Pop3Backend implements ConnectionBackend
     public function folderStatus(string $folder, array $items): array
     {
         $unseen = 0;
-        foreach ($this->uidByMsgno as $msgno => $uid) {
-            if (!in_array('\\Seen', $this->flags[$msgno] ?? [], true)) {
+        foreach ($this->messages->uidTable()->uids() as $uid) {
+            if (!in_array('\\Seen', $this->flags[$uid] ?? [], true)) {
                 $unseen++;
             }
         }
 
+        $count = (int) $this->messages->count();
+
         return [
-            'messages' => $this->exists,
-            'recent' => $this->exists,
+            'messages' => $count,
+            'recent' => $count,
             'unseen' => $unseen,
-            'uidnext' => $this->exists + 1,
+            'uidnext' => $this->uidLast + 1,
             'uidvalidity' => 1,
         ];
     }
@@ -348,19 +367,20 @@ final class Pop3Backend implements ConnectionBackend
         throw new \RuntimeException('Quota not available on this IMAP server');
     }
 
-    private function rawMessage(int $msgno): RawMessage
+    private function rawMessage(int $uid): RawMessage
     {
-        return $this->rawMessageCache[$msgno] ??= new RawMessage($this->protocol->retr($msgno));
+        return $this->rawMessageCache[$uid] ??= new RawMessage($this->protocol->retr($uid));
     }
 
-    private function resolveMsgno(int|string $uid): int
+    /**
+     * @throws MessageNotFoundException
+     */
+    private function knownUid(int $uid): int
     {
-        $msgno = (int) $uid;
-
-        if (!isset($this->uidByMsgno[$msgno])) {
+        if (!$this->messages->uidTable()->holds($uid)) {
             throw new MessageNotFoundException("Message with uid {$uid} not found");
         }
 
-        return $msgno;
+        return $uid;
     }
 }

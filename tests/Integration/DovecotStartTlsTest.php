@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 /**
  * The upgrade path, which needs a server that advertises one: Greenmail
  * announces nothing on its cleartext port, so this fixture carries the
@@ -16,6 +18,8 @@ namespace ImapPolyfill\Tests\Integration;
  */
 final class DovecotStartTlsTest extends DovecotTestCase
 {
+    use CapturesWarnings;
+
     private static function spec(string $switches, string $folder = 'INBOX'): string
     {
         return sprintf('{%s:%d/imap%s}%s', self::host(), self::port(), $switches, $folder);
@@ -64,9 +68,7 @@ final class DovecotStartTlsTest extends DovecotTestCase
      */
     public function test_the_upgrade_validates_the_certificate_unless_told_not_to(): void
     {
-        $connection = @imap_open(self::spec('/tls-sslv23'), self::user(), self::password());
-
-        $this->assertFalse($connection);
+        $this->assertOpenFails(self::spec('/tls-sslv23'), self::user(), self::password());
         $this->assertIsString(imap_last_error());
     }
 
@@ -141,7 +143,7 @@ final class DovecotStartTlsTest extends DovecotTestCase
 
     public function test_pop3_refuses_the_self_signed_certificate_without_novalidate_cert(): void
     {
-        $this->assertFalse(@imap_open(self::pop3Spec('/tls-sslv23'), self::user(), self::password()));
+        $this->assertOpenFails(self::pop3Spec('/tls-sslv23'), self::user(), self::password());
         $this->assertIsString(imap_last_error());
     }
 }

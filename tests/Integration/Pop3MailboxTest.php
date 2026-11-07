@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 /**
  * POP3 message reading, flags/delete, search, and structure. Greenmail's
  * POP3 service only ever exposes a single shared INBOX (see
@@ -10,6 +12,8 @@ namespace ImapPolyfill\Tests\Integration;
  */
 final class Pop3MailboxTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     public function test_headerinfo_body_and_fetchbody(): void
     {
         $client = self::seedClient();
@@ -153,12 +157,145 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    public function test_delete_keeps_the_numbering_until_expunge(): void
+    {
+        $client = self::seedClient();
+        $folder = $client->getFolder('INBOX');
+        $folder->appendMessage("Subject: Pop3 Keep A\r\n\r\nBody");
+        $folder->appendMessage("Subject: Pop3 Keep B\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertTrue(imap_delete($connection, (string) ($count - 1)));
+        $this->assertSame($count, imap_num_msg($connection));
+        $this->assertStringContainsString('Pop3 Keep B', (string) imap_fetchheader($connection, $count));
+
+        imap_close($connection);
+    }
+
+    public function test_expunge_renumbers_and_keeps_the_server_number_as_the_uid(): void
+    {
+        $client = self::seedClient();
+        $folder = $client->getFolder('INBOX');
+        $folder->appendMessage("Subject: Pop3 Renumber A\r\n\r\nBody");
+        $folder->appendMessage("Subject: Pop3 Renumber B\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        imap_delete($connection, (string) ($count - 1));
+        imap_expunge($connection);
+
+        $this->assertSame($count - 1, imap_num_msg($connection));
+        $this->assertStringContainsString('Pop3 Renumber B', (string) imap_fetchheader($connection, $count - 1));
+        $this->assertSame($count, imap_uid($connection, $count - 1));
+        $this->assertSame($count - 1, imap_msgno($connection, $count));
+
+        imap_close($connection);
+    }
+
+    public function test_uidnext_stays_past_the_highest_server_number_after_an_expunge(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Pop3 Uidnext\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        imap_delete($connection, '1');
+        imap_expunge($connection);
+
+        $status = imap_status($connection, self::pop3MailboxSpec(), SA_UIDNEXT);
+        $this->assertSame($count + 1, $status->uidnext);
+
+        imap_close($connection);
+    }
+
+    public function test_every_message_is_recent_for_the_session(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Pop3 Recent\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame('N', imap_headerinfo($connection, $count)->Recent);
+        imap_setflag_full($connection, (string) $count, '\\Seen');
+        $this->assertSame('R', imap_headerinfo($connection, $count)->Recent);
+        $this->assertSame(1, imap_fetch_overview($connection, (string) $count)[0]->recent);
+
+        imap_close($connection);
+    }
+
+    public function test_reopen_starts_a_session_that_forgets_the_flags(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Pop3 Reopen Seen\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+        imap_setflag_full($connection, (string) $count, '\\Seen');
+        $this->assertSame('R', imap_headerinfo($connection, $count)->Recent);
+
+        $this->assertTrue(imap_reopen($connection, self::pop3MailboxSpec()));
+        $this->assertSame('N', imap_headerinfo($connection, $count)->Recent);
+
+        imap_close($connection);
+    }
+
+    public function test_reopen_after_an_expunge_numbers_the_messages_afresh(): void
+    {
+        $folder = self::seedClient()->getFolder('INBOX');
+        $folder->appendMessage("Subject: Pop3 Reopen A\r\n\r\nBody");
+        $folder->appendMessage("Subject: Pop3 Reopen B\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+        imap_delete($connection, '1');
+        imap_expunge($connection);
+
+        $this->assertTrue(imap_reopen($connection, self::pop3MailboxSpec()));
+        $this->assertSame($count - 1, imap_num_msg($connection));
+        $this->assertSame(1, imap_uid($connection, 1));
+
+        imap_close($connection);
+    }
+
+    public function test_a_reopen_that_cannot_log_in_closes_the_stream(): void
+    {
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $spec = self::pop3MailboxSpec('INBOX', '/user=nosuchuser');
+
+        $this->assertSame(
+            [false, ["imap_reopen(): Couldn't re-open stream"]],
+            $this->capturingWarnings(static fn () => imap_reopen($connection, $spec)),
+        );
+
+        $this->expectException(\ValueError::class);
+        $this->expectExceptionMessage('IMAP\Connection is already closed');
+        imap_num_msg($connection);
+    }
+
+    public function test_close_without_expunge_deletes_nothing(): void
+    {
+        $client = self::seedClient();
+        $client->getFolder('INBOX')->appendMessage("Subject: Pop3 Survivor\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+        imap_delete($connection, (string) $count);
+        imap_close($connection);
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $this->assertSame($count, imap_num_msg($connection));
+
+        imap_close($connection);
+    }
+
     public function test_mail_copy_and_move_fail(): void
     {
         $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
-        $this->assertFalse(@imap_mail_copy($connection, '1', 'INBOX.Other'));
-        $this->assertFalse(@imap_mail_move($connection, '1', 'INBOX.Other'));
+        $this->assertFalse(imap_mail_copy($connection, '1', 'INBOX.Other'));
+        $this->assertFalse(imap_mail_move($connection, '1', 'INBOX.Other'));
 
         imap_close($connection);
     }
@@ -167,7 +304,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
     {
         $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
-        $this->assertFalse(@imap_append($connection, 'INBOX', "Subject: x\r\n\r\nbody"));
+        $this->assertFalse(imap_append($connection, 'INBOX', "Subject: x\r\n\r\nbody"));
 
         imap_close($connection);
     }
@@ -176,9 +313,9 @@ final class Pop3MailboxTest extends GreenmailTestCase
     {
         $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
 
-        $this->assertFalse(@imap_createmailbox($connection, 'INBOX.Sub'));
-        $this->assertFalse(@imap_deletemailbox($connection, 'INBOX.Sub'));
-        $this->assertFalse(@imap_renamemailbox($connection, 'INBOX', 'INBOX.Renamed'));
+        $this->assertFalse(imap_createmailbox($connection, 'INBOX.Sub'));
+        $this->assertFalse(imap_deletemailbox($connection, 'INBOX.Sub'));
+        $this->assertFalse(imap_renamemailbox($connection, 'INBOX', 'INBOX.Renamed'));
 
         imap_close($connection);
     }

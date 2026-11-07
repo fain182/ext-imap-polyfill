@@ -30,16 +30,6 @@ final class Connection
      */
     private bool $expungeOnClose = false;
 
-    /**
-     * Mirrors c-client's stream->nmsgs: imap_num_msg() is a cached client-side
-     * read, not a live query, so it must keep returning the last known count
-     * (not false/0) if the connection later breaks.
-     */
-    private int $cachedNumMsg = 0;
-
-    /** Mirrors c-client's stream->recent; see $cachedNumMsg. */
-    private int $cachedNumRecent = 0;
-
     private bool $halfOpen = false;
 
     /**
@@ -131,18 +121,25 @@ final class Connection
     }
 
     /**
-     * Swaps in a connection to somewhere else, for an imap_reopen() whose
-     * spec names another server. The old one is closed first: c-client
-     * reuses the stream, so only one connection is ever live.
+     * Ends the session this stream holds, as mail_open() flushes a stream it
+     * cannot recycle before it dials the next one: a POP3 server that locks
+     * the maildrop would refuse a second session while the first is alive.
      */
-    public function reconnect(ConnectionBackend $backend, string $mailboxPrefix, string $user, string $folder, bool $readOnly, bool $anonymous = false): void
+    public function disconnect(): void
     {
         try {
             $this->backend->disconnect();
         } catch (\Throwable) {
             // The old connection is being discarded either way.
         }
+    }
 
+    /**
+     * Swaps in the connection imap_reopen() dialled once disconnect() had
+     * ended the one before it.
+     */
+    public function reconnect(ConnectionBackend $backend, string $mailboxPrefix, string $user, string $folder, bool $readOnly, bool $anonymous = false): void
+    {
         $this->backend = $backend;
         $this->mailboxPrefix = $mailboxPrefix;
         $this->user = $user;
@@ -214,22 +211,6 @@ final class Connection
     public function close(): void
     {
         $this->closed = true;
-    }
-
-    public function numMessages(): int
-    {
-        return $this->cachedNumMsg;
-    }
-
-    public function numRecent(): int
-    {
-        return $this->cachedNumRecent;
-    }
-
-    public function rememberCounts(int $numMessages, int $numRecent): void
-    {
-        $this->cachedNumMsg = $numMessages;
-        $this->cachedNumRecent = $numRecent;
     }
 
     /**

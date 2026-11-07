@@ -2,10 +2,13 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
 use PHPUnit\Framework\Attributes\Group;
 
 class ImapGetQuotaTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     /**
      * Sets the quota it then reads; Dovecot's quota is read-only,
      * configured server side.
@@ -37,6 +40,9 @@ class ImapGetQuotaTest extends GreenmailTestCase
         $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
         imap_set_quota($connection, 'INBOX', 768);
 
-        $this->assertFalse(@imap_get_quota($connection, 'NoSuchRoot'.random_int(10000, 99999)));
+        $this->assertSame(
+            [false, ['imap_get_quota(): C-client imap_getquota failed']],
+            $this->capturingWarnings(static fn () => imap_get_quota($connection, 'NoSuchRoot'.random_int(10000, 99999))),
+        );
     }
 }

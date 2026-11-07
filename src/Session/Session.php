@@ -97,8 +97,7 @@ final class Session
         }
 
         try {
-            $status = $connection->selectOrExamine();
-            $connection->rememberCounts($status->exists, $status->recent);
+            $connection->selectOrExamine();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -243,39 +242,34 @@ final class Session
     public function numMessages(): int|false
     {
         $this->connection->ensureOpen();
-        $this->refreshCounts();
 
-        return $this->connection->numMessages();
+        return $this->counts()->exists;
     }
 
     public function numRecent(): int|false
     {
         $this->connection->ensureOpen();
-        $this->refreshCounts();
 
-        return $this->connection->numRecent();
+        return $this->counts()->recent;
     }
 
     /**
-     * Brings the cached counters up to date, and leaves them alone when the
-     * connection has nothing to say.
-     *
-     * ext-imap's imap_num_msg/imap_num_recent are cached client-side reads
-     * (c-client's stream->nmsgs, stream->recent), not live queries: a
-     * connection that has since broken leaves the last known count standing
-     * rather than turning the read into false.
+     * ext-imap's imap_num_msg/imap_num_recent are client-side reads
+     * (c-client's stream->nmsgs, stream->recent), not live queries: the
+     * message cache answers them without the wire once the folder is
+     * selected, so a connection that has since broken leaves the count it
+     * last reported standing. Only a selection that cannot be made at all
+     * is a failure to report, and then there is no mailbox to count.
      */
-    private function refreshCounts(): void
+    private function counts(): FolderState
     {
         try {
-            $status = $this->connection->selectOrExamine();
+            return $this->connection->selectOrExamine();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
-            return;
+            return new FolderState(0, 0);
         }
-
-        $this->connection->rememberCounts($status->exists, $status->recent);
     }
 
     public function check(): \stdClass|false
@@ -452,14 +446,16 @@ final class Session
 
         // A different login is a different session, whatever the host:
         // mail_usable_network_stream() will not recycle a stream across one.
-        if ($prefix !== $this->connection->mailboxPrefix() || $credentials->user !== $this->connection->user()) {
+        // Nor does mail_open() recycle a POP3 stream at all, its driver
+        // lacking DR_RECYCLE: the session is closed, committing the DELEs an
+        // expunge sent, and a new one numbers the messages afresh with no
+        // flags set.
+        if ($isPop3 || $prefix !== $this->connection->mailboxPrefix() || $credentials->user !== $this->connection->user()) {
             $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $retries);
 
             if ($status === false) {
                 return false;
             }
-
-            $this->connection->rememberCounts($status->exists, $status->recent);
 
             if ($flags !== 0) {
                 $this->connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
@@ -487,7 +483,6 @@ final class Session
         }
 
         $this->connection->reselect($spec->folder, $readOnly);
-        $this->connection->rememberCounts($status->exists, $status->recent);
 
         // Mirrors php_imap.c: a nonzero $flags overrides the remembered
         // CL_EXPUNGE state outright (even clearing it if CL_EXPUNGE isn't in
@@ -500,19 +495,26 @@ final class Session
     }
 
     /**
-     * Opens a second connection from the credentials imap_open() kept, hands
-     * it to the existing IMAP\Connection in place of the one it holds, and
+     * Ends the session the IMAP\Connection holds, opens another from the
+     * credentials imap_open() kept, hands it over in place of the old one, and
      * selects the spec's folder on it — the whole of what c-client's
      * mail_open() does to a stream it is reopening elsewhere, and to one
      * whose socket is gone.
      */
     private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, Credentials $credentials, bool $readOnly, int $retries): FolderState|false
     {
+        $this->connection->disconnect();
+
         $backend = $isPop3
             ? self::connectPop3($spec, $mailbox, $credentials, $retries)
             : self::connectImap($spec, $credentials, $retries);
 
+        // mail_open() answers NIL with the old stream already gone, and
+        // php_imap.c leaves the IMAP\Connection without one.
         if ($backend === false) {
+            $this->connection->close();
+            trigger_error("imap_reopen(): Couldn't re-open stream", E_USER_WARNING);
+
             return false;
         }
 

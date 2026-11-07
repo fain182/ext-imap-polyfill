@@ -16,6 +16,7 @@ use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Message\SortCriterion;
 use ImapPolyfill\Message\SortKey;
 use ImapPolyfill\Message\ThreadBuilder;
+use ImapPolyfill\Support\Diagnostics;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -159,15 +160,11 @@ final class Mailbox
         }
 
         try {
-            $this->connection->backend()->getMessageNumber((string) $uid);
-        } catch (MessageNotFoundException) {
-            return true;
+            return !$this->connection->backend()->uidTable()->holds($uid);
         } catch (\Throwable) {
             // No answer either way: the failure that got us here stands.
             return false;
         }
-
-        return false;
     }
 
     /**
@@ -298,7 +295,7 @@ final class Mailbox
             // count it holds for message numbers, and against the uids it
             // holds for uids, which is why a uid range costs the folder
             // rather than the range.
-            $folder = new UidTable($uidMode === UidMode::Uid ? $protocol->getUid() : []);
+            $folder = $uidMode === UidMode::Uid ? $protocol->uidTable() : new UidTable([]);
             $ids = $uidMode === UidMode::Uid
                 ? $set->uids($folder)
                 : $set->messageNumbers($exists);
@@ -538,7 +535,15 @@ final class Mailbox
         if ($isResource) {
             $handle = $file;
         } else {
-            $handle = @fopen((string) $file, 'wb');
+            // php_stream_open_wrapper() is called with REPORT_ERRORS, so the
+            // extension reports a path it cannot open the way fopen() does,
+            // under its own name.
+            [$handle, $warnings] = Diagnostics::collect(static fn () => fopen((string) $file, 'wb'));
+
+            foreach ($warnings as $warning) {
+                trigger_error((string) preg_replace('/^fopen\(/', 'imap_savebody(', $warning), E_USER_WARNING);
+            }
+
             if ($handle === false) {
                 return false;
             }
@@ -654,14 +659,12 @@ final class Mailbox
                 return false;
             }
 
-            $uids = $this->connection->backend()->getUid();
+            return $this->connection->backend()->uidTable()->uidOf($messageNum);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
             return false;
         }
-
-        return (int) $uids[$messageNum];
     }
 
     public function msgno(int $messageUid): int
@@ -679,9 +682,9 @@ final class Mailbox
         }
 
         try {
-            return (int) $this->connection->backend()->getMessageNumber((string) $messageUid);
-        } catch (MessageNotFoundException) {
-            return 0;
+            $folder = $this->connection->backend()->uidTable();
+
+            return $folder->holds($messageUid) ? $folder->msgnoOf($messageUid) : 0;
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -930,7 +933,7 @@ final class Mailbox
             $exists = $status->exists;
 
             if ($exists === 0) {
-                return false;
+                return self::emptyTree();
             }
 
             // c-client threads on the server whenever it advertises the
@@ -949,7 +952,7 @@ final class Mailbox
                 if ($groups !== null) {
                     $tree = ThreadBuilder::flatten(ThreadBuilder::containersFromServer($groups, $byUid), $byUid);
 
-                    return $tree === [] ? false : $tree;
+                    return $tree === [] ? self::emptyTree() : $tree;
                 }
             }
 
@@ -963,7 +966,7 @@ final class Mailbox
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
-            return false;
+            return self::emptyTree();
         }
 
         $messages = ThreadBuilder::messagesFromFetch($data, $ids);
@@ -971,9 +974,23 @@ final class Mailbox
         $tree = ThreadBuilder::flatten($root, (bool) ($flags & SE_UID));
 
         if ($tree === []) {
-            return false;
+            return self::emptyTree();
         }
 
         return $tree;
+    }
+
+    /**
+     * php_imap.c has one answer for a mail_thread() that gave back nothing,
+     * whether the folder was empty or the command failed: a warning, and
+     * false. Declared bool for the reason absent() is.
+     *
+     * @return false
+     */
+    private static function emptyTree(): bool
+    {
+        trigger_error('imap_thread(): Function returned an empty tree', E_USER_WARNING);
+
+        return false;
     }
 }

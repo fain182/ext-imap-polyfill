@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Support;
 
+use ImapPolyfill\Support\Diagnostics;
+
 /**
  * The states a connection can be in when nothing is there to answer with,
  * and the calls worth making in each.
@@ -110,11 +112,13 @@ final class UnhappyPaths
         imap_alerts();
 
         try {
-            $returned = FixtureExport::shape(@$probe($connection));
+            [$value, $warnings] = Diagnostics::collect(static fn () => $probe($connection));
         } catch (\Throwable $e) {
             return ['throws' => $e::class, 'message' => $e->getMessage()];
         }
 
-        return ['returns' => $returned, 'errors' => imap_errors() !== false];
+        $returned = FixtureExport::shape($value);
+
+        return ['returns' => $returned, 'errors' => imap_errors() !== false, 'warnings' => $warnings];
     }
 }

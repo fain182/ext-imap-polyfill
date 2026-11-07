@@ -2,12 +2,16 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 /**
  * That imap_timeout() reaches the socket, rather than only being stored and
  * read back (which tests/Unit/ImapTimeoutTest.php covers).
  */
 final class ImapTimeoutTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     protected function tearDown(): void
     {
         // Process-global, like c-client's mail_parameters.
@@ -23,10 +27,9 @@ final class ImapTimeoutTest extends GreenmailTestCase
         $spec = sprintf('{%s:%d/imap/novalidate-cert}INBOX', self::host(), self::imapsPort());
 
         $started = microtime(true);
-        $connection = @imap_open($spec, self::user(), self::password());
+        $this->assertOpenFails($spec, self::user(), self::password());
         $elapsed = microtime(true) - $started;
 
-        $this->assertFalse($connection);
         // Generous, since what is being excluded is a socket falling back to
         // default_socket_timeout — 60 seconds, and more than once.
         $this->assertLessThan(30, $elapsed);

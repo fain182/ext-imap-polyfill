@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Connection\Pop3;
 
 use ImapPolyfill\Support\CommandArgument;
+use ImapPolyfill\Support\Diagnostics;
 
 /**
  * Minimal RFC1939 POP3 client over a raw socket: just the commands this
@@ -52,14 +53,9 @@ final class Pop3Protocol
             ],
         ]);
 
-        $stream = @stream_socket_client(
-            "{$scheme}{$host}:{$port}",
-            $errno,
-            $errstr,
-            $timeout,
-            STREAM_CLIENT_CONNECT,
-            $context,
-        );
+        $stream = Diagnostics::discard(static function () use ($scheme, $host, $port, &$errno, &$errstr, $timeout, $context) {
+            return stream_socket_client("{$scheme}{$host}:{$port}", $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $context);
+        });
 
         if ($stream === false) {
             // Same "host,port" shape as c-client's tcp_open error.
@@ -113,7 +109,7 @@ final class Pop3Protocol
     {
         $this->command('STLS');
 
-        $crypto = @stream_socket_enable_crypto($this->stream, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+        $crypto = Diagnostics::discard(fn () => stream_socket_enable_crypto($this->stream, true, STREAM_CRYPTO_METHOD_TLS_CLIENT));
 
         if ($crypto !== true) {
             throw new \RuntimeException('Unable to negotiate TLS with this server');

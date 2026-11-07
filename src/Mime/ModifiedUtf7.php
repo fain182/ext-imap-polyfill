@@ -46,17 +46,104 @@ final class ModifiedUtf7
      */
     public static function toBytes(string $string): string|false
     {
-        if (preg_match(self::VALID, $string) !== 1) {
+        $refusal = self::refusalOf($string);
+
+        if ($refusal !== null) {
+            trigger_error("imap_utf7_decode(): {$refusal}", E_USER_WARNING);
+
             return false;
         }
 
-        return (string) preg_replace_callback(
-            '/&([^-]*)-/',
-            static fn (array $m): string => $m[1] === ''
-                ? '&'
-                : (string) base64_decode(strtr($m[1], ',', '/'), true),
-            $string
-        );
+        $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,';
+        $result = '';
+        $length = strlen($string);
+
+        for ($i = 0; $i < $length; $i++) {
+            if ($string[$i] !== '&') {
+                $result .= $string[$i];
+
+                continue;
+            }
+
+            if ($string[$i + 1] === '-') {
+                $result .= '&';
+                $i++;
+
+                continue;
+            }
+
+            // Six bits per character, a byte out whenever eight have
+            // gathered; what is left over when the run closes is dropped,
+            // as the bits php_imap.c shifts into a byte it never counts.
+            $bits = 0;
+            $held = 0;
+
+            for ($i++; $string[$i] !== '-'; $i++) {
+                $bits = (($bits << 6) | strpos($alphabet, $string[$i])) & 0xFFFF;
+                $held += 6;
+
+                if ($held >= 8) {
+                    $held -= 8;
+                    $result .= chr(($bits >> $held) & 0xFF);
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * The first thing php_imap.c's validating pass over imap_utf7_decode()'s
+     * input objects to, in its own words, or null when it objects to nothing.
+     *
+     * This is php_imap.c's own reader, not c-client's mail_utf7_valid(), and
+     * it is stricter outside a run than within: a control character or an
+     * octet with the high bit set is refused wherever it stands. A run has
+     * to close with "-", and closing it one character into a quantum leaves
+     * a character that stands for no whole byte, which is refused too.
+     */
+    private static function refusalOf(string $string): ?string
+    {
+        $length = strlen($string);
+        $inRun = false;
+        $quantum = 0;
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $string[$i];
+
+            if (!$inRun) {
+                if ($char <= "\x1F" || $char >= "\x7F") {
+                    return "Invalid modified UTF-7 character: `{$char}'";
+                }
+
+                if ($char !== '&') {
+                    continue;
+                }
+
+                if ($i + 1 === $length) {
+                    return 'Unexpected end of string';
+                }
+
+                if ($string[$i + 1] === '-') {
+                    $i++;
+                } else {
+                    $inRun = true;
+                    $quantum = 0;
+                }
+            } elseif ($char === '-') {
+                if ($quantum === 1) {
+                    return "Stray modified base64 character: `{$string[$i - 1]}'";
+                }
+
+                $inRun = false;
+            } elseif (!ctype_alnum($char) && $char !== '+' && $char !== ',') {
+                return "Invalid modified base64 character: `{$char}'";
+            } else {
+                $quantum = ($quantum + 1) % 4;
+            }
+        }
+
+        return $inRun ? 'Unexpected end of string' : null;
     }
 
     /**
