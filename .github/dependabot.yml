@@ -7,6 +7,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
 
   # composer.json / composer.lock. This is a library, so the lock file never
   # reaches consumers: what matters here is the dev toolchain (phpunit,
@@ -16,6 +19,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
 
   # Docker images in docker-compose.yml (the Greenmail and Dovecot test
   # fixtures) and in Dockerfile.parity.
@@ -23,6 +29,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
     ignore:
       # Dockerfile.parity is pinned to php:8.3-cli-bookworm on purpose and must
       # not be bumped: 8.3 is the last PHP release that ships ext-imap in core
