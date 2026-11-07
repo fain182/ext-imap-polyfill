@@ -538,8 +538,27 @@ final class Mailbox
         if ($isResource) {
             $handle = $file;
         } else {
-            $handle = @fopen((string) $file, 'wb');
+            // php_stream_open_wrapper() is called with REPORT_ERRORS, so the
+            // extension reports a path it cannot open the way fopen() does,
+            // under its own name.
+            $refusal = null;
+            set_error_handler(static function (int $errno, string $message) use (&$refusal): bool {
+                $refusal = $message;
+
+                return true;
+            });
+
+            try {
+                $handle = fopen((string) $file, 'wb');
+            } finally {
+                restore_error_handler();
+            }
+
             if ($handle === false) {
+                if ($refusal !== null) {
+                    trigger_error((string) preg_replace('/^fopen\(/', 'imap_savebody(', $refusal), E_USER_WARNING);
+                }
+
                 return false;
             }
         }

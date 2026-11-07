@@ -167,7 +167,10 @@ class ImapSavebodyTest extends GreenmailTestCase
 
         $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
-        $this->assertFalse(@imap_savebody($connection, '/nonexistent-dir/imap_savebody_test', 1, '1'));
+        $this->assertSame(
+            [false, ['imap_savebody(/nonexistent-dir/imap_savebody_test): Failed to open stream: No such file or directory']],
+            $this->capturingWarnings(static fn () => imap_savebody($connection, '/nonexistent-dir/imap_savebody_test', 1, '1')),
+        );
     }
 
     public function test_throws_value_error_for_a_non_positive_message_number(): void
