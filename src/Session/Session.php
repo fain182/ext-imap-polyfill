@@ -97,8 +97,7 @@ final class Session
         }
 
         try {
-            $status = $connection->selectOrExamine();
-            $connection->rememberCounts($status->exists, $status->recent);
+            $connection->selectOrExamine();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -243,39 +242,34 @@ final class Session
     public function numMessages(): int|false
     {
         $this->connection->ensureOpen();
-        $this->refreshCounts();
 
-        return $this->connection->numMessages();
+        return $this->counts()->exists;
     }
 
     public function numRecent(): int|false
     {
         $this->connection->ensureOpen();
-        $this->refreshCounts();
 
-        return $this->connection->numRecent();
+        return $this->counts()->recent;
     }
 
     /**
-     * Brings the cached counters up to date, and leaves them alone when the
-     * connection has nothing to say.
-     *
-     * ext-imap's imap_num_msg/imap_num_recent are cached client-side reads
-     * (c-client's stream->nmsgs, stream->recent), not live queries: a
-     * connection that has since broken leaves the last known count standing
-     * rather than turning the read into false.
+     * ext-imap's imap_num_msg/imap_num_recent are client-side reads
+     * (c-client's stream->nmsgs, stream->recent), not live queries: the
+     * message cache answers them without the wire once the folder is
+     * selected, so a connection that has since broken leaves the count it
+     * last reported standing. Only a selection that cannot be made at all
+     * is a failure to report, and then there is no mailbox to count.
      */
-    private function refreshCounts(): void
+    private function counts(): FolderState
     {
         try {
-            $status = $this->connection->selectOrExamine();
+            return $this->connection->selectOrExamine();
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
-            return;
+            return new FolderState(0, 0);
         }
-
-        $this->connection->rememberCounts($status->exists, $status->recent);
     }
 
     public function check(): \stdClass|false
@@ -463,8 +457,6 @@ final class Session
                 return false;
             }
 
-            $this->connection->rememberCounts($status->exists, $status->recent);
-
             if ($flags !== 0) {
                 $this->connection->setExpungeOnClose((bool) ($flags & CL_EXPUNGE));
             }
@@ -491,7 +483,6 @@ final class Session
         }
 
         $this->connection->reselect($spec->folder, $readOnly);
-        $this->connection->rememberCounts($status->exists, $status->recent);
 
         // Mirrors php_imap.c: a nonzero $flags overrides the remembered
         // CL_EXPUNGE state outright (even clearing it if CL_EXPUNGE isn't in

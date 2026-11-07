@@ -7,7 +7,7 @@ use ImapPolyfill\Message\SearchProgram;
 /**
  * The wire operations an \IMAP\Connection needs from whatever protocol it
  * actually speaks. IMAP\Connection owns connection-level state (selected
- * folder, read-only flag, cached counters) and is otherwise a thin delegator
+ * folder, read-only flag, half-open) and is otherwise a thin delegator
  * to one implementation of this interface per protocol (see
  * Connection\Protocol, Connection\Pop3\Pop3Backend).
  */

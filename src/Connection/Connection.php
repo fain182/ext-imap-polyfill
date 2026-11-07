@@ -30,16 +30,6 @@ final class Connection
      */
     private bool $expungeOnClose = false;
 
-    /**
-     * Mirrors c-client's stream->nmsgs: imap_num_msg() is a cached client-side
-     * read, not a live query, so it must keep returning the last known count
-     * (not false/0) if the connection later breaks.
-     */
-    private int $cachedNumMsg = 0;
-
-    /** Mirrors c-client's stream->recent; see $cachedNumMsg. */
-    private int $cachedNumRecent = 0;
-
     private bool $halfOpen = false;
 
     /**
@@ -214,22 +204,6 @@ final class Connection
     public function close(): void
     {
         $this->closed = true;
-    }
-
-    public function numMessages(): int
-    {
-        return $this->cachedNumMsg;
-    }
-
-    public function numRecent(): int
-    {
-        return $this->cachedNumRecent;
-    }
-
-    public function rememberCounts(int $numMessages, int $numRecent): void
-    {
-        $this->cachedNumMsg = $numMessages;
-        $this->cachedNumRecent = $numRecent;
     }
 
     /**
