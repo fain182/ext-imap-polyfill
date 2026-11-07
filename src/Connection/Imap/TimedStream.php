@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Connection\Imap;
 
 use DirectoryTree\ImapEngine\Connection\Streams\ImapStream;
+use ImapPolyfill\Support\Diagnostics;
 use ImapPolyfill\Support\Timeouts;
 
 /**
@@ -20,17 +21,8 @@ final class TimedStream extends ImapStream
     /** @param array<string, mixed> $options */
     public function open(string $transport, string $host, int $port, int $timeout, array $options = []): bool
     {
-        // The engine dials with "@", which an error handler that does not
-        // honour it — most of the ones a framework installs — sees anyway:
-        // a warning the real extension never raises, about a failure the
-        // exception below already reports.
-        set_error_handler(static fn (): bool => true);
-
-        try {
-            $opened = parent::open($transport, $host, $port, $timeout, $options);
-        } finally {
-            restore_error_handler();
-        }
+        // The engine dials with "@", which Diagnostics says is not enough.
+        $opened = Diagnostics::discard(fn () => parent::open($transport, $host, $port, $timeout, $options));
 
         // A single socket timeout covers both directions, so c-client's
         // two have to become one; see Timeouts::socketSeconds() for which.
@@ -45,12 +37,6 @@ final class TimedStream extends ImapStream
      */
     public function setSocketSetCrypto(bool $enabled, ?int $method): bool|int
     {
-        set_error_handler(static fn (): bool => true);
-
-        try {
-            return parent::setSocketSetCrypto($enabled, $method);
-        } finally {
-            restore_error_handler();
-        }
+        return Diagnostics::discard(fn () => parent::setSocketSetCrypto($enabled, $method));
     }
 }

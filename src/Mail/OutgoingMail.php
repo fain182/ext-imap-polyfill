@@ -50,13 +50,7 @@ final class OutgoingMail
         }
 
         // C's popen() reports nothing through PHP; PHP's does.
-        set_error_handler(static fn (): bool => true);
-
-        try {
-            $sendmail = popen($sendmailPath, 'w');
-        } finally {
-            restore_error_handler();
-        }
+        $sendmail = \ImapPolyfill\Support\Diagnostics::discard(static fn () => popen($sendmailPath, 'w'));
 
         if ($sendmail === false) {
             trigger_error('imap_mail(): Could not execute mail delivery program', E_USER_WARNING);

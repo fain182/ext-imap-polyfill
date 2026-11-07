@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests\Support;
 
+use ImapPolyfill\Support\Diagnostics;
+
 /**
  * The conversions, one charset at a time.
  *
@@ -104,13 +106,7 @@ final class CharsetCalls
      */
     private static function encoded(string $charset, string $utf8): string
     {
-        set_error_handler(static fn (): bool => true);
-
-        try {
-            return (string) iconv('UTF-8', $charset, $utf8);
-        } finally {
-            restore_error_handler();
-        }
+        return (string) Diagnostics::discard(static fn () => iconv('UTF-8', $charset, $utf8));
     }
 
     /**
@@ -120,18 +116,7 @@ final class CharsetCalls
      */
     public static function outcome(callable $call): array
     {
-        $warnings = [];
-        set_error_handler(static function (int $errno, string $message) use (&$warnings): bool {
-            $warnings[] = $message;
-
-            return true;
-        });
-
-        try {
-            $result = $call();
-        } finally {
-            restore_error_handler();
-        }
+        [$result, $warnings] = Diagnostics::collect($call);
 
         return ['returns' => get_debug_type($result), 'value' => $result, 'warnings' => $warnings];
     }

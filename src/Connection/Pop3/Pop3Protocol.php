@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Connection\Pop3;
 
 use ImapPolyfill\Support\CommandArgument;
+use ImapPolyfill\Support\Diagnostics;
 
 /**
  * Minimal RFC1939 POP3 client over a raw socket: just the commands this
@@ -52,22 +53,9 @@ final class Pop3Protocol
             ],
         ]);
 
-        // Not "@": an error handler that does not honour it would see a
-        // warning the real extension never raises. See TimedStream.
-        set_error_handler(static fn (): bool => true);
-
-        try {
-            $stream = stream_socket_client(
-                "{$scheme}{$host}:{$port}",
-                $errno,
-                $errstr,
-                $timeout,
-                STREAM_CLIENT_CONNECT,
-                $context,
-            );
-        } finally {
-            restore_error_handler();
-        }
+        $stream = Diagnostics::discard(static function () use ($scheme, $host, $port, &$errno, &$errstr, $timeout, $context) {
+            return stream_socket_client("{$scheme}{$host}:{$port}", $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $context);
+        });
 
         if ($stream === false) {
             // Same "host,port" shape as c-client's tcp_open error.
@@ -121,15 +109,7 @@ final class Pop3Protocol
     {
         $this->command('STLS');
 
-        // The failure is the exception below; PHP's own warning about the
-        // handshake is not something the extension ever raises.
-        set_error_handler(static fn (): bool => true);
-
-        try {
-            $crypto = stream_socket_enable_crypto($this->stream, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
-        } finally {
-            restore_error_handler();
-        }
+        $crypto = Diagnostics::discard(fn () => stream_socket_enable_crypto($this->stream, true, STREAM_CRYPTO_METHOD_TLS_CLIENT));
 
         if ($crypto !== true) {
             throw new \RuntimeException('Unable to negotiate TLS with this server');

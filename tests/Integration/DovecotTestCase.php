@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Support\Diagnostics;
 use ImapPolyfill\Tests\Support\SeedClient;
 use PHPUnit\Framework\TestCase;
 
@@ -34,13 +35,9 @@ abstract class DovecotTestCase extends TestCase
     protected function setUp(): void
     {
         // A refused probe is the answer here, not something to report.
-        set_error_handler(static fn (): bool => true);
-
-        try {
-            $socket = fsockopen(self::host(), self::port(), $errno, $errstr, 2);
-        } finally {
-            restore_error_handler();
-        }
+        $socket = Diagnostics::discard(static function () use (&$errno, &$errstr) {
+            return fsockopen(self::host(), self::port(), $errno, $errstr, 2);
+        });
 
         if ($socket === false) {
             $this->markTestSkipped(sprintf(

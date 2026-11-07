@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Tests;
 
+use ImapPolyfill\Support\Diagnostics;
+
 /**
  * Collects the diagnostics a call emits, for the paths where ext-imap warns
  * instead of recording an error.
@@ -17,20 +19,7 @@ trait CapturesWarnings
      */
     protected function capturingWarnings(callable $call): array
     {
-        $messages = [];
-        set_error_handler(static function (int $errno, string $message) use (&$messages): bool {
-            $messages[] = $message;
-
-            return true;
-        });
-
-        try {
-            $result = $call();
-        } finally {
-            restore_error_handler();
-        }
-
-        return [$result, $messages];
+        return Diagnostics::collect($call);
     }
 
     /**
