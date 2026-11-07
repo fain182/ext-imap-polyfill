@@ -23,13 +23,14 @@ install:
 	composer install
 
 ## Re-resolves every dependency to the oldest release composer.json allows, so
-## a run exercises the bottom of the declared constraints instead of the single
-## set composer.lock pins. That is the half `make test` cannot reach: nothing
-## else here ever installs imapengine 1.25.0 rather than 1.25.4, so a constraint
-## claiming more than it supports would surface in a user's install, not ours.
-## Rewrites composer.lock in place — the `install` prerequisite of the test
-## targets then installs *from* that rewritten lock, which is what carries the
-## old versions into the run. `git checkout composer.lock && make install` undoes it.
+## a run exercises the bottom of the declared constraints instead of the top a
+## fresh `make install` resolves. That is the half `make test` cannot reach:
+## nothing else here ever installs imapengine 1.25.5 rather than the latest, so
+## a constraint claiming more than it supports would surface in a user's
+## install, not ours. Rewrites the local (gitignored) composer.lock — the
+## `install` prerequisite of the test targets then installs *from* that
+## rewritten lock, which is what carries the old versions into the run.
+## `composer update` undoes it.
 install-lowest:
 	composer update --prefer-lowest --prefer-stable
 

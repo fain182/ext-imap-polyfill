@@ -11,14 +11,15 @@ updates:
       minor-and-patch:
         update-types: ["minor", "patch"]
 
-  # composer.json / composer.lock. This is a library, so the lock file never
-  # reaches consumers: what matters here is the dev toolchain (phpunit,
-  # phpstan, phpdotenv) and the version constraint on directorytree/imapengine,
-  # which is the actual backend the polyfill is built on.
+  # composer.json. No lock file is committed, so CI already installs the newest
+  # release each constraint allows; what is left for Dependabot is a release
+  # outside a constraint. `widen` adds it to the range instead of raising the
+  # floor, which in a library would take the older releases away from users.
   - package-ecosystem: "composer"
     directory: "/"
     schedule:
       interval: "weekly"
+    versioning-strategy: widen
     groups:
       minor-and-patch:
         update-types: ["minor", "patch"]
