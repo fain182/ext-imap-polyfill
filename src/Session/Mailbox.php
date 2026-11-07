@@ -149,11 +149,16 @@ final class Mailbox
      * asked the other way round: only on the path where the fetch already
      * failed, so the happy path stays one round trip.
      */
-    private function uidIsAbsent(int $uid): bool
+    private function uidIsAbsent(int $uid, FolderState $selection): bool
     {
         // An empty folder has no uids, and asking it for the ones it has is
         // itself an error on some servers ("1:*" over nothing).
-        if ($this->connection->numMessages() < 1) {
+        //
+        // The selection's count, not Connection::numMessages(): that one is
+        // imap_num_msg()'s cache and moves only when it is read, while the
+        // selection follows every untagged EXISTS — including the one an
+        // APPEND into this very folder brings back, as c-client's nmsgs does.
+        if ($selection->exists < 1) {
             return true;
         }
 
@@ -181,14 +186,16 @@ final class Mailbox
      */
     private function fetchItem(int $messageNum, string $item, UidMode $uidMode, string $function): string|false
     {
-        if ($this->selectionCovering($messageNum, $uidMode, $function) === false) {
+        $selection = $this->selectionCovering($messageNum, $uidMode, $function);
+
+        if ($selection === false) {
             return false;
         }
 
         try {
             $data = $this->connection->backend()->fetch([$item], [$messageNum], null, $uidMode);
         } catch (\Throwable $e) {
-            if ($uidMode === UidMode::Uid && $this->uidIsAbsent($messageNum)) {
+            if ($uidMode === UidMode::Uid && $this->uidIsAbsent($messageNum, $selection)) {
                 return $this->absent($function, $uidMode);
             }
 
@@ -519,11 +526,13 @@ final class Mailbox
         // settles it: from the counts and the uid table it already holds.
         // Opening first would truncate a file the caller asked to fill with
         // a message that was never there.
-        if ($this->selectionCovering($messageNum, $uidMode, 'imap_savebody') === false) {
+        $selection = $this->selectionCovering($messageNum, $uidMode, 'imap_savebody');
+
+        if ($selection === false) {
             return false;
         }
 
-        if ($uidMode === UidMode::Uid && $this->uidIsAbsent($messageNum)) {
+        if ($uidMode === UidMode::Uid && $this->uidIsAbsent($messageNum, $selection)) {
             return $this->absent('imap_savebody', $uidMode);
         }
 

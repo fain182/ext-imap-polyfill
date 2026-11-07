@@ -124,6 +124,33 @@ class ImapSavebodyTest extends GreenmailTestCase
         }
     }
 
+    /**
+     * The message this connection appended into its own selected folder is
+     * there for it at once: c-client counts it from the untagged EXISTS the
+     * APPEND brings back, without an imap_num_msg() in between to ask.
+     */
+    public function test_ft_uid_saves_a_message_appended_into_the_selected_folder(): void
+    {
+        $folderName = 'SaveBodyAppendBox'.uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->assertTrue(imap_append($connection, self::mailboxSpec($folderName), "Subject: Appended\r\nContent-Type: text/plain\r\n\r\nAppended body"));
+
+        $observer = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+        $uid = imap_uid($observer, 1);
+        imap_close($observer);
+
+        $path = tempnam(sys_get_temp_dir(), 'imap_savebody_');
+
+        try {
+            $this->assertTrue(imap_savebody($connection, $path, $uid, '1', FT_UID));
+            $this->assertSame('Appended body', file_get_contents($path));
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function test_returns_false_for_an_unwritable_path(): void
     {
         $folderName = 'SaveBodyBox'.uniqid();
