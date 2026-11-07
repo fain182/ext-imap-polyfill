@@ -22,8 +22,8 @@ final class CharsetCalls
      */
     public static function all(): array
     {
-        $latin1 = static fn (string $utf8): string => (string) iconv('UTF-8', 'ISO-8859-1', $utf8);
-        $cp1251 = static fn (string $utf8): string => (string) iconv('UTF-8', 'Windows-1251', $utf8);
+        $latin1 = static fn (string $utf8): string => self::encoded('ISO-8859-1', $utf8);
+        $cp1251 = static fn (string $utf8): string => self::encoded('Windows-1251', $utf8);
 
         /** Text that costs nothing in ASCII and everything outside it. */
         $texts = [
@@ -98,14 +98,41 @@ final class CharsetCalls
     }
 
     /**
+     * The input in a single-byte charset, or the empty string for text that
+     * charset cannot hold. iconv() says so with a warning, which belongs to
+     * building the input and not to the call the outcome records.
+     */
+    private static function encoded(string $charset, string $utf8): string
+    {
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            return (string) iconv('UTF-8', $charset, $utf8);
+        } finally {
+            restore_error_handler();
+        }
+    }
+
+    /**
      * What a call answered, in the shape the fixture records.
      *
-     * @return array{returns: string, value: mixed}
+     * @return array{returns: string, value: mixed, warnings: list<string>}
      */
     public static function outcome(callable $call): array
     {
-        $result = @$call();
+        $warnings = [];
+        set_error_handler(static function (int $errno, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
 
-        return ['returns' => get_debug_type($result), 'value' => $result];
+            return true;
+        });
+
+        try {
+            $result = $call();
+        } finally {
+            restore_error_handler();
+        }
+
+        return ['returns' => get_debug_type($result), 'value' => $result, 'warnings' => $warnings];
     }
 }

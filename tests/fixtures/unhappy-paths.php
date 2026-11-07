@@ -25,180 +25,252 @@ return [
         "imap_num_msg" => [
             "returns" => "int:0",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_num_recent" => [
             "returns" => "int:0",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_ping" => [
             "returns" => "true",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_check" => [
             "returns" => "object:stdClass",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_headers" => [
             "returns" => "array:0",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_headerinfo" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_headerinfo(): Bad message number",
+            ],
         ],
         "imap_fetchheader" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_fetchheader(): Bad message number",
+            ],
         ],
         "imap_fetchbody" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_fetchbody(): Bad message number",
+            ],
         ],
         "imap_fetchmime" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_fetchmime(): Bad message number",
+            ],
         ],
         "imap_fetchstructure" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_fetchstructure(): Bad message number",
+            ],
         ],
         "imap_body" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_body(): Bad message number",
+            ],
         ],
         "imap_fetch_overview" => [
             "returns" => "array:0",
             "errors" => true,
+            "warnings" => [],
         ],
         "imap_search" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_sort" => [
             "returns" => "array:0",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_uid" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_uid(): Bad message number",
+            ],
         ],
         "imap_msgno" => [
             "returns" => "int:0",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_expunge" => [
             "returns" => "true",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_mailboxmsginfo" => [
             "returns" => "object:stdClass",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_gc" => [
             "returns" => "true",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_is_open" => [
             "returns" => "true",
             "errors" => false,
+            "warnings" => [],
         ],
     ],
     "folder deleted underneath" => [
         "imap_num_msg" => [
             "returns" => "int:0",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_num_recent" => [
             "returns" => "int:0",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_ping" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_check" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_headers" => [
             "returns" => "array:0",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_headerinfo" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_headerinfo(): Bad message number",
+            ],
         ],
         "imap_fetchheader" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_fetchheader(): Bad message number",
+            ],
         ],
         "imap_fetchbody" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_fetchbody(): Bad message number",
+            ],
         ],
         "imap_fetchmime" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_fetchmime(): Bad message number",
+            ],
         ],
         "imap_fetchstructure" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_fetchstructure(): Bad message number",
+            ],
         ],
         "imap_body" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_body(): Bad message number",
+            ],
         ],
         "imap_fetch_overview" => [
             "returns" => "array:0",
             "errors" => true,
+            "warnings" => [],
         ],
         "imap_search" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_sort" => [
             "returns" => "array:0",
             "errors" => true,
+            "warnings" => [],
         ],
         "imap_uid" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [
+                0 => "imap_uid(): Bad message number",
+            ],
         ],
         "imap_msgno" => [
             "returns" => "int:0",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_setflag_full" => [
             "returns" => "true",
             "errors" => true,
+            "warnings" => [],
         ],
         "imap_clearflag_full" => [
             "returns" => "true",
             "errors" => true,
+            "warnings" => [],
         ],
         "imap_delete" => [
             "returns" => "true",
             "errors" => true,
+            "warnings" => [],
         ],
         "imap_undelete" => [
             "returns" => "true",
             "errors" => true,
+            "warnings" => [],
         ],
         "imap_expunge" => [
             "returns" => "true",
             "errors" => true,
+            "warnings" => [],
         ],
         "imap_mailboxmsginfo" => [
             "returns" => "object:stdClass",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_gc" => [
             "returns" => "true",
             "errors" => false,
+            "warnings" => [],
         ],
         "imap_is_open" => [
             "returns" => "true",
             "errors" => false,
+            "warnings" => [],
         ],
     ],
     "closed connection" => [
@@ -297,6 +369,7 @@ return [
         "imap_is_open" => [
             "returns" => "false",
             "errors" => false,
+            "warnings" => [],
         ],
     ],
 ];

@@ -107,13 +107,22 @@ final class UnhappyPaths
         imap_errors();
         imap_alerts();
 
+        $warnings = [];
+        set_error_handler(static function (int $errno, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+
+            return true;
+        });
+
         try {
-            $returned = FixtureExport::shape(@$probe($connection));
+            $returned = FixtureExport::shape($probe($connection));
         } catch (\Throwable $e) {
             return ['throws' => $e::class, 'message' => $e->getMessage()];
+        } finally {
+            restore_error_handler();
         }
 
-        return ['returns' => $returned, 'errors' => imap_errors() !== false];
+        return ['returns' => $returned, 'errors' => imap_errors() !== false, 'warnings' => $warnings];
     }
 
     /**
@@ -122,8 +131,17 @@ final class UnhappyPaths
      * generated name, neither of which is the point here.
      */
 
+    /**
+     * /tls-sslv23 for the Dovecot fixture only, the way DovecotTestCase does:
+     * it announces STARTTLS, c-client upgrades whenever that is offered, and
+     * its unqualified upgrade speaks only TLS 1.0. On Greenmail, which
+     * announces nothing, the switch would make the upgrade compulsory.
+     */
     private static function spec(string $host, int $port): string
     {
-        return sprintf('{%s:%d/imap/novalidate-cert}', $host, $port);
+        $dovecotPort = (int) (getenv('IMAP_POLYFILL_DOVECOT_PORT') ?: 13144);
+        $flags = $port === $dovecotPort ? '/imap/tls-sslv23/novalidate-cert' : '/imap/novalidate-cert';
+
+        return sprintf('{%s:%d%s}', $host, $port, $flags);
     }
 }
