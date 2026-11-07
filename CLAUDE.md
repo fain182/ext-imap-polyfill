@@ -14,7 +14,7 @@ The short version: `make test` for unit + integration, `make parity` to run the 
 
 ## Architecture
 
-Strict layering; each layer only talks to the next:
+Strict layering; each layer only talks to the next: The dependency rules below are checked by phparkitect (`phparkitect.php`, `make arch`, and a CI job): breaking one fails the build.
 
 - **`src/functions.php`** — conditional (`function_exists`) one-liner shims. No logic beyond delegation, plus the user-facing `trigger_error` warning where ext-imap emits one (e.g. `imap_open`). Aliases (`imap_fetchtext`, `imap_listmailbox`, `imap_delete`…) call the canonical function.
 - **`src/Session/`** — the imap_* contract layer, instantiated per call around an `\IMAP\Connection`:
