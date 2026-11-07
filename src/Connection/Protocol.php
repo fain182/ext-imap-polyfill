@@ -263,21 +263,21 @@ final class Protocol implements ConnectionBackend
     }
 
     /**
-     * msgno => uid for the whole selected folder, read off the message cache
-     * the way c-client's mail_uid() reads it off the stream: only the
-     * messages whose uid is not yet known are asked for, which after the
-     * first call is none, or the few an EXISTS has since added.
-     *
-     * @return array<int, int>
+     * Read off the message cache the way c-client's mail_uid() reads it off
+     * the stream: only the messages whose uid is not yet known are asked
+     * for, which after the first call is none, or the few an EXISTS has
+     * since added.
      */
-    public function getUid(): array
+    public function uidTable(): UidTable
     {
         $messages = $this->connection->messages();
 
         // Nothing selected, so nothing cached to read or fill.
         if ($messages->count() === null) {
-            /** @var array<int, int> */
-            return $this->fetchSet('1:*', ['UID'], UidMode::Msgno);
+            /** @var array<int, int> $uids */
+            $uids = $this->fetchSet('1:*', ['UID'], UidMode::Msgno);
+
+            return new UidTable($uids);
         }
 
         $unknown = $messages->unknownUids();
@@ -294,21 +294,7 @@ final class Protocol implements ConnectionBackend
             }
         }
 
-        return $messages->uidsByMsgno();
-    }
-
-    /**
-     * @throws MessageNotFoundException
-     */
-    public function getMessageNumber(string $uid): int
-    {
-        foreach ($this->getUid() as $msgno => $candidate) {
-            if ((string) $candidate === $uid) {
-                return $msgno;
-            }
-        }
-
-        throw new MessageNotFoundException('message number not found: '.$uid);
+        return $messages->uidTable();
     }
 
     /**

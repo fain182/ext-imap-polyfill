@@ -257,20 +257,9 @@ final class Pop3Backend implements ConnectionBackend
         };
     }
 
-    public function getUid(): array
+    public function uidTable(): UidTable
     {
-        return $this->messages->uidsByMsgno();
-    }
-
-    public function getMessageNumber(string $uid): int
-    {
-        $msgno = array_search((int) $uid, $this->messages->uidsByMsgno(), true);
-
-        if ($msgno === false) {
-            throw new MessageNotFoundException("Message with uid {$uid} not found");
-        }
-
-        return $msgno;
+        return $this->messages->uidTable();
     }
 
     public function store(string $command, array $args): void
@@ -282,7 +271,7 @@ final class Pop3Backend implements ConnectionBackend
 
         $set = MessageSequence::parse($sequence);
         $ids = $byUid
-            ? $set->uids(new UidTable($this->messages->uidsByMsgno()))
+            ? $set->uids($this->messages->uidTable())
             : $set->messageNumbers((int) $this->messages->count());
 
         foreach ($ids as $id) {
@@ -380,8 +369,11 @@ final class Pop3Backend implements ConnectionBackend
 
     private function uidOf(int $msgno): int
     {
-        return $this->messages->uidsByMsgno()[$msgno]
-            ?? throw new MessageNotFoundException("Message {$msgno} not found");
+        if ($msgno < 1 || $msgno > (int) $this->messages->count()) {
+            throw new MessageNotFoundException("Message {$msgno} not found");
+        }
+
+        return $this->messages->uidTable()->uidOf($msgno);
     }
 
     /**
@@ -389,7 +381,9 @@ final class Pop3Backend implements ConnectionBackend
      */
     private function knownUid(int|string $uid): int
     {
-        $this->getMessageNumber((string) $uid);
+        if (!$this->messages->uidTable()->holds((int) $uid)) {
+            throw new MessageNotFoundException("Message with uid {$uid} not found");
+        }
 
         return (int) $uid;
     }

@@ -21,7 +21,7 @@ class ProtocolUidTableTest extends TestCase
         ]);
         $protocol->selectOrExamineFolder('INBOX', false);
 
-        $this->assertSame([], $protocol->getUid());
+        $this->assertSame([], $protocol->uidTable()->uids());
         $this->stream->assertNotWritten('FETCH');
     }
 
@@ -40,11 +40,14 @@ class ProtocolUidTableTest extends TestCase
             'TAG4 OK FETCH completed',
         ]);
         $protocol->selectOrExamineFolder('INBOX', false);
-        $this->assertSame([1 => 10, 2 => 11], $protocol->getUid());
+        $this->assertSame([10, 11], $protocol->uidTable()->uids());
 
         $protocol->noop();
 
-        $this->assertSame([1 => 11, 2 => 12], $protocol->getUid());
+        $table = $protocol->uidTable();
+        $this->assertSame([11, 12], $table->uids());
+        $this->assertSame(12, $table->uidOf(2));
+        $this->assertSame(1, $table->msgnoOf(11));
         $this->stream->assertWritten('TAG4 FETCH 2:2 (UID)');
     }
 }

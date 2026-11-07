@@ -23,8 +23,12 @@ final class MessageCache
 
     private int $recent = 0;
 
+    /** What uidTable() last built, until an edit makes it stale. */
+    private ?UidTable $table = null;
+
     public function reset(): void
     {
+        $this->table = null;
         $this->uids = [];
         $this->counted = false;
         $this->recent = 0;
@@ -32,6 +36,7 @@ final class MessageCache
 
     public function exists(int $count): void
     {
+        $this->table = null;
         $this->counted = true;
         $held = count($this->uids);
 
@@ -58,6 +63,7 @@ final class MessageCache
             throw new \RuntimeException("Expunge of non-existent message {$msgno} of ".count($this->uids));
         }
 
+        $this->table = null;
         array_splice($this->uids, $msgno - 1, 1);
     }
 
@@ -95,8 +101,19 @@ final class MessageCache
     public function learnUid(int $msgno, int $uid): void
     {
         if (array_key_exists($msgno - 1, $this->uids)) {
+            $this->table = null;
             $this->uids[$msgno - 1] = $uid;
         }
+    }
+
+    /**
+     * The folder's uid table, which needs every uid to be known. Built once
+     * per state of the cache: imap_uid() is routinely called once per
+     * message, and each call asks this.
+     */
+    public function uidTable(): UidTable
+    {
+        return $this->table ??= new UidTable($this->uidsByMsgno());
     }
 
     /**

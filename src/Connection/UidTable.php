@@ -15,11 +15,21 @@ final class UidTable
     /** @var array<int, int> uid => msgno */
     private array $msgnos;
 
-    /** @param array<int, int> $byMsgno msgno => uid, as a backend reports it */
-    public function __construct(array $byMsgno)
+    /** @param array<int, int> $byMsgno msgno => uid */
+    public function __construct(private readonly array $byMsgno)
     {
         $this->uids = array_values($byMsgno);
         $this->msgnos = array_flip($byMsgno);
+    }
+
+    /**
+     * The uid of a message the folder holds; asking for one past the end is
+     * the caller's mistake, since the count is checked before the table.
+     */
+    public function uidOf(int $msgno): int
+    {
+        return $this->byMsgno[$msgno]
+            ?? throw new \LogicException("no message {$msgno} in a folder of ".count($this->byMsgno));
     }
 
     /** @return list<int> */

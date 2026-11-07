@@ -106,11 +106,11 @@ interface ConnectionBackend
     public function fetch(array $items, array $ids, ?int $to, UidMode $uidMode): array;
 
     /**
-     * @return array<int, int>
+     * The selected folder's uids, which every question about a uid — which
+     * message it names, whether the folder has it, what "*" stands for — is
+     * asked of.
      */
-    public function getUid(): array;
-
-    public function getMessageNumber(string $uid): int;
+    public function uidTable(): UidTable;
 
     /**
      * @param string[] $args

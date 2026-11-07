@@ -159,15 +159,11 @@ final class Mailbox
         }
 
         try {
-            $this->connection->backend()->getMessageNumber((string) $uid);
-        } catch (MessageNotFoundException) {
-            return true;
+            return !$this->connection->backend()->uidTable()->holds($uid);
         } catch (\Throwable) {
             // No answer either way: the failure that got us here stands.
             return false;
         }
-
-        return false;
     }
 
     /**
@@ -298,7 +294,7 @@ final class Mailbox
             // count it holds for message numbers, and against the uids it
             // holds for uids, which is why a uid range costs the folder
             // rather than the range.
-            $folder = new UidTable($uidMode === UidMode::Uid ? $protocol->getUid() : []);
+            $folder = $uidMode === UidMode::Uid ? $protocol->uidTable() : new UidTable([]);
             $ids = $uidMode === UidMode::Uid
                 ? $set->uids($folder)
                 : $set->messageNumbers($exists);
@@ -673,14 +669,12 @@ final class Mailbox
                 return false;
             }
 
-            $uids = $this->connection->backend()->getUid();
+            return $this->connection->backend()->uidTable()->uidOf($messageNum);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
             return false;
         }
-
-        return (int) $uids[$messageNum];
     }
 
     public function msgno(int $messageUid): int
@@ -698,9 +692,9 @@ final class Mailbox
         }
 
         try {
-            return (int) $this->connection->backend()->getMessageNumber((string) $messageUid);
-        } catch (MessageNotFoundException) {
-            return 0;
+            $folder = $this->connection->backend()->uidTable();
+
+            return $folder->holds($messageUid) ? $folder->msgnoOf($messageUid) : 0;
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
