@@ -930,7 +930,7 @@ final class Mailbox
             $exists = $status->exists;
 
             if ($exists === 0) {
-                return false;
+                return self::emptyTree();
             }
 
             // c-client threads on the server whenever it advertises the
@@ -949,7 +949,7 @@ final class Mailbox
                 if ($groups !== null) {
                     $tree = ThreadBuilder::flatten(ThreadBuilder::containersFromServer($groups, $byUid), $byUid);
 
-                    return $tree === [] ? false : $tree;
+                    return $tree === [] ? self::emptyTree() : $tree;
                 }
             }
 
@@ -963,7 +963,7 @@ final class Mailbox
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
-            return false;
+            return self::emptyTree();
         }
 
         $messages = ThreadBuilder::messagesFromFetch($data, $ids);
@@ -971,9 +971,23 @@ final class Mailbox
         $tree = ThreadBuilder::flatten($root, (bool) ($flags & SE_UID));
 
         if ($tree === []) {
-            return false;
+            return self::emptyTree();
         }
 
         return $tree;
+    }
+
+    /**
+     * php_imap.c has one answer for a mail_thread() that gave back nothing,
+     * whether the folder was empty or the command failed: a warning, and
+     * false. Declared bool for the reason absent() is.
+     *
+     * @return false
+     */
+    private static function emptyTree(): bool
+    {
+        trigger_error('imap_thread(): Function returned an empty tree', E_USER_WARNING);
+
+        return false;
     }
 }

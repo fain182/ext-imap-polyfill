@@ -2,8 +2,12 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
+
 final class ImapThreadTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
+
     public function test_reference_chain_nests_replies_and_keeps_unrelated_message_as_sibling(): void
     {
         $folderName = 'ImapThread'.random_int(10000, 99999);
@@ -121,8 +125,21 @@ final class ImapThreadTest extends GreenmailTestCase
         $this->makeFolder($folderName);
         $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
-        $this->assertFalse(imap_thread($connection));
+        $this->assertSame(
+            [false, ['imap_thread(): Function returned an empty tree']],
+            $this->capturingWarnings(static fn () => imap_thread($connection)),
+        );
 
         imap_close($connection);
+    }
+
+    public function test_a_failed_thread_warns_the_same_way(): void
+    {
+        $connection = $this->openConnectionToFolderThatThenDisappears('ImapThread'.random_int(10000, 99999));
+
+        $this->assertSame(
+            [false, ['imap_thread(): Function returned an empty tree']],
+            $this->capturingWarnings(static fn () => imap_thread($connection)),
+        );
     }
 }
