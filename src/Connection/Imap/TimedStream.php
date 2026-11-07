@@ -6,7 +6,8 @@ use DirectoryTree\ImapEngine\Connection\Streams\ImapStream;
 use ImapPolyfill\Support\Timeouts;
 
 /**
- * The engine's stream with imap_timeout()'s read timeout applied to it.
+ * The engine's stream with imap_timeout()'s read timeout applied to it,
+ * and with PHP's own warnings about the socket kept to itself.
  *
  * It has to happen here rather than after connect(): the very first read is
  * the server greeting, done inside connect(), and that is exactly the read
@@ -36,5 +37,20 @@ final class TimedStream extends ImapStream
         $this->setTimeout(Timeouts::socketSeconds());
 
         return $opened;
+    }
+
+    /**
+     * The STARTTLS handshake, whose failure the caller reports as its own
+     * exception; OpenSSL's warning about it is not one the extension raises.
+     */
+    public function setSocketSetCrypto(bool $enabled, ?int $method): bool|int
+    {
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            return parent::setSocketSetCrypto($enabled, $method);
+        } finally {
+            restore_error_handler();
+        }
     }
 }
