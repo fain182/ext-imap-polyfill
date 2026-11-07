@@ -231,7 +231,8 @@ final class Pop3Backend implements ConnectionBackend
     private function fetchItem(string $item, int $uid, RawMessage $message): mixed
     {
         return match (true) {
-            $item === 'FLAGS' => $this->flags[$uid] ?? [],
+            // pop3_open() marks every message of the session recent.
+            $item === 'FLAGS' => ['\\Recent', ...($this->flags[$uid] ?? [])],
             $item === 'INTERNALDATE' => self::FAKE_INTERNAL_DATE,
             $item === 'RFC822.SIZE' => (string) strlen($message->getRaw()),
             $item === 'RFC822.HEADER' => $message->getRawHeader()."\r\n",

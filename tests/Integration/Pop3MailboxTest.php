@@ -207,6 +207,21 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    public function test_every_message_is_recent_for_the_session(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Pop3 Recent\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame('N', imap_headerinfo($connection, $count)->Recent);
+        imap_setflag_full($connection, (string) $count, '\\Seen');
+        $this->assertSame('R', imap_headerinfo($connection, $count)->Recent);
+        $this->assertSame(1, imap_fetch_overview($connection, (string) $count)[0]->recent);
+
+        imap_close($connection);
+    }
+
     public function test_close_without_expunge_deletes_nothing(): void
     {
         $client = self::seedClient();
