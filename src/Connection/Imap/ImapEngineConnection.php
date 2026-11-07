@@ -11,8 +11,10 @@ use DirectoryTree\ImapEngine\Connection\Responses\Response;
 use DirectoryTree\ImapEngine\Connection\Responses\TaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Responses\UntaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
+use DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException;
 use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\CommandFailedException;
+use ImapPolyfill\Connection\ConnectionClosedException;
 use ImapPolyfill\Connection\MessageCache;
 use ImapPolyfill\Support\CommandArgument;
 use ImapPolyfill\Support\ErrorStack;
@@ -248,7 +250,11 @@ final class ImapEngineConnection extends ImapConnection
      */
     protected function nextReply(): Data|Token|Response|null
     {
-        $reply = parent::nextReply();
+        try {
+            $reply = parent::nextReply();
+        } catch (ImapConnectionClosedException $e) {
+            throw new ConnectionClosedException($e->getMessage(), 0, $e);
+        }
 
         if ($reply instanceof UntaggedResponse) {
             $this->absorbCounts($reply);

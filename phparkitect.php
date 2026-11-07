@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Arkitect\ClassSet;
 use Arkitect\CLI\Config;
 use Arkitect\Expression\ForClasses\NotDependsOnTheseNamespaces;
+use Arkitect\Expression\ForClasses\NotResideInTheseNamespaces;
 use Arkitect\Expression\ForClasses\ResideInOneOfTheseNamespaces;
 use Arkitect\Rules\Rule;
 
@@ -23,6 +24,13 @@ return static function (Config $config): void {
         ->that(new ResideInOneOfTheseNamespaces('ImapPolyfill', 'IMAP'))
         ->should(new NotDependsOnTheseNamespaces(['ImapPolyfill\Connection\MessageCache']))
         ->because('the message cache is the backend\'s, reached from above only as counts and a UidTable');
+
+    $rules[] = Rule::allClasses()
+        ->except('ImapPolyfill\Connection\Protocol')
+        ->that(new ResideInOneOfTheseNamespaces('ImapPolyfill', 'IMAP'))
+        ->andThat(new NotResideInTheseNamespaces('ImapPolyfill\Connection\Imap'))
+        ->should(new NotDependsOnTheseNamespaces(['DirectoryTree\ImapEngine']))
+        ->because('ImapEngine stops at the wire layer, so swapping the library again stays a change there');
 
     $rules[] = Rule::allClasses()
         ->that(new ResideInOneOfTheseNamespaces('IMAP\Connection'))

@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Session;
 
+use ImapPolyfill\Connection\ConnectionClosedException;
 use ImapPolyfill\Connection\Credentials;
 use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\UidMode;
@@ -127,47 +128,8 @@ final class Session
     {
         $attempts = 1 + max(0, $retries);
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
-            $connection = new \ImapPolyfill\Connection\Imap\ImapEngineConnection(
-                new \ImapPolyfill\Connection\Imap\TimedStream()
-            );
-
             try {
-                $connection->connect($spec->host, $spec->port, [
-                    // The upgrade is driven below, not here: handed
-                    // "starttls", ImapEngine issues STARTTLS blind, without
-                    // asking whether the server offers it and without the
-                    // refusal c-client gives when it doesn't.
-                    'encryption' => $spec->encryption() === 'ssl' ? 'ssl' : '',
-                    'validate_cert' => !$spec->switches->novalidate,
-                    'timeout' => Timeouts::seconds(IMAP_OPENTIMEOUT),
-                ]);
-
-                if ($spec->encryption() !== 'ssl') {
-                    $connection->upgradeToTls($spec->switches->tls, $spec->switches->notls);
-                }
-
-                if ($credentials->anonymous) {
-                    // c-client offers the client's own host name as the
-                    // anonymous contact address (net_localhost).
-                    $connection->loginAnonymous(gethostname() ?: 'localhost');
-                } else {
-                    $credentials->assertPlaintextLoginAllowed($connection->capabilities());
-                    $connection->login($credentials->user, $credentials->password);
-                }
-
-                // c-client clears its capability cache across authentication:
-                // a server routinely advertises more to a logged-in client
-                // than it did to a stranger, and the gated commands
-                // (SORT, THREAD, QUOTA) read the second answer.
-                $connection->forgetCapabilities();
-
-                return new \ImapPolyfill\Connection\Protocol($connection, $spec->host);
-            } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionFailedException $e) {
-                // c-client reports "Can't connect to host,port: reason", and
-                // naming the attempted port is the only way the default-port
-                // choice stays observable (and parity-testable) from outside.
-                $reason = $e->getPrevious()?->getMessage() ?? $e->getMessage();
-                ErrorStack::push("Can't connect to {$spec->host},{$spec->port}: {$reason}");
+                return \ImapPolyfill\Connection\Protocol::dial($spec, $credentials);
             } catch (\Throwable $e) {
                 ErrorStack::push($e->getMessage());
             }
@@ -381,7 +343,7 @@ final class Session
 
         try {
             $this->connection->backend()->noop();
-        } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException) {
+        } catch (ConnectionClosedException) {
             // Reporting a dead stream is what this function is for, so
             // finding one is an answer rather than a failure: c-client
             // returns NIL and logs nothing.
@@ -466,7 +428,7 @@ final class Session
 
         try {
             $status = $this->connection->reselectFolder($spec->folder, $readOnly);
-        } catch (\DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException) {
+        } catch (ConnectionClosedException) {
             // Losing the socket is not losing the connection: c-client
             // dials the host again and logs back in rather than reporting
             // a dead stream, which is what makes a session survive a server

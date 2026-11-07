@@ -8,10 +8,14 @@ use DirectoryTree\ImapEngine\Connection\Responses\Data\ResponseCodeData;
 use DirectoryTree\ImapEngine\Connection\Tokens\Nil;
 use DirectoryTree\ImapEngine\Connection\Tokens\Number;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
+use DirectoryTree\ImapEngine\Exceptions\ImapConnectionFailedException;
 use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\Imap\ImapEngineConnection;
+use ImapPolyfill\Connection\Imap\TimedStream;
+use ImapPolyfill\Mailbox\MailboxSpec;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Support\CommandArgument;
+use ImapPolyfill\Support\Timeouts;
 
 /**
  * The ConnectionBackend an \IMAP\Connection speaks IMAP through, and the
@@ -40,6 +44,55 @@ final class Protocol implements ConnectionBackend
         private readonly ImapEngineConnection $connection,
         private readonly string $host,
     ) {
+    }
+
+    /**
+     * Connects and logs in. ImapEngine's connection failures are translated
+     * here, where its exceptions stop.
+     */
+    public static function dial(MailboxSpec $spec, Credentials $credentials): self
+    {
+        $connection = new ImapEngineConnection(new TimedStream());
+
+        try {
+            $connection->connect($spec->host, $spec->port, [
+                // The upgrade is driven below, not here: handed
+                // "starttls", ImapEngine issues STARTTLS blind, without
+                // asking whether the server offers it and without the
+                // refusal c-client gives when it doesn't.
+                'encryption' => $spec->encryption() === 'ssl' ? 'ssl' : '',
+                'validate_cert' => !$spec->switches->novalidate,
+                'timeout' => Timeouts::seconds(IMAP_OPENTIMEOUT),
+            ]);
+
+            if ($spec->encryption() !== 'ssl') {
+                $connection->upgradeToTls($spec->switches->tls, $spec->switches->notls);
+            }
+
+            if ($credentials->anonymous) {
+                // c-client offers the client's own host name as the
+                // anonymous contact address (net_localhost).
+                $connection->loginAnonymous(gethostname() ?: 'localhost');
+            } else {
+                $credentials->assertPlaintextLoginAllowed($connection->capabilities());
+                $connection->login($credentials->user, $credentials->password);
+            }
+        } catch (ImapConnectionFailedException $e) {
+            // c-client reports "Can't connect to host,port: reason", and
+            // naming the attempted port is the only way the default-port
+            // choice stays observable (and parity-testable) from outside.
+            $reason = $e->getPrevious()?->getMessage() ?? $e->getMessage();
+
+            throw new \RuntimeException("Can't connect to {$spec->host},{$spec->port}: {$reason}", 0, $e);
+        }
+
+        // c-client clears its capability cache across authentication:
+        // a server routinely advertises more to a logged-in client
+        // than it did to a stranger, and the gated commands
+        // (SORT, THREAD, QUOTA) read the second answer.
+        $connection->forgetCapabilities();
+
+        return new self($connection, $spec->host);
     }
 
     public function driverName(): string
