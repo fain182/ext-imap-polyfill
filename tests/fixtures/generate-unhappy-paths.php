@@ -4,9 +4,10 @@
  * Regenerates tests/fixtures/unhappy-paths.php by asking the genuine
  * ext-imap what it does when there is nothing to answer with.
  *
- *     make greenmail-up && make parity-build
+ *     make greenmail-up && make dovecot-up && make parity-build
  *     podman run --rm --network ext-imap-polyfill-net \
  *         -e IMAP_POLYFILL_TEST_HOST=greenmail -e IMAP_POLYFILL_TEST_PORT=3143 \
+ *         -e IMAP_POLYFILL_DOVECOT_HOST=dovecot -e IMAP_POLYFILL_DOVECOT_PORT=31143 \
  *         -v "$PWD":/app:Z ext-imap-polyfill-parity \
  *         php tests/fixtures/generate-unhappy-paths.php
  *
@@ -33,17 +34,17 @@ $user = getenv('IMAP_POLYFILL_TEST_USER') ?: 'testuser';
 $password = getenv('IMAP_POLYFILL_TEST_PASSWORD') ?: 'testpass';
 
 [$matrix, $excluded] = AgreedMatrix::of(
-    static function (string $host, int $port) use ($user, $password): array {
+    static function (string $base) use ($user, $password): array {
         $matrix = [];
 
         foreach (UnhappyPaths::scenarios() as $scenario => $build) {
             foreach (UnhappyPaths::probes() as $call => $probe) {
                 // A connection per cell: several of these calls change the
                 // state the next one would be reading.
-                $connection = $build($host, $port, $user, $password);
+                $connection = $build($base, $user, $password);
 
                 if ($connection === false) {
-                    fwrite(STDERR, "Could not build the '{$scenario}' connection on {$host}:{$port}.\n");
+                    fwrite(STDERR, "Could not build the '{$scenario}' connection on {$base}.\n");
 
                     exit(1);
                 }

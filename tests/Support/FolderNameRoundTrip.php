@@ -42,13 +42,9 @@ final class FolderNameRoundTrip
      *
      * @return array<string, mixed>
      */
-    public static function carry(string $name, string $host, int $port, string $user, string $password): array
+    public static function carry(string $name, string $base, string $user, string $password): array
     {
-        // The same flags GreenmailTestCase::flags() honours, so pointing
-        // the suite at a server with a real certificate does not fail
-        // here alone.
-        $flags = getenv('IMAP_POLYFILL_TEST_FLAGS') ?: '/imap/novalidate-cert';
-        $spec = static fn (string $folder = '') => sprintf('{%s:%d%s}%s', $host, $port, $flags, $folder);
+        $spec = static fn (string $folder = '') => $base.$folder;
         $encode = static fn (string $utf8): string => (string) mb_convert_encoding($utf8, 'UTF7-IMAP', 'UTF-8');
 
         $suffix = bin2hex(random_bytes(4));

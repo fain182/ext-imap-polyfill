@@ -46,8 +46,7 @@ final class MessageBodiesTest extends GreenmailTestCase
     {
         $read = MessageBodies::read(
             $raw,
-            self::host(),
-            self::port(),
+            self::mailboxSpec(''),
             self::user(),
             self::password(),
         );

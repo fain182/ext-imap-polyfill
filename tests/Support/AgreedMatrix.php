@@ -16,21 +16,32 @@ namespace ImapPolyfill\Tests\Support;
 final class AgreedMatrix
 {
     /**
-     * @param callable(string, int): array<string, array<string, mixed>> $measure keyed group => cell => outcome
-     * @param string                                                    $label   sprintf template taking cell then group
+     * The callback gets each server's spec base, `{host:port/flags}`, to
+     * append folder names to. The flags differ per server and are decided
+     * here rather than by the callers: Dovecot announces STARTTLS, c-client
+     * upgrades whenever it is offered, and its unqualified upgrade speaks
+     * only TLS 1.0, so Dovecot needs /tls-sslv23 (see DovecotTestCase). On
+     * Greenmail, which announces nothing, the same switch would make the
+     * upgrade compulsory and the connection fail.
+     *
+     * @param callable(string): array<string, array<string, mixed>> $measure keyed group => cell => outcome
+     * @param string                                               $label   sprintf template taking cell then group
      *
      * @return array{0: array<string, array<string, mixed>>, 1: list<string>} [kept, excluded]
      */
     public static function of(callable $measure, string $label): array
     {
-        $primary = $measure(
+        $primary = $measure(sprintf(
+            '{%s:%d%s}',
             getenv('IMAP_POLYFILL_TEST_HOST') ?: '127.0.0.1',
             (int) (getenv('IMAP_POLYFILL_TEST_PORT') ?: 13143),
-        );
-        $second = $measure(
+            getenv('IMAP_POLYFILL_TEST_FLAGS') ?: '/imap/novalidate-cert',
+        ));
+        $second = $measure(sprintf(
+            '{%s:%d/imap/tls-sslv23/novalidate-cert}',
             getenv('IMAP_POLYFILL_DOVECOT_HOST') ?: '127.0.0.1',
             (int) (getenv('IMAP_POLYFILL_DOVECOT_PORT') ?: 13144),
-        );
+        ));
 
         $kept = [];
         $excluded = [];
