@@ -110,7 +110,10 @@ class ImapFetchmimeTest extends GreenmailTestCase
         $folderName = 'FetchMimeGoneBox'.uniqid();
         $connection = $this->openConnectionToFolderThatThenDisappears($folderName);
 
-        $this->assertFalse(imap_fetchmime($connection, 1, '1'));
+        $this->assertSame(
+            [false, ['imap_fetchmime(): Bad message number']],
+            $this->capturingWarnings(static fn () => imap_fetchmime($connection, 1, '1')),
+        );
     }
 
     /**

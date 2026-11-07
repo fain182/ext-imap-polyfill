@@ -2,10 +2,12 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
 use ImapPolyfill\Tests\ResetsErrorStack;
 
 class ImapErrorsTest extends GreenmailTestCase
 {
+    use CapturesWarnings;
     use ResetsErrorStack;
 
     public function test_returns_false_when_no_errors_occurred(): void
@@ -25,7 +27,10 @@ class ImapErrorsTest extends GreenmailTestCase
 
     public function test_returns_and_drains_accumulated_errors(): void
     {
-        imap_open(self::mailboxSpec(), self::user(), 'wrong-password');
+        $this->assertSame(
+            [false, ["imap_open(): Couldn't open stream ".self::mailboxSpec()]],
+            $this->capturingWarnings(static fn () => imap_open(self::mailboxSpec(), self::user(), 'wrong-password')),
+        );
 
         $errors = imap_errors();
 

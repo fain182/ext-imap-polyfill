@@ -208,7 +208,10 @@ class ImapHeaderinfoTest extends GreenmailTestCase
         $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
         imap_errors();
 
-        $this->assertFalse(imap_headerinfo($connection, 1));
+        $this->assertSame(
+            [false, ['imap_headerinfo(): Bad message number']],
+            $this->capturingWarnings(static fn () => imap_headerinfo($connection, 1)),
+        );
         $this->assertFalse(imap_errors());
     }
 
