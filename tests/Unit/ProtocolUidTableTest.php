@@ -24,4 +24,27 @@ class ProtocolUidTableTest extends TestCase
         $this->assertSame([], $protocol->getUid());
         $this->stream->assertNotWritten('FETCH');
     }
+
+    public function test_an_expunge_and_an_append_edit_the_table_rather_than_replace_it(): void
+    {
+        $protocol = $this->protocolServing([
+            '* 2 EXISTS',
+            'TAG1 OK [READ-WRITE] SELECT completed',
+            '* 1 FETCH (UID 10)',
+            '* 2 FETCH (UID 11)',
+            'TAG2 OK FETCH completed',
+            '* 1 EXPUNGE',
+            '* 2 EXISTS',
+            'TAG3 OK NOOP completed',
+            '* 2 FETCH (UID 12)',
+            'TAG4 OK FETCH completed',
+        ]);
+        $protocol->selectOrExamineFolder('INBOX', false);
+        $this->assertSame([1 => 10, 2 => 11], $protocol->getUid());
+
+        $protocol->noop();
+
+        $this->assertSame([1 => 11, 2 => 12], $protocol->getUid());
+        $this->stream->assertWritten('TAG4 FETCH 2:2 (UID)');
+    }
 }

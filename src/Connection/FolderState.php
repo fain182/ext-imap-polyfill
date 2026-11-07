@@ -24,7 +24,6 @@ final class FolderState
     public function __construct(
         public readonly int $exists,
         public readonly int $recent,
-        public readonly ?int $uidValidity = null,
         public readonly array $flags = [],
     ) {
     }

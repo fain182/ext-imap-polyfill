@@ -29,11 +29,6 @@ use ImapPolyfill\Support\CommandArgument;
  */
 final class Protocol implements ConnectionBackend
 {
-    /** @var array<int, int>|null msgno => uid for the folder $uidTableFor describes */
-    private ?array $uidTable = null;
-
-    private string $uidTableFor = '';
-
     private ?string $selectedFolder = null;
 
     private bool $selectedReadOnly = false;
@@ -83,18 +78,14 @@ final class Protocol implements ConnectionBackend
         // costs a round trip on every single imap_* function, and against a
         // mailbox of any size that round trip is the dominant cost.
         if ($folder === $this->selectedFolder && $readOnly === $this->selectedReadOnly) {
-            $counts = $this->connection->counts();
+            $messages = $this->connection->messages();
 
-            if ($counts['exists'] !== null) {
-                return new FolderState(
-                    $counts['exists'],
-                    $counts['recent'] ?? 0,
-                    flags: $this->selectedFlags,
-                );
+            if (($count = $messages->count()) !== null) {
+                return new FolderState($count, $messages->recentCount(), flags: $this->selectedFlags);
             }
         }
 
-        $this->connection->forgetCounts();
+        $this->connection->messages()->reset();
 
         $responses = $this->connection->sendAndCollect(
             $readOnly ? 'EXAMINE' : 'SELECT',
@@ -103,7 +94,6 @@ final class Protocol implements ConnectionBackend
 
         $exists = null;
         $recent = 0;
-        $uidValidity = null;
         $flags = [];
 
         foreach ($responses as $response) {
@@ -125,13 +115,6 @@ final class Protocol implements ConnectionBackend
             }
             if ($keyword === 'RECENT') {
                 $recent = (int) $type;
-                continue;
-            }
-
-            // "* OK [UIDVALIDITY 1234]", kept only to invalidate the uid table.
-            $code = $response->tokenAt(2);
-            if ($code instanceof ResponseCodeData && (string) ($code->tokenAt(0) ?? '') === 'UIDVALIDITY') {
-                $uidValidity = (int) (string) ($code->tokenAt(1) ?? 0);
             }
         }
 
@@ -147,16 +130,7 @@ final class Protocol implements ConnectionBackend
         $this->selectedReadOnly = $readOnly;
         $this->selectedFlags = $flags;
 
-        // A real SELECT is the one moment the uid table can be trusted to
-        // describe these messages; from here the count tracked on the
-        // connection decides when it stops.
-        $fingerprint = sprintf('%s/%d/%d', $folder, $uidValidity ?? 0, $exists);
-        if ($fingerprint !== $this->uidTableFor) {
-            $this->uidTable = null;
-            $this->uidTableFor = $fingerprint;
-        }
-
-        return new FolderState($exists, $recent, $uidValidity, $flags);
+        return new FolderState($exists, $recent, $flags);
     }
 
     /**
@@ -289,33 +263,38 @@ final class Protocol implements ConnectionBackend
     }
 
     /**
-     * msgno => uid for the whole selected folder, the way c-client keeps its
-     * per-mailbox uid table — cached like one too, since imap_uid() is
-     * routinely called once per message and this fetch covers the whole
-     * mailbox. selectOrExamine() drops the cache as soon as the folder,
-     * its UIDVALIDITY or its message count changes.
+     * msgno => uid for the whole selected folder, read off the message cache
+     * the way c-client's mail_uid() reads it off the stream: only the
+     * messages whose uid is not yet known are asked for, which after the
+     * first call is none, or the few an EXISTS has since added.
      *
      * @return array<int, int>
      */
     public function getUid(): array
     {
-        $exists = $this->connection->counts()['exists'];
-        if ($this->uidTable !== null && $exists !== null && count($this->uidTable) !== $exists) {
-            $this->uidTable = null;
+        $messages = $this->connection->messages();
+
+        // Nothing selected, so nothing cached to read or fill.
+        if ($messages->count() === null) {
+            /** @var array<int, int> */
+            return $this->fetchSet('1:*', ['UID'], UidMode::Msgno);
         }
 
-        if ($exists === 0) {
-            return $this->uidTable = [];
+        $unknown = $messages->unknownUids();
+
+        // An empty folder has no uids, and asking it for the ones it has is
+        // itself an error on some servers ("1:*" over nothing).
+        if ($unknown !== []) {
+            foreach ($this->fetchSet($unknown[0].':'.end($unknown), ['UID'], UidMode::Msgno) as $msgno => $uid) {
+                $messages->learnUid($msgno, (int) $uid);
+            }
+
+            if ($messages->unknownUids() !== []) {
+                throw new \RuntimeException('FETCH UID left message '.$messages->unknownUids()[0].' without a uid');
+            }
         }
 
-        if ($this->uidTable !== null) {
-            return $this->uidTable;
-        }
-
-        /** @var array<int, int> $uids */
-        $uids = $this->fetchSet('1:*', ['UID'], UidMode::Msgno);
-
-        return $this->uidTable = $uids;
+        return $messages->uidsByMsgno();
     }
 
     /**

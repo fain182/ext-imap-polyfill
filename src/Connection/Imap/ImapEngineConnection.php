@@ -13,6 +13,7 @@ use DirectoryTree\ImapEngine\Connection\Responses\UntaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
 use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\CommandFailedException;
+use ImapPolyfill\Connection\MessageCache;
 use ImapPolyfill\Support\CommandArgument;
 use ImapPolyfill\Support\ErrorStack;
 
@@ -27,9 +28,7 @@ use ImapPolyfill\Support\ErrorStack;
  */
 final class ImapEngineConnection extends ImapConnection
 {
-    private ?int $exists = null;
-
-    private ?int $recent = null;
+    private ?MessageCache $messages = null;
 
     /** @var list<string>|null */
     private ?array $capabilities = null;
@@ -263,23 +262,12 @@ final class ImapEngineConnection extends ImapConnection
     }
 
     /**
-     * Message counts as last reported for the selected folder, or null when
-     * nothing has reported them since the folder was selected.
-     *
-     * @return array{exists: ?int, recent: ?int}
+     * The selected folder's message cache, which every untagged response
+     * edits as it arrives.
      */
-    public function counts(): array
+    public function messages(): MessageCache
     {
-        return ['exists' => $this->exists, 'recent' => $this->recent];
-    }
-
-    /**
-     * Called when the selection changes: counts describe one folder only.
-     */
-    public function forgetCounts(): void
-    {
-        $this->exists = null;
-        $this->recent = null;
+        return $this->messages ??= new MessageCache();
     }
 
     /**
@@ -287,9 +275,6 @@ final class ImapEngineConnection extends ImapConnection
      * stream cache wherever they turn up — they are not tied to SELECT, and
      * a server may volunteer them on any command. Tracking them here is what
      * lets the polyfill report counts without re-selecting the folder first.
-     *
-     * EXPUNGE carries the message number that went away, not a new total, so
-     * the count is decremented rather than replaced.
      */
     private function absorbCounts(UntaggedResponse $response): void
     {
@@ -297,9 +282,9 @@ final class ImapEngineConnection extends ImapConnection
         $number = (int) (string) $response->type();
 
         match ($keyword) {
-            'EXISTS' => $this->exists = $number,
-            'RECENT' => $this->recent = $number,
-            'EXPUNGE' => $this->exists = max(0, ($this->exists ?? 1) - 1),
+            'EXISTS' => $this->messages()->exists($number),
+            'RECENT' => $this->messages()->recent($number),
+            'EXPUNGE' => $this->messages()->expunged($number),
             default => null,
         };
     }
