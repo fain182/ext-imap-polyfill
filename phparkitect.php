@@ -33,6 +33,15 @@ return static function (Config $config): void {
         ->because('ImapEngine stops at the wire layer, so swapping the library again stays a change there');
 
     $rules[] = Rule::allClasses()
+        ->that(new ResideInOneOfTheseNamespaces('ImapPolyfill\Session'))
+        ->should(new NotDependsOnTheseNamespaces([
+            'ImapPolyfill\Connection\Protocol',
+            'ImapPolyfill\Connection\Imap',
+            'ImapPolyfill\Connection\Pop3',
+        ]))
+        ->because('the imap_* layer talks to IMAP\Connection and ConnectionBackend, never to a protocol\'s implementation');
+
+    $rules[] = Rule::allClasses()
         ->that(new ResideInOneOfTheseNamespaces('IMAP\Connection'))
         ->should(new NotDependsOnTheseNamespaces(['ImapPolyfill\Support\ErrorStack']))
         ->because('IMAP\Connection knows nothing about the imap_* error contract');
