@@ -219,9 +219,8 @@ class ImapFetchbodyTest extends GreenmailTestCase
     }
 
     /**
-     * A section past the first is checked against the message's structure
-     * before it is fetched; a uid that is not there must still be answered
-     * as absent, not as that check failing.
+     * A section past '1' makes the structure probe run first; that probe
+     * must answer an absent uid as absent too.
      */
     public function test_warns_for_a_uid_that_does_not_exist_with_a_later_section(): void
     {
