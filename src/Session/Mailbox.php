@@ -540,11 +540,11 @@ final class Mailbox
             // under its own name.
             [$handle, $warnings] = Diagnostics::collect(static fn () => fopen((string) $file, 'wb'));
 
-            if ($handle === false) {
-                if ($warnings !== []) {
-                    trigger_error((string) preg_replace('/^fopen\(/', 'imap_savebody(', end($warnings)), E_USER_WARNING);
-                }
+            foreach ($warnings as $warning) {
+                trigger_error((string) preg_replace('/^fopen\(/', 'imap_savebody(', $warning), E_USER_WARNING);
+            }
 
+            if ($handle === false) {
                 return false;
             }
         }
