@@ -10,7 +10,7 @@ use ImapPolyfill\Tests\CapturesWarnings;
  * certificate (`make dovecot-up` generates it) and the announcement.
  *
  * Most of it is checked through /tls-sslv23 rather than /tls, for the reason
- * DovecotTestCase::mailboxSpec() spells out: c-client's /tls speaks TLS 1.0
+ * MailServer::dovecot() spells out: c-client's /tls speaks TLS 1.0
  * and nothing else, so /tls is the one shape of this that cannot be compared
  * against the real extension at all. What is compared is worth more than the
  * switch used to reach it — that the upgrade happens, that it is reported,

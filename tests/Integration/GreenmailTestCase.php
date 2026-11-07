@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\Support\MailServer;
 use ImapPolyfill\Tests\Support\SeedClient;
 
 use PHPUnit\Framework\TestCase;
@@ -18,14 +19,10 @@ abstract class GreenmailTestCase extends TestCase
         return getenv('IMAP_POLYFILL_TEST_PASSWORD') ?: 'testpass';
     }
 
-    /**
-     * The connection flags every spec in this suite carries. Overridable so
-     * the same tests can run against a server reached over TLS with a real
-     * certificate, where "/novalidate-cert" would be wrong.
-     */
+    /** The connection flags every spec in this suite carries. */
     protected static function flags(): string
     {
-        return getenv('IMAP_POLYFILL_TEST_FLAGS') ?: '/imap/novalidate-cert';
+        return MailServer::greenmail()->flags;
     }
 
     /**
@@ -53,12 +50,12 @@ abstract class GreenmailTestCase extends TestCase
 
     protected static function host(): string
     {
-        return getenv('IMAP_POLYFILL_TEST_HOST') ?: '127.0.0.1';
+        return MailServer::greenmail()->host;
     }
 
     protected static function port(): int
     {
-        return (int) (getenv('IMAP_POLYFILL_TEST_PORT') ?: 13143);
+        return MailServer::greenmail()->port;
     }
 
     /**
@@ -92,13 +89,9 @@ abstract class GreenmailTestCase extends TestCase
         return getenv('IMAP_POLYFILL_TEST_POP3_FLAGS') ?: '/pop3/novalidate-cert';
     }
 
-    /**
-     * $extraFlags carries the ones a single test is about (/readonly), which
-     * belong after the connection flags every spec shares.
-     */
     protected static function mailboxSpec(string $folder = 'INBOX', string $extraFlags = ''): string
     {
-        return sprintf('{%s:%d%s%s}%s', self::host(), self::port(), self::flags(), $extraFlags, $folder);
+        return MailServer::greenmail()->spec($folder, $extraFlags);
     }
 
     protected static function pop3MailboxSpec(string $folder = 'INBOX', string $extraFlags = ''): string

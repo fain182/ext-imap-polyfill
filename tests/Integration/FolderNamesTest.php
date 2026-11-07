@@ -46,8 +46,7 @@ final class FolderNamesTest extends GreenmailTestCase
     {
         $carried = FolderNameRoundTrip::carry(
             $name,
-            self::host(),
-            self::port(),
+            self::mailboxSpec(''),
             self::user(),
             self::password(),
         );

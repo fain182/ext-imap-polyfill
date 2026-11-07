@@ -16,21 +16,18 @@ namespace ImapPolyfill\Tests\Support;
 final class AgreedMatrix
 {
     /**
-     * @param callable(string, int): array<string, array<string, mixed>> $measure keyed group => cell => outcome
-     * @param string                                                    $label   sprintf template taking cell then group
+     * The callback gets each server's spec base, `{host:port/flags}`, to
+     * append folder names to.
+     *
+     * @param callable(string): array<string, array<string, mixed>> $measure keyed group => cell => outcome
+     * @param string                                               $label   sprintf template taking cell then group
      *
      * @return array{0: array<string, array<string, mixed>>, 1: list<string>} [kept, excluded]
      */
     public static function of(callable $measure, string $label): array
     {
-        $primary = $measure(
-            getenv('IMAP_POLYFILL_TEST_HOST') ?: '127.0.0.1',
-            (int) (getenv('IMAP_POLYFILL_TEST_PORT') ?: 13143),
-        );
-        $second = $measure(
-            getenv('IMAP_POLYFILL_DOVECOT_HOST') ?: '127.0.0.1',
-            (int) (getenv('IMAP_POLYFILL_DOVECOT_PORT') ?: 13144),
-        );
+        $primary = $measure(MailServer::greenmail()->spec());
+        $second = $measure(MailServer::dovecot()->spec());
 
         $kept = [];
         $excluded = [];
