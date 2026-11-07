@@ -280,12 +280,36 @@ final class ImapEngineConnection extends ImapConnection
         match ($keyword) {
             'EXISTS' => $this->messages()->exists($number),
             'RECENT' => $this->messages()->recent($number),
-            // Between a reset and the new folder's EXISTS the cache describes
-            // no folder, so an EXPUNGE still in flight for the one being left
-            // has nothing there to take out.
-            'EXPUNGE' => $this->messages()->count() === null ? null : $this->messages()->expunged($number),
+            'EXPUNGE' => $this->absorbExpunge($number),
             default => null,
         };
+    }
+
+    /**
+     * mail_expunged(): an EXPUNGE naming a message the stream does not have
+     * is logged, in c-client's words, and changes nothing. Raising here
+     * instead would abandon the reply half read, the tagged completion of
+     * whatever command is in flight still on the wire.
+     *
+     * Between a reset and the new folder's EXISTS the cache describes no
+     * folder at all, so an EXPUNGE still in flight for the one being left
+     * has nothing there to take out, and nothing to report about either.
+     */
+    private function absorbExpunge(int $msgno): void
+    {
+        $count = $this->messages()->count();
+
+        if ($count === null) {
+            return;
+        }
+
+        if ($msgno < 1 || $msgno > $count) {
+            ErrorStack::push("Expunge of non-existent message {$msgno}, nmsgs={$count}");
+
+            return;
+        }
+
+        $this->messages()->expunged($msgno);
     }
 
     /**
