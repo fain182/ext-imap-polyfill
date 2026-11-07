@@ -98,6 +98,10 @@ final class UnhappyPaths
      * The error stack is drained first, so what is reported was put there
      * by this call and not by the scenario that set the connection up.
      *
+     * Return values are compared by shape, not by content: a header string
+     * or a status object carries the server's own wording and the folder's
+     * generated name, neither of which is the point here.
+     *
      * @return array<string, mixed>
      */
     public static function outcome(callable $probe, \IMAP\Connection $connection): array
