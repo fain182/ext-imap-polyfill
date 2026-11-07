@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Tests\Integration;
 
+use ImapPolyfill\Tests\CapturesWarnings;
 use ImapPolyfill\Tests\ResetsErrorStack;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -20,6 +21,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class PureFunctionsTest extends TestCase
 {
+    use CapturesWarnings;
     use ResetsErrorStack;
 
     /**
@@ -297,10 +299,48 @@ final class PureFunctionsTest extends TestCase
         $this->assertSame($expected, imap_mutf7_to_utf8($input));
     }
 
-    #[DataProvider('modifiedUtf7')]
-    public function test_utf7_decode(string $input, string|false $expected): void
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function utf7DecodeInputs(): array
     {
-        $this->assertSame($expected, imap_utf7_decode($input));
+        return [
+            'plain ascii' => ['Ciao', 'Ciao'],
+            'escaped ampersand' => ['a&-b', 'a&b'],
+            'a run of two bytes' => ['caff&w6g-', "caff\xC3\xA8"],
+            'a run of three bytes' => ['&4pi6-', "\xE2\x98\xBA"],
+            'the bits left over are dropped' => ['&QUI-', 'AB'],
+        ];
+    }
+
+    #[DataProvider('utf7DecodeInputs')]
+    public function test_utf7_decode(string $input, string $expected): void
+    {
+        $this->assertSame([$expected, []], $this->capturingWarnings(static fn () => imap_utf7_decode($input)));
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function utf7DecodeRefusals(): array
+    {
+        return [
+            'trailing ampersand' => ['INBOX&', 'Unexpected end of string'],
+            'unterminated run' => ['&AOk', 'Unexpected end of string'],
+            'a control character' => ["a\tb", "Invalid modified UTF-7 character: `\t'"],
+            'an octet with the high bit set' => ["caff\xC3\xA8", "Invalid modified UTF-7 character: `\xC3'"],
+            'outside the run alphabet' => ['&A=-', "Invalid modified base64 character: `='"],
+            'one character into a quantum' => ['&AAAAB-', "Stray modified base64 character: `B'"],
+        ];
+    }
+
+    #[DataProvider('utf7DecodeRefusals')]
+    public function test_utf7_decode_refuses_with_a_warning(string $input, string $warning): void
+    {
+        $this->assertSame(
+            [false, ["imap_utf7_decode(): {$warning}"]],
+            $this->capturingWarnings(static fn () => imap_utf7_decode($input)),
+        );
     }
 
     /**
