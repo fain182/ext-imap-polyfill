@@ -1,0 +1,41 @@
+name: Dependabot auto-merge
+
+# Merges a Dependabot pull request once the Tests run for its push is green,
+# unless the update is a major one.
+#
+# This waits on workflow_run rather than using GitHub's native auto-merge
+# because tests.yml skips every job on the pull_request event for branches of
+# this repository, and a job skipped by its `if` reports "Success" under the
+# same name as the real one: a required check would be satisfied by the skip.
+#
+# workflow_run is also what gets a token able to merge: a workflow Dependabot
+# itself triggers runs with a read-only one.
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.event == 'push'
+      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.actor.login == 'dependabot[bot]'
+      && startsWith(github.event.workflow_run.head_branch, 'dependabot/')
+      && !contains(github.event.workflow_run.head_commit.message, 'update-type: version-update:semver-major')
+    runs-on: ubuntu-latest
+    steps:
+      # --match-head-commit: if Dependabot pushed again (a rebase) after the
+      # run that went green, the merge is refused and the new run decides.
+      - run: >-
+          gh pr merge "$BRANCH" --repo "$REPO" --merge
+          --match-head-commit "$SHA" --delete-branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
