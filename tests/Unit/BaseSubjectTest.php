@@ -37,6 +37,8 @@ class BaseSubjectTest extends TestCase
             // it, so it starts past the end and strips nothing.
             'trailing whitespace after a collapse stays' => ["  spaced \t  out  ", 'spaced out '],
             '(fwd) after a collapse stays' => ['Hello  world (fwd)', 'hello world (fwd)'],
+            'an encoded re is a re' => ['=?utf-8?q?Re=3A_foo?=', 'foo'],
+            'an encoded subject is decoded' => ['Re: =?utf-8?b?Y2Fmw6g=?=', "caf\xc3\xa8"],
             'reply is not re' => ['Reply: no', 'reply: no'],
             'fwd trailer chain' => ['topic (fwd) (FWD) ', 'topic'],
             'leading (fwd) is not a trailer' => ['(fwd) leading', '(fwd) leading'],

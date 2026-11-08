@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Message;
 
+use ImapPolyfill\Mime\MimeText;
+
 /**
  * Port of c-client's mail_strip_subject() (mail.c), the RFC 5256 §2.1 base
  * subject algorithm: collapse whitespace, strip trailing "(fwd)"/WSP
@@ -52,6 +54,12 @@ final class BaseSubject
         if ($subject === '') {
             return ['', false];
         }
+
+        // Step 1 starts from the decoded subject (utf8_mime2text()), so an
+        // encoded "Re:" is a reply like any other. c-client also folds the
+        // case of the decoded text and decomposes it; that changes the bytes
+        // of the same text and nothing a caller sees, and is left out.
+        $subject = MimeText::decode($subject);
 
         $size = strlen($subject);
         $buffer = $subject."\0";

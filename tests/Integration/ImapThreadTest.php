@@ -181,6 +181,25 @@ final class ImapThreadTest extends GreenmailTestCase
         return $result;
     }
 
+    /**
+     * The base subject is taken from the decoded subject, so an encoded
+     * "Re:" files the message under the one it answers.
+     */
+    #[Group('greenmail-only')]
+    public function test_an_encoded_reply_prefix_groups_by_subject(): void
+    {
+        $folderName = 'ImapThread'.random_int(10000, 99999);
+        $folder = $this->makeFolder($folderName)->getFolder($folderName);
+        $folder->appendMessage("Message-ID: <a@example.com>\r\nSubject: Shared Topic\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nA");
+        $folder->appendMessage("Message-ID: <b@example.com>\r\nSubject: =?utf-8?q?Re=3A_Shared_Topic?=\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nB");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->assertSame(['a' => null, 'b' => 'a'], self::parents(imap_thread($connection), ['a', 'b']));
+
+        imap_close($connection);
+    }
+
     public function test_duplicate_message_ids_each_keep_their_own_node(): void
     {
         $folderName = 'ImapThread'.random_int(10000, 99999);
