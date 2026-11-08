@@ -3,22 +3,46 @@
 SHELL := /bin/bash
 
 CONTAINER_RUNTIME ?= $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
+## Prefix of every container, network and image name, so that checkouts of
+## the repository in other directories (git worktrees) run their fixtures side
+## by side instead of removing each other's. A checkout named after the
+## repository keeps the plain names and the default ports.
+##
+## Every other checkout moves its host ports up by a multiple of 100 drawn
+## from a checksum of its name: 1 to 180 hundreds, which keeps the highest
+## port under Linux's ephemeral range (32768). No two base ports below are a
+## multiple of 100 apart, so a shifted port never lands on another service's
+## port; two names can still draw the same offset, and then any port can be
+## passed by hand (`make test PORT_OFFSET=...` or `GREENMAIL_PORT=...`).
+CHECKOUT := $(notdir $(CURDIR))
+IS_MAIN_CHECKOUT := $(filter ext-imap-polyfill,$(CHECKOUT))
+INSTANCE ?= ext-imap-polyfill$(if $(IS_MAIN_CHECKOUT),,-$(CHECKOUT))
+PORT_OFFSET ?= $(if $(IS_MAIN_CHECKOUT),0,$(shell printf %s '$(CHECKOUT)' | cksum | awk '{ print ($$1 % 180 + 1) * 100 }'))
 GREENMAIL_IMAGE := docker.io/greenmail/standalone:2.1.12
-GREENMAIL_NAME := ext-imap-polyfill-greenmail
-GREENMAIL_PORT := 13143
-GREENMAIL_POP3_PORT := 13110
-GREENMAIL_IMAPS_PORT := 13993
-GREENMAIL_POP3S_PORT := 13995
+GREENMAIL_NAME := $(INSTANCE)-greenmail
+GREENMAIL_PORT ?= $(shell expr 13143 + $(PORT_OFFSET))
+GREENMAIL_POP3_PORT ?= $(shell expr 13110 + $(PORT_OFFSET))
+GREENMAIL_IMAPS_PORT ?= $(shell expr 13993 + $(PORT_OFFSET))
+GREENMAIL_POP3S_PORT ?= $(shell expr 13995 + $(PORT_OFFSET))
 ## One user per suite that can run at the same time as another: testuser for
 ## the suite on the host, parity for the one in the parity container.
 GREENMAIL_OPTS := -Dgreenmail.setup.test.imap -Dgreenmail.setup.test.pop3 -Dgreenmail.setup.test.imaps -Dgreenmail.setup.test.pop3s -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=testuser:testpass@localhost,parity:testpass@localhost
 DOVECOT_IMAGE := docker.io/dovecot/dovecot:latest
-DOVECOT_NAME := ext-imap-polyfill-dovecot
-DOVECOT_PORT := 13144
-DOVECOT_POP3_PORT := 13111
+DOVECOT_NAME := $(INSTANCE)-dovecot
+DOVECOT_PORT ?= $(shell expr 13144 + $(PORT_OFFSET))
+DOVECOT_POP3_PORT ?= $(shell expr 13111 + $(PORT_OFFSET))
 DOVECOT_SSL_DIR := $(CURDIR)/tests/fixtures/dovecot-ssl
-NETWORK_NAME := ext-imap-polyfill-net
-PARITY_IMAGE := ext-imap-polyfill-parity
+NETWORK_NAME := $(INSTANCE)-net
+PARITY_IMAGE := $(INSTANCE)-parity
+
+## What the suite reads to find the fixtures started on the ports above.
+FIXTURE_ENV := \
+	IMAP_POLYFILL_TEST_PORT=$(GREENMAIL_PORT) \
+	IMAP_POLYFILL_TEST_POP3_PORT=$(GREENMAIL_POP3_PORT) \
+	IMAP_POLYFILL_TEST_IMAPS_PORT=$(GREENMAIL_IMAPS_PORT) \
+	IMAP_POLYFILL_TEST_POP3S_PORT=$(GREENMAIL_POP3S_PORT) \
+	IMAP_POLYFILL_DOVECOT_PORT=$(DOVECOT_PORT) \
+	IMAP_POLYFILL_DOVECOT_POP3_PORT=$(DOVECOT_POP3_PORT)
 
 ## What a running fixture must have been started with to be reused: a change
 ## to the image, to Greenmail's options or to dovecot.conf replaces it.
@@ -133,7 +157,7 @@ dovecot-down:
 fixtures-down: dovecot-down greenmail-down
 
 test-integration: install greenmail-up dovecot-up
-	vendor/bin/phpunit --testsuite integration $(PHPUNIT_FILTER)
+	$(FIXTURE_ENV) vendor/bin/phpunit --testsuite integration $(PHPUNIT_FILTER)
 
 test: test-unit test-integration
 
@@ -150,6 +174,7 @@ check:
 ## or this polyfill leans on it — which is how the POP3 uid bug surfaced.
 ## Not part of `make test`: it is an audit to run before a release.
 cross-check: install dovecot-up
+	$(FIXTURE_ENV) \
 	IMAP_POLYFILL_TEST_HOST=127.0.0.1 \
 	IMAP_POLYFILL_TEST_PORT=$(DOVECOT_PORT) \
 	IMAP_POLYFILL_TEST_POP3_PORT=$(DOVECOT_POP3_PORT) \
@@ -172,7 +197,7 @@ parity-build:
 ## leave the job green while a note in the tree went stale; the grep below
 ## is what turns it into a failure.
 phpt: install dovecot-up
-	@set -o pipefail; 	IMAP_POLYFILL_DOVECOT_USER=phpt REPORT_EXIT_STATUS=1 TEST_PHP_EXECUTABLE="$$(command -v php)" 		php tests/phpt/run-tests.php -q 			-d auto_prepend_file=$(CURDIR)/tests/bootstrap.php 			tests/phpt/tests | tee tests/phpt/run.log; 	status=$$?; 	if grep -q 'XFAIL section but test passes' tests/phpt/run.log; then 		echo 'An --XFAIL-- test passed: the reason it carries is out of date.'; 		status=1; 	fi; 	rm -f tests/phpt/run.log; 	exit $$status
+	@set -o pipefail; 	$(FIXTURE_ENV) IMAP_POLYFILL_DOVECOT_USER=phpt REPORT_EXIT_STATUS=1 TEST_PHP_EXECUTABLE="$$(command -v php)" 		php tests/phpt/run-tests.php -q 			-d auto_prepend_file=$(CURDIR)/tests/bootstrap.php 			tests/phpt/tests | tee tests/phpt/run.log; 	status=$$?; 	if grep -q 'XFAIL section but test passes' tests/phpt/run.log; then 		echo 'An --XFAIL-- test passed: the reason it carries is out of date.'; 		status=1; 	fi; 	rm -f tests/phpt/run.log; 	exit $$status
 
 parity: parity-build greenmail-up dovecot-up
 	$(CONTAINER_RUNTIME) run --rm \
