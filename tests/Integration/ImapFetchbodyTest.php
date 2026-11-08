@@ -4,6 +4,7 @@ namespace ImapPolyfill\Tests\Integration;
 
 use ImapPolyfill\Tests\CapturesWarnings;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 
 class ImapFetchbodyTest extends GreenmailTestCase
@@ -233,5 +234,62 @@ class ImapFetchbodyTest extends GreenmailTestCase
 
         $this->assertFalse($result);
         $this->assertSame(['imap_fetchbody(): UID does not exist'], $warnings);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function sectionsTheServerRefuses(): iterable
+    {
+        yield 'a part inside a message/rfc822 part' => [
+            "Subject: Outer\r\n"
+            ."MIME-Version: 1.0\r\n"
+            ."Content-Type: message/rfc822\r\n"
+            ."\r\n"
+            ."Subject: Inner\r\n"
+            ."MIME-Version: 1.0\r\n"
+            ."Content-Type: multipart/mixed; boundary=\"IN\"\r\n"
+            ."\r\n"
+            ."--IN\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."inner part\r\n"
+            ."--IN--\r\n",
+            '1.1',
+        ];
+
+        yield 'a multipart without a boundary' => [
+            "Subject: No boundary\r\n"
+            ."MIME-Version: 1.0\r\n"
+            ."Content-Type: multipart/mixed\r\n"
+            ."\r\n"
+            ."just text\r\n",
+            '1',
+        ];
+    }
+
+    /**
+     * c-client hands a refused FETCH's text to mm_log() and
+     * mail_fetch_body() answers the empty string: the message is there,
+     * so there is no warning, and no false either.
+     *
+     * It needs a server that refuses these FETCHes, and Greenmail's MIME
+     * parser is the one that does.
+     */
+    #[Group('greenmail-only')]
+    #[DataProvider('sectionsTheServerRefuses')]
+    public function test_a_section_the_server_refuses_is_an_empty_string_with_the_refusal_on_the_stack(string $message, string $section): void
+    {
+        $folderName = 'FetchBodyRefusedBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage($message);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+        imap_errors();
+
+        [$result, $warnings] = $this->capturingWarnings(fn () => imap_fetchbody($connection, 1, $section));
+
+        $this->assertSame('', $result);
+        $this->assertSame([], $warnings);
+        $this->assertNotFalse(imap_errors());
     }
 }

@@ -176,8 +176,10 @@ final class Mailbox
      * failure, in the two shapes a server reports it: an empty response,
      * and — because a UID was never checked against the count up front —
      * a rejected FETCH whose uid the folder turns out not to have.
+     *
+     * Any other rejection is $whenRefused, the server's text on the stack.
      */
-    private function fetchItem(int $messageNum, string $item, UidMode $uidMode, string $function): string|false
+    private function fetchItem(int $messageNum, string $item, UidMode $uidMode, string $function, string|false $whenRefused = false): string|false
     {
         $selection = $this->selectionCovering($messageNum, $uidMode, $function);
 
@@ -194,7 +196,7 @@ final class Mailbox
 
             ErrorStack::push($e->getMessage());
 
-            return false;
+            return $whenRefused;
         }
 
         if ($data === []) {
@@ -433,7 +435,10 @@ final class Mailbox
             }
         }
 
-        return $this->fetchItem($messageNum, self::bodyItem($wireSection, $flags), $uidMode, $function);
+        // A message that is there and a FETCH the server refuses is the
+        // empty string: imap_msgdata() hands the refusal to mm_log() and
+        // fails, and mail_fetch_body() answers that failure with "".
+        return $this->fetchItem($messageNum, self::bodyItem($wireSection, $flags), $uidMode, $function, '');
     }
 
     /**
