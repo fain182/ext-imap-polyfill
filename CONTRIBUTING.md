@@ -5,13 +5,17 @@
 ```bash
 make install           # composer install
 make test-unit         # pure-PHP tests, no server needed
-make test-integration  # spins up the fixtures, runs the suite against them, tears them down
+make test-integration  # starts the fixtures if they aren't running, runs the suite against them
 make test              # both of the above
 make phpstan           # static analysis at level 6
+make check             # phpstan, arch, test, phpt and parity: what CI runs
+make fixtures-down     # stops both fixtures
 make install-lowest    # re-resolve to the oldest versions composer.json allows
 ```
 
 Docker or Podman is required from `test-integration` onwards; `docker-compose.yml` describes the same setup for compose tooling.
+
+The fixtures stay up after a run, so the next one skips starting them; `make fixtures-down` stops them, and is also how an edit to `tests/fixtures/dovecot.conf` takes effect. `FILTER` narrows any phpunit target, parity included: `make test-integration FILTER=ImapSavebodyTest`.
 
 No `composer.lock` is committed, since it never reaches the projects that depend on this library. `make install` resolves the newest releases `composer.json` allows into a local, gitignored lock (`composer update` refreshes it), and `make install-lowest` rewrites that lock to the oldest ones, which the test targets then pick up.
 

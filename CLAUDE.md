@@ -10,7 +10,9 @@ A drop-in polyfill for PHP's `imap_*` functions (removed from core in 8.4), back
 
 `CONTRIBUTING.md` is the single source for the make targets, the two fixtures and their ports, and how `make parity` and `make cross-check` work. Read it first; don't restate it here, or the two drift.
 
-The short version: `make test` for unit + integration, `make parity` to run the same integration suite against the genuine extension, `make cross-check` to run it against the second server.
+The short version: `make test` for unit + integration, `make parity` to run the same integration suite against the genuine extension, `make cross-check` to run it against the second server, `make check` for everything CI runs.
+
+Run the suites through these targets, not `vendor/bin/phpunit` with hand-started fixtures: `FILTER=` narrows a run, and the fixtures stay up between runs, so there is nothing to gain by going around make.
 
 ## Architecture
 
