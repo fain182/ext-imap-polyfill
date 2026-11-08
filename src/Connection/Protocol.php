@@ -129,6 +129,21 @@ final class Protocol implements ConnectionBackend
         return $this->selectOrExamineFolder($folder, $readOnly);
     }
 
+    public function unselect(): void
+    {
+        $this->selectedFolder = null;
+        $this->connection->messages()->reset();
+
+        // c-client sends it and never reads the answer (imap4r1.c,
+        // imap_open), so a server refusing it, because nothing was
+        // selected, leaves the error stack alone. A socket that is gone
+        // still surfaces, as ConnectionClosedException.
+        try {
+            $this->connection->sendAndCollect('UNSELECT');
+        } catch (CommandFailedException) {
+        }
+    }
+
     public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState
     {
         // c-client selects a mailbox once and keeps it: the counts it reports

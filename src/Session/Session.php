@@ -413,6 +413,9 @@ final class Session
         // Like imap_open(): a /readonly flag in the spec counts as OP_READONLY.
         $readOnly = (bool) ($flags & OP_READONLY) || $spec->switches->readOnly;
         $isPop3 = $spec->service === Service::Pop3;
+        // pop3.c has no half-open state: the flag reaches the driver, which
+        // never reads it, and the reopened session is the mailbox as usual.
+        $halfOpen = (bool) ($flags & OP_HALFOPEN) && !$isPop3;
 
         if ($spec->service === Service::Nntp) {
             throw \ImapPolyfill\Support\UnsupportedFeature::nntp($mailbox);
@@ -440,8 +443,13 @@ final class Session
         // lacking DR_RECYCLE: the session is closed, committing the DELEs an
         // expunge sent, and a new one numbers the messages afresh with no
         // flags set.
-        if ($isPop3 || $prefix !== $this->connection->mailboxPrefix() || $credentials->user !== $this->connection->user()) {
-            $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $retries);
+        //
+        // Nor can c-client leave a selection behind on a server without
+        // UNSELECT: going half-open there logs out and dials again
+        // (imap4r1.c, imap_open).
+        if ($isPop3 || $prefix !== $this->connection->mailboxPrefix() || $credentials->user !== $this->connection->user()
+            || ($halfOpen && !$this->connection->backend()->hasCapability('UNSELECT'))) {
+            $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $retries, $halfOpen);
 
             if ($status === false) {
                 return false;
@@ -455,13 +463,17 @@ final class Session
         }
 
         try {
-            $status = $this->connection->reselectFolder($spec->folder, $readOnly);
+            if ($halfOpen) {
+                $this->connection->unselect();
+            } else {
+                $this->connection->reselectFolder($spec->folder, $readOnly);
+            }
         } catch (ConnectionClosedException) {
             // Losing the socket is not losing the connection: c-client
             // dials the host again and logs back in rather than reporting
             // a dead stream, which is what makes a session survive a server
             // that hangs up on it. Same host as before — the prefix matched.
-            $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $retries);
+            $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $retries, $halfOpen);
 
             if ($status === false) {
                 return false;
@@ -472,7 +484,13 @@ final class Session
             return false;
         }
 
+        // The folder is remembered even when nothing is selected, as
+        // imap_open() remembers it, for a later imap_reopen() to land on.
         $this->connection->reselect($spec->folder, $readOnly);
+
+        if ($halfOpen) {
+            $this->connection->markHalfOpen();
+        }
 
         // Mirrors php_imap.c: a nonzero $flags overrides the remembered
         // CL_EXPUNGE state outright (even clearing it if CL_EXPUNGE isn't in
@@ -491,7 +509,7 @@ final class Session
      * mail_open() does to a stream it is reopening elsewhere, and to one
      * whose socket is gone.
      */
-    private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, Credentials $credentials, bool $readOnly, int $retries): FolderState|false
+    private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, Credentials $credentials, bool $readOnly, int $retries, bool $halfOpen): FolderState|false
     {
         $this->connection->disconnect();
 
@@ -516,6 +534,10 @@ final class Session
             $readOnly,
             $credentials->anonymous,
         );
+
+        if ($halfOpen) {
+            $this->connection->markHalfOpen();
+        }
 
         try {
             return $this->connection->selectOrExamine();

@@ -88,6 +88,16 @@ final class Pop3Backend implements ConnectionBackend
         return $this->selectOrExamineFolder($folder, $readOnly);
     }
 
+    /**
+     * A POP3 session is its mailbox, so there is no selection to leave.
+     * hasCapability() answers false for UNSELECT as for everything else, so
+     * no caller reaches this.
+     */
+    public function unselect(): void
+    {
+        throw new \LogicException('POP3 has no selection to leave');
+    }
+
     public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState
     {
         if ($readOnly) {

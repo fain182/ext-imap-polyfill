@@ -242,6 +242,24 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * OP_HALFOPEN means nothing to the POP3 driver: the reopened session is
+     * the mailbox, the way any reopen's is.
+     */
+    public function test_reopen_with_op_halfopen_still_opens_the_mailbox(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Pop3 Reopen Half\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertTrue(imap_reopen($connection, self::pop3MailboxSpec(), OP_HALFOPEN));
+        $this->assertSame($count, imap_num_msg($connection));
+        $this->assertStringEndsWith('}INBOX', imap_check($connection)->Mailbox);
+
+        imap_close($connection);
+    }
+
     public function test_reopen_after_an_expunge_numbers_the_messages_afresh(): void
     {
         $folder = self::seedClient()->getFolder('INBOX');

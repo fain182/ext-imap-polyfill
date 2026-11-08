@@ -34,6 +34,12 @@ interface ConnectionBackend
      */
     public function reselectFolder(string $folder, bool $readOnly): FolderState;
 
+    /**
+     * Leaves the selected folder without expunging it, which is RFC 3691's
+     * UNSELECT. Sent only where hasCapability('UNSELECT') said so.
+     */
+    public function unselect(): void;
+
     public function host(): string;
 
     /**
