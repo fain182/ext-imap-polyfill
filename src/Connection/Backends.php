@@ -9,9 +9,9 @@ use ImapPolyfill\Support\Timeouts;
 
 /**
  * A logged-in ConnectionBackend for each protocol, so that the imap_* layer
- * opens one without naming the implementations. Each attempt either answers
- * a backend or throws; retrying and reporting are the caller's, as they are
- * part of imap_open()'s contract.
+ * opens one without naming the implementations. Each call either answers a
+ * backend or throws, and reporting is the caller's, as it is part of
+ * imap_open()'s contract. Only a refused login is tried again (LoginTrials).
  */
 final class Backends
 {
@@ -35,7 +35,7 @@ final class Backends
         // No CAPA: pop3_auth() checks these before looking at what
         // the server offers, and this backend has only USER/PASS.
         $credentials->assertPlaintextLoginAllowed();
-        $protocol->login($credentials->user, $credentials->password);
+        LoginTrials::attempt(static fn () => $protocol->login($credentials->user, $credentials->password));
 
         return new Pop3Backend($protocol, $spec->host, $mailbox);
     }

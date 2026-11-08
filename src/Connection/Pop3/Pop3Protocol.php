@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Connection\Pop3;
 
+use ImapPolyfill\Connection\CommandFailedException;
 use ImapPolyfill\Support\CommandArgument;
 use ImapPolyfill\Support\Diagnostics;
 
@@ -290,7 +291,7 @@ final class Pop3Protocol
         }
 
         if (str_starts_with($line, '-ERR')) {
-            throw new \RuntimeException(trim(substr($line, 4)));
+            throw new CommandFailedException('-ERR', trim(substr($line, 4)));
         }
 
         throw new \RuntimeException('Unexpected POP3 response: '.$line);

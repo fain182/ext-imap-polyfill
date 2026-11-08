@@ -76,7 +76,9 @@ final class Protocol implements ConnectionBackend
                 $connection->loginAnonymous(gethostname() ?: 'localhost');
             } else {
                 $credentials->assertPlaintextLoginAllowed($connection->capabilities());
-                $connection->login($credentials->user, $credentials->password);
+                LoginTrials::attempt(static function () use ($connection, $credentials): void {
+                    $connection->login($credentials->user, $credentials->password);
+                });
             }
         } catch (ImapConnectionFailedException $e) {
             // c-client reports "Can't connect to host,port: reason", and

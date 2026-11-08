@@ -11,7 +11,7 @@ namespace ImapPolyfill\Connection;
 final class CommandFailedException extends \RuntimeException
 {
     /**
-     * @param string $status NO (the command failed) or BAD (the server didn't understand it)
+     * @param string $status NO (the command failed) or BAD (the server didn't understand it); -ERR over POP3, which has no such distinction
      */
     public function __construct(private readonly string $status, string $text)
     {
