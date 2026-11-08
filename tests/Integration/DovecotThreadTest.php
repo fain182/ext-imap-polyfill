@@ -14,10 +14,14 @@ final class DovecotThreadTest extends DovecotTestCase
      * the server's, so this asserts the shape ext-imap gets from the same
      * server rather than the local algorithm's output.
      */
-    private function seedThread(): string
+    private function seedThread(bool $burnUid = false): string
     {
         $folderName = 'DcThread'.random_int(10000, 99999);
-        $folder = $this->makeFolder($folderName)->getFolder($folderName);
+        $client = $this->makeFolder($folderName);
+        if ($burnUid) {
+            $client->burnUid($folderName);
+        }
+        $folder = $client->getFolder($folderName);
         $folder->appendMessage("Message-ID: <root@example.com>\r\nSubject: Original\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nRoot");
         $folder->appendMessage("Message-ID: <reply1@example.com>\r\nIn-Reply-To: <root@example.com>\r\nReferences: <root@example.com>\r\nSubject: Re: Original\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nReply1");
         $folder->appendMessage("Message-ID: <reply2@example.com>\r\nIn-Reply-To: <reply1@example.com>\r\nReferences: <root@example.com> <reply1@example.com>\r\nSubject: Re: Original\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nReply2");
@@ -71,16 +75,20 @@ final class DovecotThreadTest extends DovecotTestCase
 
     public function test_se_uid_reports_uids(): void
     {
-        $folderName = $this->seedThread();
-        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+        $connection = imap_open(self::mailboxSpec($this->seedThread(burnUid: true)), self::user(), self::password());
 
         $byMsgno = imap_thread($connection);
         $byUid = imap_thread($connection, SE_UID);
 
-        $this->assertIsArray($byUid);
-        // Same tree shape either way; only the ids differ, and on a folder
-        // this fresh the uids happen to match the message numbers.
-        $this->assertSame(array_keys($byMsgno), array_keys($byUid));
+        $this->assertIsArray($byMsgno);
+        $expected = $byMsgno;
+        foreach ($expected as $key => $value) {
+            if (str_ends_with($key, '.num') && $value !== 0) {
+                $expected[$key] = imap_uid($connection, $value);
+            }
+        }
+        $this->assertNotSame($byMsgno, $expected);
+        $this->assertSame($expected, $byUid);
 
         imap_close($connection);
     }
