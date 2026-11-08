@@ -15,15 +15,15 @@ make install-lowest    # re-resolve to the oldest versions composer.json allows
 
 Docker or Podman is required from `test-integration` onwards; `docker-compose.yml` describes the same setup for compose tooling.
 
-The fixtures stay up after a run, so the next one skips starting them; one is replaced only when its image, its options or `tests/fixtures/dovecot.conf` changed, and `make fixtures-down` stops them. `FILTER` narrows any phpunit target, parity included: `make test-integration FILTER=ImapSavebodyTest`.
+The fixtures stay up after a run, so the next one skips starting them; one is replaced only when its image, its options, its ports, `tests/fixtures/dovecot.conf` or the certificate changed, and `make fixtures-down` stops them. `FILTER` narrows any phpunit target, parity included: `make test-integration FILTER=ImapSavebodyTest`.
 
-`make check` runs its suites in parallel. Each logs in as a user of its own — `testuser` on the host, `parity` in the parity container, `phpt` for the extension's suite — so none sees another's folders; a new suite run alongside them needs a user of its own too.
+`make check` runs its suites in parallel. Each logs in as a user of its own — `testuser` on the host, `parity` in the parity container, a fresh `phpt…` user on every run of the extension's suite, whose setup refuses to run over a leftover mailbox — so none sees another's folders; a new suite run alongside them needs a user of its own too.
 
 No `composer.lock` is committed, since it never reaches the projects that depend on this library. `make install` resolves the newest releases `composer.json` allows into a local, gitignored lock (`composer update` refreshes it), and `make install-lowest` rewrites that lock to the oldest ones, which the test targets then pick up.
 
 ## The two fixtures
 
-Almost every test runs against **Greenmail** (IMAP on 127.0.0.1:13143, POP3 on 13110, plus imaps and pop3s). A second **Dovecot** fixture (IMAP on 13144, POP3 on 13111) exists for the two commands Greenmail answers `BAD Invalid command` to — THREAD and ACL — and doubles as the second server for `make cross-check`. Its config lives in `tests/fixtures/dovecot.conf`; note the image is rootless, so inside the container it listens on 31143, not 143.
+Almost every test runs against **Greenmail** (IMAP on 127.0.0.1:13143, POP3 on 13110, plus imaps and pop3s). A second **Dovecot** fixture (IMAP on 13144, POP3 on 13111) exists for the two commands Greenmail answers `BAD Invalid command` to — THREAD and ACL — and doubles as the second server for `make cross-check`. Those are the ports of a checkout named `ext-imap-polyfill`; any other (a git worktree, say) gets its own containers and moves every port up by a multiple of 100 drawn from its directory name, so two checkouts can run their suites at once. `make test PORT_OFFSET=...` picks another offset when two names draw the same one. Its config lives in `tests/fixtures/dovecot.conf`; note the image is rootless, so inside the container it listens on 31143, not 143.
 
 Bring one up on its own with `make greenmail-up` / `make dovecot-up` (and the matching `-down`). Tests needing Dovecot **skip themselves when it isn't running**, so check the skip count before reading a run as green.
 
