@@ -199,7 +199,7 @@ final class Protocol implements ConnectionBackend
     /**
      * @return int[]
      */
-    public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array
+    public function search(SearchProgram $program, UidMode $uidMode, ?string $charset = null): array
     {
         $tokens = self::searchTokens($program);
         $command = $uidMode === UidMode::Uid ? 'UID SEARCH' : 'SEARCH';
@@ -207,7 +207,7 @@ final class Protocol implements ConnectionBackend
         // CHARSET comes before the criteria, as in c-client's imap_search():
         // without it the server has no way to read a term whose bytes fall
         // outside ASCII, and answers BAD rather than searching.
-        if ($charset !== '') {
+        if ($charset !== null && $charset !== '') {
             $tokens = ['CHARSET', self::astring($charset), ...$tokens];
         }
 

@@ -37,7 +37,7 @@ final class Mailbox
     /**
      * @return int[]|false
      */
-    public function search(string $criteria, int $flags, string $charset): array|false
+    public function search(string $criteria, int $flags, ?string $charset): array|false
     {
         if ($flags !== 0 && ($flags & ~(SE_UID | SE_FREE)) !== 0) {
             throw new \ValueError('imap_search(): Argument #3 ($flags) must be a bitmask of SE_FREE, and SE_UID');
@@ -893,8 +893,11 @@ final class Mailbox
                 return [];
             }
 
-            if ($program !== null) {
-                $ids = $this->connection->backend()->search($program, UidMode::Msgno);
+            // mail_sort_msgs() searches with the sort's charset before it
+            // sorts, an absent program included, so a charset it cannot
+            // read fails the sort. With neither there is nothing to ask.
+            if ($program !== null || $charset !== null) {
+                $ids = $this->connection->backend()->search($program ?? SearchProgram::parse('ALL'), UidMode::Msgno, $charset);
 
                 if ($ids === []) {
                     return [];

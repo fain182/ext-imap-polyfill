@@ -188,11 +188,15 @@ final class Pop3Backend implements ConnectionBackend
         return $this->structure($uid)->toBodyPart();
     }
 
-    public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array
+    public function search(SearchProgram $program, UidMode $uidMode, ?string $charset = null): array
     {
+        // Checked before any message is read, as mail_search_default()
+        // checks it before its loop.
+        $charset = $charset === null ? null : SearchCharset::named($charset);
+
         $ids = [];
         foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
-            if (Pop3SearchEvaluator::matches($program, $this->rawMessage($uid), $this->flags[$uid] ?? [])) {
+            if (Pop3SearchEvaluator::matches($program, $this->rawMessage($uid), $this->flags[$uid] ?? [], $charset)) {
                 $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
         }

@@ -203,7 +203,7 @@ final class MimeText
      * iconv reports that same "no such charset" as a warning instead, one
      * the real extension never raises.
      */
-    private static function toUtf8From(string $charset, string $bytes): string
+    public static function toUtf8From(string $charset, string $bytes): string
     {
         $converted = Diagnostics::discard(static fn () => iconv($charset, 'UTF-8//IGNORE', $bytes));
 

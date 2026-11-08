@@ -105,7 +105,9 @@ if (!function_exists('imap_search')) {
      */
     function imap_search(\IMAP\Connection $imap, string $criteria, int $flags = SE_FREE, string $charset = ''): array|false
     {
-        return (new \ImapPolyfill\Session\Mailbox($imap))->search($criteria, $flags, $charset);
+        // php_imap.c's charset stays NULL unless one is passed, and c-client
+        // treats NULL and "" differently: only "" is a name to look up.
+        return (new \ImapPolyfill\Session\Mailbox($imap))->search($criteria, $flags, func_num_args() > 3 ? $charset : null);
     }
 }
 
