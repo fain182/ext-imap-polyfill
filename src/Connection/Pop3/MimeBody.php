@@ -152,7 +152,7 @@ final class MimeBody
             parameters: $this->parameters,
             id: $this->id,
             description: $this->description,
-            bytes: $this->type === 'MULTIPART' ? 0 : $this->size,
+            bytes: $this->size,
             lines: $this->lines,
             disposition: $this->disposition,
             dispositionParameters: $this->dispositionParameters,

@@ -390,6 +390,7 @@ final class Pop3MailboxTest extends GreenmailTestCase
         );
 
         $structure = imap_fetchstructure($connection, $count);
+        $this->assertSame(169, $structure->bytes);
         $this->assertCount(2, $structure->parts);
         $this->assertSame(1, $structure->parts[0]->lines);
         $this->assertSame(11, $structure->parts[0]->bytes);
