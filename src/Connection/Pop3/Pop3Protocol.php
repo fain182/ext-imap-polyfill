@@ -241,9 +241,7 @@ final class Pop3Protocol
         $this->readSingleLine();
 
         $lines = [];
-        while (($raw = fgets($this->stream)) !== false) {
-            $line = rtrim($raw, "\r\n");
-
+        while (($line = $this->readDataLine()) !== null) {
             if ($line === '.') {
                 break;
             }
@@ -254,6 +252,25 @@ final class Pop3Protocol
         }
 
         return $lines;
+    }
+
+    /**
+     * One line of message data, without its CRLF. Only CRLF ends a line, as
+     * in c-client's tcp_getline(): a bare LF is data, and netmsg_slurp()
+     * keeps it inside the line it writes back, so the message's sizes and
+     * offsets count it as one byte, not two.
+     */
+    private function readDataLine(): ?string
+    {
+        $line = '';
+        while (($chunk = fgets($this->stream)) !== false) {
+            $line .= $chunk;
+            if (str_ends_with($line, "\r\n")) {
+                return substr($line, 0, -2);
+            }
+        }
+
+        return $line === '' ? null : $line;
     }
 
     /** The only place this class writes a line, so the rule holds for the next command too. */
