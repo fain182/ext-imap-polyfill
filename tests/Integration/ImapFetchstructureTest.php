@@ -62,6 +62,48 @@ class ImapFetchstructureTest extends GreenmailTestCase
         $this->assertSame('test.bin', $result->parts[1]->dparameters[0]->value);
     }
 
+    public function test_sets_the_properties_in_php_imap_order(): void
+    {
+        $folderName = 'StructBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $message = "Subject: Order\r\n"
+            ."MIME-Version: 1.0\r\n"
+            ."Content-Type: multipart/mixed; boundary=\"B1\"\r\n"
+            ."\r\n"
+            ."--B1\r\n"
+            ."Content-Type: text/plain; charset=us-ascii\r\n"
+            ."Content-ID: <part1@example.com>\r\n"
+            ."Content-Description: first\r\n"
+            ."Content-Disposition: inline\r\n"
+            ."\r\n"
+            ."Hello body\r\n"
+            ."--B1\r\n"
+            ."Content-Type: application/octet-stream; name=\"test.bin\"\r\n"
+            ."Content-Transfer-Encoding: base64\r\n"
+            ."Content-Disposition: attachment; filename=\"test.bin\"\r\n"
+            ."\r\n"
+            ."AAAA\r\n"
+            ."--B1--\r\n";
+        $seedClient->getFolder($folderName)->appendMessage($message);
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $result = imap_fetchstructure($connection, 1);
+
+        $this->assertSame(
+            ['type', 'encoding', 'ifsubtype', 'subtype', 'ifdescription', 'ifid', 'ifdisposition', 'ifdparameters', 'ifparameters', 'parameters', 'parts'],
+            array_keys(get_object_vars($result)),
+        );
+        $this->assertSame(
+            ['type', 'encoding', 'ifsubtype', 'subtype', 'ifdescription', 'description', 'ifid', 'id', 'lines', 'bytes', 'ifdisposition', 'disposition', 'ifdparameters', 'ifparameters', 'parameters'],
+            array_keys(get_object_vars($result->parts[0])),
+        );
+        $this->assertSame(
+            ['type', 'encoding', 'ifsubtype', 'subtype', 'ifdescription', 'ifid', 'bytes', 'ifdisposition', 'disposition', 'ifdparameters', 'dparameters', 'ifparameters', 'parameters'],
+            array_keys(get_object_vars($result->parts[1])),
+        );
+    }
+
     public function test_returns_structure_of_a_nested_multipart(): void
     {
         $folderName = 'StructBox' . uniqid();

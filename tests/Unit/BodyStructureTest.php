@@ -104,7 +104,7 @@ class BodyStructureTest extends TestCase
         $this->assertSame(1, $result->ifdisposition);
         $this->assertSame('inline', $result->disposition);
         $this->assertSame(0, $result->ifdparameters);
-        $this->assertEquals(new \stdClass(), $result->dparameters);
+        $this->assertObjectNotHasProperty('dparameters', $result);
     }
 
     public function test_ifsubtype_is_zero_when_subtype_is_absent(): void

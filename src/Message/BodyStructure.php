@@ -112,10 +112,6 @@ final class BodyStructure
      */
     private static function buildMultipart(array $parsed): \stdClass
     {
-        $result = new \stdClass();
-        $result->type = self::TYPES['multipart'];
-        $result->encoding = 0; // ENC7BIT: multipart bodies carry no encoding atom of their own
-
         $parts = [];
         $i = 0;
         while (isset($parsed[$i]) && is_array($parsed[$i])) {
@@ -123,22 +119,18 @@ final class BodyStructure
             $i++;
         }
 
-        self::assignSubtype($result, $parsed[$i] ?? null);
-        $i++;
-
-        // multipart bodies have no id/description slots on the wire; ext-imap
-        // still reports the flags as false rather than omitting them.
-        $result->ifdescription = 0;
-        $result->ifid = 0;
-
-        self::assignParameters($result, $parsed[$i] ?? null);
-        $i++;
-
-        self::assignDisposition($result, $parsed[$i] ?? null);
-
-        $result->parts = $parts;
-
-        return $result;
+        return self::node(
+            type: self::TYPES['multipart'],
+            encoding: 0, // ENC7BIT: multipart bodies carry no encoding atom of their own
+            subtype: $parsed[$i] ?? null,
+            description: null,
+            id: null,
+            lines: null,
+            bytes: null,
+            disposition: $parsed[$i + 2] ?? null,
+            parameters: $parsed[$i + 1] ?? null,
+            parts: $parts,
+        );
     }
 
     /**
@@ -146,100 +138,105 @@ final class BodyStructure
      */
     private static function buildSinglePart(array $parsed): \stdClass
     {
-        $result = new \stdClass();
-
-        $type = strtolower((string) $parsed[0]);
-        $result->type = self::TYPES[$type] ?? 8; // TYPEOTHER
-
-        self::assignSubtype($result, $parsed[1] ?? null);
-        self::assignParameters($result, $parsed[2] ?? null);
-        self::assignIfSet($result, 'id', $parsed[3] ?? null);
-        self::assignIfSet($result, 'description', $parsed[4] ?? null);
-
-        $encoding = strtolower((string) ($parsed[5] ?? ''));
-        $result->encoding = self::ENCODINGS[$encoding] ?? 5; // ENCOTHER
-
-        if (!empty($parsed[6])) {
-            $result->bytes = $parsed[6];
-        }
+        $type = self::TYPES[strtolower((string) $parsed[0])] ?? 8; // TYPEOTHER
+        $subtype = $parsed[1] ?? null;
+        $lines = null;
+        $parts = null;
 
         $next = 7;
-        if ($result->type === self::TYPES['text']) {
-            if (!empty($parsed[$next])) {
-                $result->lines = $parsed[$next];
-            }
+        if ($type === self::TYPES['text']) {
+            $lines = $parsed[$next] ?? null;
             $next++;
-        } elseif ($result->type === self::TYPES['message'] && strtolower($result->subtype ?? '') === 'rfc822') {
+        } elseif ($type === self::TYPES['message'] && strtolower((string) $subtype) === 'rfc822') {
             $next++; // skip envelope
-            $result->parts = [self::build($parsed[$next])];
+            $parts = [self::build($parsed[$next])];
             $next++;
-            if (!empty($parsed[$next])) {
-                $result->lines = $parsed[$next];
-            }
+            $lines = $parsed[$next] ?? null;
             $next++;
         }
 
         $next++; // skip md5
-        self::assignDisposition($result, $parsed[$next] ?? null);
+
+        return self::node(
+            type: $type,
+            encoding: self::ENCODINGS[strtolower((string) ($parsed[5] ?? ''))] ?? 5, // ENCOTHER
+            subtype: $subtype,
+            description: $parsed[4] ?? null,
+            id: $parsed[3] ?? null,
+            lines: $lines,
+            bytes: $parsed[6] ?? null,
+            disposition: $parsed[$next] ?? null,
+            parameters: $parsed[2] ?? null,
+            parts: $parts,
+        );
+    }
+
+    /**
+     * The properties in the order php_imap_populate_body_struct_object()
+     * sets them, with `parts` last as _php_imap_add_body() adds it: the
+     * order is what var_dump(), json_encode() and a foreach over the
+     * object show.
+     *
+     * @param \stdClass[]|null $parts
+     */
+    private static function node(
+        int $type,
+        int $encoding,
+        mixed $subtype,
+        mixed $description,
+        mixed $id,
+        mixed $lines,
+        mixed $bytes,
+        mixed $disposition,
+        mixed $parameters,
+        ?array $parts,
+    ): \stdClass {
+        $result = new \stdClass();
+        $result->type = $type;
+        $result->encoding = $encoding;
+
+        $result->ifsubtype = $subtype !== null ? 1 : 0;
+        if ($subtype !== null) {
+            $result->subtype = strtoupper($subtype);
+        }
+
+        $result->ifdescription = $description !== null ? 1 : 0;
+        if ($description !== null) {
+            $result->description = $description;
+        }
+
+        $result->ifid = $id !== null ? 1 : 0;
+        if ($id !== null) {
+            $result->id = $id;
+        }
+
+        // c-client's size fields are unsigned longs php_imap.c tests for
+        // non-zero: a zero count is left out, not reported as 0.
+        if (!empty($lines)) {
+            $result->lines = $lines;
+        }
+        if (!empty($bytes)) {
+            $result->bytes = $bytes;
+        }
+
+        $result->ifdisposition = empty($disposition) ? 0 : 1;
+        if (!empty($disposition)) {
+            $result->disposition = $disposition[0];
+        }
+
+        $result->ifdparameters = empty($disposition[1]) ? 0 : 1;
+        if (!empty($disposition[1])) {
+            $result->dparameters = self::pairsToObjects($disposition[1]);
+        }
+
+        $result->ifparameters = empty($parameters) ? 0 : 1;
+        $result->parameters = empty($parameters) ? new \stdClass() : self::pairsToObjects($parameters);
+
+        if ($parts !== null) {
+            $result->parts = $parts;
+        }
 
         return $result;
-    }
-
-    private static function assignSubtype(\stdClass $result, mixed $subtype): void
-    {
-        if ($subtype !== null) {
-            $result->ifsubtype = 1;
-            $result->subtype = strtoupper($subtype);
-        } else {
-            $result->ifsubtype = 0;
-        }
-    }
-
-    private static function assignIfSet(\stdClass $result, string $property, mixed $value): void
-    {
-        if ($value !== null) {
-            $result->{'if'.$property} = 1;
-            $result->$property = $value;
-        } else {
-            $result->{'if'.$property} = 0;
-        }
-    }
-
-    private static function assignParameters(\stdClass $result, mixed $params): void
-    {
-        if (empty($params)) {
-            $result->ifparameters = 0;
-            $result->parameters = new \stdClass();
-
-            return;
-        }
-
-        $result->ifparameters = 1;
-        $result->parameters = self::pairsToObjects($params);
-    }
-
-    private static function assignDisposition(\stdClass $result, mixed $disposition): void
-    {
-        if (empty($disposition)) {
-            $result->ifdisposition = 0;
-            $result->ifdparameters = 0;
-            $result->dparameters = new \stdClass();
-
-            return;
-        }
-
-        $result->ifdisposition = 1;
-        $result->disposition = $disposition[0];
-
-        if (empty($disposition[1])) {
-            $result->ifdparameters = 0;
-            $result->dparameters = new \stdClass();
-
-            return;
-        }
-
-        $result->ifdparameters = 1;
-        $result->dparameters = self::pairsToObjects($disposition[1]);
     }
 
     /**
