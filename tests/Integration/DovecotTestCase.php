@@ -20,9 +20,15 @@ use PHPUnit\Framework\TestCase;
  */
 abstract class DovecotTestCase extends TestCase
 {
+    /**
+     * The fixture's passdb accepts any username, and each one gets a mail
+     * store of its own: that is what lets `make check` run the suite here
+     * and in the parity container at once without either seeing the
+     * other's folders.
+     */
     protected static function user(): string
     {
-        return 'testuser';
+        return getenv('IMAP_POLYFILL_DOVECOT_USER') ?: 'testuser';
     }
 
     protected static function password(): string
