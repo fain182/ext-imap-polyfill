@@ -861,7 +861,7 @@ final class Mailbox
                 $sorted = $this->connection->backend()->sort(
                     ($reverse ? 'REVERSE ' : '').SortKey::wireName($criterion),
                     $charset ?? 'US-ASCII',
-                    $program === null ? ['ALL'] : $program->tokens,
+                    $program,
                     UidMode::fromFlags($flags, SE_UID),
                 );
 
@@ -954,7 +954,7 @@ final class Mailbox
                 $groups = $this->connection->backend()->thread(
                     'REFERENCES',
                     'US-ASCII',
-                    ['ALL'],
+                    null,
                     $byUid ? UidMode::Uid : UidMode::Msgno,
                 );
 

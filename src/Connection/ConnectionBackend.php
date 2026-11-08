@@ -67,8 +67,8 @@ interface ConnectionBackend
     public function fetchBodyStructure(int $messageNum, bool $byUid): array;
 
     /**
-     * @param SearchProgram $program the parsed criteria; the IMAP backend sends
-     *                               its tokens on, the POP3 one evaluates them
+     * @param SearchProgram $program the parsed criteria; the IMAP backend writes
+     *                               a SEARCH from them, the POP3 one evaluates them
      * @param string        $charset how the server should read the criteria's
      *                               bytes; empty when the caller named none
      *
@@ -84,22 +84,23 @@ interface ConnectionBackend
      * c-client's cue to sort locally instead.
      *
      * @param string $program the sort program inside the parentheses, e.g. "REVERSE DATE"
-     * @param string[] $searchTokens the search program the results are drawn from
+     * @param SearchProgram|null $search the search program the results are
+     *                                  drawn from; null for every message
      *
      * @return int[]|null
      */
-    public function sort(string $program, string $charset, array $searchTokens, UidMode $uidMode): ?array;
+    public function sort(string $program, string $charset, ?SearchProgram $search, UidMode $uidMode): ?array;
 
     /**
      * Server-side threading. Returns the nested id groups of the THREAD
      * response, or null when the server has no usable threader — c-client's
      * cue to thread locally instead.
      *
-     * @param string[] $searchTokens
+     * @param SearchProgram|null $search null for every message
      *
      * @return array<int, mixed>|null
      */
-    public function thread(string $algorithm, string $charset, array $searchTokens, UidMode $uidMode): ?array;
+    public function thread(string $algorithm, string $charset, ?SearchProgram $search, UidMode $uidMode): ?array;
 
     /**
      * A single requested item collapses to its scalar value per id instead

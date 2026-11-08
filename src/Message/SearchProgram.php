@@ -4,22 +4,30 @@ namespace ImapPolyfill\Message;
 
 /**
  * imap_search()'s criteria string, parsed the way c-client's mail_criteria()
- * (mail.c) parses it: a space-separated run of keywords, some of them taking
- * a value, and nothing outside the closed set SearchKey lists.
+ * (mail.c) parses it, and into what it builds: keywords from a closed set,
+ * each with the value it takes, if it takes one. The string itself does not
+ * travel on — the IMAP backend writes a SEARCH command from the criteria, as
+ * c-client writes one from its search program.
  *
  * An unrecognized keyword is not passed on for a server to judge — it fails
  * the whole search, which is why this parses at the boundary rather than
  * letting each backend make its own sense of the string.
+ *
+ * The parse is strtok_r() over a buffer it writes into, and the port keeps
+ * both. Keywords are separated by spaces and nothing else, so a tab is part
+ * of the keyword next to it. A value is read from right after its keyword's
+ * single space (mail_criteria_string()): a "{n}" literal, a quoted string
+ * running to the next quote, or an atom to the next space. A value that
+ * starts with a second space, an empty or unclosed quote, or a literal
+ * whose length does not fit is no value, and the keyword is what fails.
  */
 final class SearchProgram
 {
     /**
      * @param list<SearchCriterion> $criteria
-     * @param list<string>          $tokens   the string as split for the wire
      */
     private function __construct(
         public readonly array $criteria,
-        public readonly array $tokens,
     ) {
     }
 
@@ -29,16 +37,15 @@ final class SearchProgram
      */
     public static function parse(string $criteria): self
     {
-        $tokens = $criteria === '' ? [] : (preg_split('/\s+/', trim($criteria)) ?: []);
-        $tokens = array_values(array_filter($tokens, static fn (string $t): bool => $t !== ''));
-
+        // c-client reads the argument as a C string.
+        $nul = strpos($criteria, "\0");
+        $buffer = ($nul === false ? $criteria : substr($criteria, 0, $nul))."\0";
+        $rest = 0;
         $parsed = [];
-        $at = 0;
-        $count = count($tokens);
 
-        while ($at < $count) {
-            $word = $tokens[$at++];
-            $key = SearchKey::tryFrom(strtoupper($word));
+        for ($at = self::strtok($buffer, 0, $rest, ' '); $at !== null; $at = self::strtok($buffer, $rest, $rest, ' ')) {
+            $word = strtr(self::cString($buffer, $at), 'abcdefghijklmnopqrstuvwxyz', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+            $key = SearchKey::tryFrom($word);
 
             if ($key === null) {
                 throw self::unknown($word);
@@ -50,71 +57,138 @@ final class SearchProgram
                 continue;
             }
 
-            // A missing value is not a keyword c-client understands either:
-            // mail_criteria_string() answers NIL and the criterion is
-            // reported as the unknown one.
-            if ($at >= $count) {
-                throw self::unknown($word);
+            $argument = self::value($buffer, $rest);
+
+            if ($argument !== null && $key->takesDate()) {
+                // mail_criteria_date(): mail_parse_date(), packed into a
+                // shortdate, which has to come out non-zero.
+                $date = MailDate::parse($argument);
+
+                // A month of 0 ("20260006") is one difference left: c-client
+                // keeps it, prints it from before the start of its month
+                // table, and searches locally once the server refuses that.
+                // With no such fallback here there is no command to send, so
+                // it fails as a date c-client could not read.
+                $argument = $date !== null && $date->packed() !== 0 && $date->month !== 0 ? $date->toImap() : null;
             }
 
-            $argument = $tokens[$at++];
-
-            // A quoted value may carry the spaces the split just broke it on.
-            if (str_starts_with($argument, '"') && !str_ends_with($argument, '"')) {
-                while ($at < $count) {
-                    $argument .= ' '.$tokens[$at++];
-
-                    if (str_ends_with($argument, '"')) {
-                        break;
-                    }
-                }
-            }
-
-            $argument = trim($argument, '"');
-
-            // A date c-client cannot parse fails as the criterion itself:
-            // mail_criteria_date() answers NIL and the keyword is the one
-            // reported. It takes a single space-delimited token, so
-            // "BEFORE 5 Jan 2026" fails on "5" rather than on "Jan".
-            if ($key->takesDate() && !self::isDate($argument)) {
+            if ($argument === null) {
                 throw self::unknown($word);
             }
 
             $parsed[] = new SearchCriterion($key, $argument);
         }
 
-        return new self($parsed, $tokens);
+        return new self($parsed);
     }
 
     /**
-     * The dates c-client's search program can hold. Its shortdate packs the
-     * year into 7 bits above 1970 (mail_shortdate), so 2097 is the last one
-     * that fits and 1970 the first — measured against the extension, which
-     * refuses 1-Jan-1969 and 1-Jan-2098 alike.
+     * mail_criteria_string(): the value from where the keyword's strtok
+     * stopped, read by strtok with no delimiters at all — the whole rest.
      */
-    private static function isDate(string $argument): bool
+    private static function value(string &$buffer, int &$rest): ?string
     {
-        $parts = date_parse($argument);
+        $at = self::strtok($buffer, $rest, $rest, '');
 
-        if ($parts['error_count'] > 0 || $parts['warning_count'] > 0) {
-            return false;
+        if ($at === null) {
+            return null;
         }
 
-        if (!is_int($parts['year']) || !is_int($parts['month']) || !is_int($parts['day'])) {
-            return false;
+        $delimiter = ' ';
+
+        switch ($buffer[$at]) {
+            case '{':
+                return self::literal($buffer, $at, $rest);
+
+            case ' ':
+                return null;
+
+            case '"':
+                $close = strpos($buffer, '"', $at + 1);
+
+                if ($close === false || $close > strcspn($buffer, "\0", $at) + $at) {
+                    return null;
+                }
+
+                $delimiter = '"';
         }
 
-        if (!checkdate($parts['month'], $parts['day'], $parts['year'])) {
-            return false;
+        $token = self::strtok($buffer, $at, $rest, $delimiter);
+
+        return $token === null ? null : self::cString($buffer, $token);
+    }
+
+    /**
+     * "{n}" CRLF and n bytes, ending the string or followed by a space.
+     * strtoul() reads n, so leading whitespace and a "+" are allowed and no
+     * digits at all is a length of 0.
+     */
+    private static function literal(string &$buffer, int $at, int &$rest): ?string
+    {
+        $digitsAt = $at + 1 + strspn($buffer, " \t\n\v\f\r", $at + 1);
+
+        if ($buffer[$digitsAt] === '+') {
+            $digitsAt++;
         }
 
-        return $parts['year'] >= 1970 && $parts['year'] <= 2097;
+        $digits = strspn($buffer, '0123456789', $digitsAt);
+        $length = $digits === 0 ? 0 : (int) substr($buffer, $digitsAt, min($digits, 18));
+        $close = $digits === 0 ? $at + 1 : $digitsAt + $digits;
+        $data = $close + 3;
+        $end = $data + $length;
+
+        if (substr($buffer, $close, 3) !== "}\r\n" || $digits > 18 || $end >= strlen($buffer)
+            || ($buffer[$end] !== "\0" && $buffer[$end] !== ' ')) {
+            return null;
+        }
+
+        // c-client restarts strtok on the literal's last byte, made a
+        // non-space for the purpose, so the scan stops right behind it.
+        if ($buffer[$end] === ' ') {
+            $buffer[$end] = "\0";
+            $rest = $end + 1;
+        } else {
+            $rest = $end;
+        }
+
+        return self::cString($buffer, $data);
+    }
+
+    /**
+     * strtok_r() from $from: skip the delimiters, then cut the token at the
+     * next one by writing a NUL over it. Answers where the token starts.
+     */
+    private static function strtok(string &$buffer, int $from, int &$rest, string $delimiters): ?int
+    {
+        $start = $from + strspn($buffer, $delimiters, $from);
+
+        if ($buffer[$start] === "\0") {
+            $rest = $start;
+
+            return null;
+        }
+
+        $end = $start + strcspn($buffer, $delimiters."\0", $start);
+
+        if ($buffer[$end] === "\0") {
+            $rest = $end;
+        } else {
+            $buffer[$end] = "\0";
+            $rest = $end + 1;
+        }
+
+        return $start;
+    }
+
+    private static function cString(string $buffer, int $at): string
+    {
+        return substr($buffer, $at, strcspn($buffer, "\0", $at));
     }
 
     private static function unknown(string $criterion): \RuntimeException
     {
-        // "Unknown search criterion: %.30s", uppercased as c-client
-        // uppercases the criterion in place before comparing it.
-        return new \RuntimeException('Unknown search criterion: '.substr(strtoupper($criterion), 0, 30));
+        // "Unknown search criterion: %.30s", of the criterion c-client has
+        // uppercased in place.
+        return new \RuntimeException('Unknown search criterion: '.substr($criterion, 0, 30));
     }
 }

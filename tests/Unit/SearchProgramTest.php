@@ -50,12 +50,40 @@ class SearchProgramTest extends TestCase
     }
 
     /**
-     * The tokens travel on to the server untouched — they have been checked
-     * against the vocabulary, not rewritten.
+     * mail_criteria_string()'s three forms of a value, as the extension was
+     * measured reading them.
+     *
+     * @param array{SearchKey, ?string}[] $expected
      */
-    public function test_keeps_the_tokens_for_the_wire(): void
+    #[DataProvider('values')]
+    public function test_reads_values_the_way_mail_criteria_string_does(string $criteria, array $expected): void
     {
-        $this->assertSame(['UNSEEN', 'SUBJECT', 'Invoice'], SearchProgram::parse('UNSEEN SUBJECT Invoice')->tokens);
+        $program = SearchProgram::parse($criteria);
+
+        $this->assertSame($expected, array_map(
+            static fn ($criterion): array => [$criterion->key, $criterion->argument],
+            $program->criteria,
+        ));
+    }
+
+    /**
+     * @return iterable<string, array{string, array{SearchKey, ?string}[]}>
+     */
+    public static function values(): iterable
+    {
+        yield 'a literal' => ["SUBJECT {7}\r\nfoo bar UNSEEN", [[SearchKey::Subject, 'foo bar'], [SearchKey::Unseen, null]]];
+        yield 'an empty literal' => ["SUBJECT {0}\r\n UNSEEN", [[SearchKey::Subject, ''], [SearchKey::Unseen, null]]];
+        yield 'a literal length strtoul reads' => ["SUBJECT { +3}\r\nfoo", [[SearchKey::Subject, 'foo']]];
+        yield 'quotes run to the next quote' => ['SUBJECT ""foo bar" SEEN', [[SearchKey::Subject, 'foo bar'], [SearchKey::Seen, null]]];
+        yield 'leading quotes are skipped' => ['SUBJECT "" UNSEEN', [[SearchKey::Subject, ' UNSEEN']]];
+        yield 'a quote inside an atom is text' => ['SUBJECT foo"bar', [[SearchKey::Subject, 'foo"bar']]];
+        yield 'a NUL ends the criteria' => ["SUBJECT foo\0 UNSEEN", [[SearchKey::Subject, 'foo']]];
+        yield 'a date is written the way the command carries it' => ['BEFORE 2026-01-06', [[SearchKey::Before, '6-Jan-2026']]];
+        yield 'a two-digit year' => ['SINCE 1-Jan-26', [[SearchKey::Since, '1-Jan-2026']]];
+        yield 'a three-digit year' => ['SINCE 1-Jan-126', [[SearchKey::Since, '1-Jan-2026']]];
+        yield 'a day the month does not have' => ['ON 31-Feb-2026', [[SearchKey::On, '31-Feb-2026']]];
+        yield 'a compact date with day 0' => ['ON 20260100', [[SearchKey::On, '0-Jan-2026']]];
+        yield 'a quoted date with a time' => ['BEFORE "Mon, 5 Jan 2026 10:00:00 +0000"', [[SearchKey::Before, '5-Jan-2026']]];
     }
 
     public function test_an_empty_criteria_string_is_an_empty_program(): void
@@ -91,6 +119,14 @@ class SearchProgramTest extends TestCase
         yield 'a value with no keyword' => ['Invoice', 'INVOICE'];
         yield 'a keyword with no value' => ['SUBJECT', 'SUBJECT'];
         yield 'the second keyword' => ['UNSEEN BOGUS', 'BOGUS'];
+        yield 'a tab is part of the keyword' => ["ALL\tSEEN", "ALL\tSEEN"];
+        yield 'a value after two spaces' => ['SUBJECT  foo', 'SUBJECT'];
+        yield 'an empty quoted value' => ['SUBJECT ""', 'SUBJECT'];
+        yield 'an unclosed quote' => ['SUBJECT "foo', 'SUBJECT'];
+        yield 'text behind the closing quote' => ['SUBJECT "foo bar"x', 'X'];
+        yield 'a literal longer than what follows' => ["SUBJECT {9}\r\nfoo", 'SUBJECT'];
+        yield 'a literal without its CRLF' => ["SUBJECT {3}\nfoo", 'SUBJECT'];
+        yield 'a literal followed by more than a space' => ["SUBJECT {3}\r\nfoox", 'SUBJECT'];
     }
 
     /**
@@ -121,6 +157,12 @@ class SearchProgramTest extends TestCase
         yield 'the last year that fits' => ['SINCE 1-Jan-2097', true];
         yield 'an ISO date' => ['BEFORE 2026-01-05', true];
 
+        yield 'a two-digit year read as 1949' => ['SINCE 1-Jan-49', false];
+        yield 'a time that is not one' => ['BEFORE "5 Jan 2026 25:00"', false];
+        yield 'junk behind the year' => ['BEFORE 6-Jan-2026x', false];
+        yield 'a layout c-client does not read' => ['BEFORE 2026/01/06', false];
+        yield 'the one date that packs to 0' => ['SINCE 19700000', false];
+        yield 'a month of 0' => ['SINCE 20260006', false];
         yield 'a year below the range' => ['SINCE 1-Jan-1969', false];
         yield 'a year above it' => ['SINCE 1-Jan-2098', false];
         yield 'a day that does not exist' => ['SINCE 32-Jan-2026', false];

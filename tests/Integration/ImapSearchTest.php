@@ -130,6 +130,18 @@ class ImapSearchTest extends GreenmailTestCase
 
         // Reported uppercased, however it was written.
         yield 'lowercase' => ['header Subject Present', 'HEADER'];
+
+        // Keywords are split on spaces alone, and a value starts right after
+        // its keyword's one space (mail_criteria_string()).
+        yield 'a tab joins two keywords' => ["ALL\tSEEN", "ALL\tSEEN"];
+        yield 'a value after two spaces' => ['SUBJECT  Present', 'SUBJECT'];
+        yield 'an empty quoted value' => ['SUBJECT ""', 'SUBJECT'];
+        yield 'an unclosed quote' => ['SUBJECT "Present', 'SUBJECT'];
+        yield 'text behind the closing quote' => ['SUBJECT "Present"x', 'X'];
+
+        // mail_parse_date(), which reads 49 as 1949.
+        yield 'a two-digit year before 1970' => ['SINCE 1-Jan-49', 'SINCE'];
+        yield 'junk behind the year' => ['SINCE 1-Jan-2020x', 'SINCE'];
     }
 
     /**
@@ -164,6 +176,41 @@ class ImapSearchTest extends GreenmailTestCase
 
         // ...and a criterion it can build still sorts.
         $this->assertSame([1], imap_sort($connection, SORTDATE, 0, 0, 'UNSEEN'));
+    }
+
+    /**
+     * What mail_criteria() reads that a whitespace split did not: a literal,
+     * keywords in any case, and the dates mail_parse_date() knows.
+     *
+     * @param non-empty-string $criteria
+     */
+    #[DataProvider('criteriaCClientReads')]
+    public function test_reads_criteria_the_way_mail_criteria_does(string $criteria, bool $matches): void
+    {
+        $folderName = 'SearchBox'.uniqid();
+        $this->makeFolder($folderName)->getFolder($folderName)->appendMessage("Subject: Present tense\r\n\r\nBody");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+        imap_errors();
+
+        $this->assertSame($matches ? [1] : false, imap_search($connection, $criteria));
+        $this->assertFalse(imap_errors());
+    }
+
+    /**
+     * @return iterable<string, array{string, bool}>
+     */
+    public static function criteriaCClientReads(): iterable
+    {
+        yield 'a literal' => ["SUBJECT {13}\r\nPresent tense UNDELETED", true];
+        yield 'a lowercase keyword' => ['subject Present', true];
+        yield 'a quoted value' => ['SUBJECT "Present tense"', true];
+        yield 'an ISO date' => ['SINCE 1970-01-02', true];
+        yield 'a two-digit year' => ['BEFORE 1-Jan-70', false];
+        yield 'a three-digit year' => ['SINCE 1-Jan-100', true];
+        yield 'a day February does not have' => ['SINCE 31-Feb-2000', true];
+        yield 'a date with a time' => ['SINCE "Sat, 1 Jan 2000 10:00:00 +0000"', true];
+        yield 'an empty criteria string' => ['', true];
     }
 
     public function test_throws_value_error_for_an_invalid_flags_bitmask(): void

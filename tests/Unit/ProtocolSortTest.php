@@ -4,6 +4,7 @@ namespace ImapPolyfill\Tests\Unit;
 
 use ImapPolyfill\Connection\Protocol;
 use ImapPolyfill\Connection\UidMode;
+use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Tests\SpeaksToAFakeServer;
 use PHPUnit\Framework\TestCase;
 
@@ -24,7 +25,7 @@ class ProtocolSortTest extends TestCase
             'TAG1 OK SORT completed',
         ]);
 
-        $this->assertSame([3, 1, 2], $protocol->sort('DATE', 'US-ASCII', ['ALL'], UidMode::Msgno));
+        $this->assertSame([3, 1, 2], $protocol->sort('DATE', 'US-ASCII', null, UidMode::Msgno));
         $this->stream->assertWritten('TAG1 SORT (DATE) US-ASCII ALL');
     }
 
@@ -40,7 +41,7 @@ class ProtocolSortTest extends TestCase
             'TAG1 OK SORT completed',
         ]);
 
-        $protocol->sort('REVERSE SUBJECT', 'UTF-8', ['UNSEEN'], UidMode::Msgno);
+        $protocol->sort('REVERSE SUBJECT', 'UTF-8', SearchProgram::parse('UNSEEN'), UidMode::Msgno);
 
         $this->stream->assertWritten('TAG1 SORT (REVERSE SUBJECT) UTF-8 UNSEEN');
     }
@@ -52,7 +53,7 @@ class ProtocolSortTest extends TestCase
             'TAG1 OK SORT completed',
         ]);
 
-        $this->assertSame([42, 7], $protocol->sort('ARRIVAL', 'US-ASCII', ['ALL'], UidMode::Uid));
+        $this->assertSame([42, 7], $protocol->sort('ARRIVAL', 'US-ASCII', null, UidMode::Uid));
         $this->stream->assertWritten('TAG1 UID SORT (ARRIVAL) US-ASCII ALL');
     }
 
@@ -66,7 +67,7 @@ class ProtocolSortTest extends TestCase
             'TAG1 BAD Sort/search command failed to parse',
         ]);
 
-        $this->assertNull($protocol->sort('DATE', 'US-ASCII', ['ALL'], UidMode::Msgno));
+        $this->assertNull($protocol->sort('DATE', 'US-ASCII', null, UidMode::Msgno));
     }
 
     /**
@@ -80,6 +81,6 @@ class ProtocolSortTest extends TestCase
             'TAG1 OK SORT completed',
         ]);
 
-        $this->assertSame([], $protocol->sort('DATE', 'US-ASCII', ['ALL'], UidMode::Msgno));
+        $this->assertSame([], $protocol->sort('DATE', 'US-ASCII', null, UidMode::Msgno));
     }
 }
