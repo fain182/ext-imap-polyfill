@@ -55,4 +55,16 @@ class ImapStatusTest extends GreenmailTestCase
         $this->expectException(\ValueError::class);
         imap_status($connection, self::mailboxSpec(), 4096);
     }
+
+    public function test_refuses_a_prefix_the_imap_driver_does_not_serve(): void
+    {
+        $folderName = 'StatusRefused'.uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
+        imap_errors();
+        $mailbox = '{'.self::host().':0}'.$folderName;
+
+        $this->assertFalse(imap_status($connection, $mailbox, SA_MESSAGES));
+        $this->assertSame(["Can't get status of mailbox {$mailbox}: invalid remote specification"], imap_errors());
+    }
 }

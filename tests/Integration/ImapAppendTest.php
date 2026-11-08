@@ -46,4 +46,20 @@ class ImapAppendTest extends GreenmailTestCase
         $overview = imap_fetch_overview($connection, '1:1');
         $this->assertSame($timestamp, $overview[0]->udate);
     }
+
+    /**
+     * A name starting with "{" that is not a spec never reaches the server.
+     * Sent as it stands, "{x" is the start of a literal there, and the
+     * connection would not survive the server waiting for its bytes.
+     */
+    public function test_refuses_a_prefix_that_is_not_a_spec_without_sending_it(): void
+    {
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
+        imap_errors();
+        $mailbox = '{x'.uniqid();
+
+        $this->assertFalse(imap_append($connection, $mailbox, "Subject: x\r\n\r\nx\r\n"));
+        $this->assertSame(["Can't append to mailbox {$mailbox}: invalid remote specification"], imap_errors());
+        $this->assertTrue(imap_ping($connection));
+    }
 }

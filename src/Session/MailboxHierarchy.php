@@ -3,6 +3,8 @@
 namespace ImapPolyfill\Session;
 
 use ImapPolyfill\Mailbox\MailboxReference;
+use ImapPolyfill\Mailbox\MalformedSpec;
+use ImapPolyfill\Mailbox\Service;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -55,7 +57,13 @@ final class MailboxHierarchy
     {
         $this->connection->ensureOpen();
 
-        $ref = MailboxReference::parse($reference);
+        $listing = $this->listing($reference, $pattern);
+
+        if ($listing === null) {
+            return false;
+        }
+
+        [$ref, $pattern] = $listing;
         $folders = $this->foldersMatching($ref, $pattern, $subscribedOnly);
 
         if ($folders === false || $folders === []) {
@@ -81,7 +89,13 @@ final class MailboxHierarchy
             '\hasnochildren' => LATT_HASNOCHILDREN,
         ];
 
-        $ref = MailboxReference::parse($reference);
+        $listing = $this->listing($reference, $pattern);
+
+        if ($listing === null) {
+            return false;
+        }
+
+        [$ref, $pattern] = $listing;
         $folders = $this->foldersMatching($ref, $pattern, $subscribedOnly);
 
         if ($folders === false || $folders === []) {
@@ -103,6 +117,54 @@ final class MailboxHierarchy
         }
 
         return $result;
+    }
+
+    /**
+     * The reference and pattern as LIST/LSUB send them. A pattern carrying
+     * its own "{host}" prefix overrides the reference (mail_list() drops it),
+     * and the prefix then comes off the pattern instead. Null where that
+     * prefix is one the connection's driver refuses, which imap_list_work()
+     * answers by sending nothing and logging nothing.
+     *
+     * @return array{MailboxReference, string}|null
+     */
+    private function listing(string $reference, string $pattern): ?array
+    {
+        try {
+            if (str_starts_with($pattern, '{')) {
+                $spec = MailboxReference::parse($pattern, $this->service());
+
+                return [new MailboxReference($spec->displayPrefix, ''), $spec->bareReference];
+            }
+
+            return [MailboxReference::parse($reference, $this->service()), $pattern];
+        } catch (MalformedSpec) {
+            return null;
+        }
+    }
+
+    /**
+     * The folder name to send for $mailbox, or null where its "{host}"
+     * prefix is one c-client refuses. mail_valid() logs that refusal only
+     * when its caller names a purpose; mail_create() and the new name of
+     * mail_rename() give none, and fail silently.
+     */
+    private function folderName(string $mailbox, ?string $purpose): ?string
+    {
+        try {
+            return MailboxReference::parse($mailbox, $this->service())->bareReference;
+        } catch (MalformedSpec) {
+            if ($purpose !== null) {
+                ErrorStack::push(MalformedSpec::of($mailbox, $purpose)->getMessage());
+            }
+
+            return null;
+        }
+    }
+
+    private function service(): Service
+    {
+        return Service::from($this->connection->backend()->driverName());
     }
 
     /**
@@ -138,7 +200,11 @@ final class MailboxHierarchy
         ];
 
         $items = array_keys(array_filter($itemBits, static fn (int $bit): bool => (bool) ($flags & $bit)));
-        $folderName = MailboxReference::parse($mailbox)->bareReference;
+        $folderName = $this->folderName($mailbox, 'get status of mailbox');
+
+        if ($folderName === null) {
+            return false;
+        }
 
         try {
             $status = $this->connection->backend()->folderStatus($folderName, $items);
@@ -257,40 +323,54 @@ final class MailboxHierarchy
     public function createMailbox(string $mailbox): bool
     {
         $this->connection->ensureOpen();
-        $folderName = MailboxReference::parse($mailbox)->bareReference;
+        $folderName = $this->folderName($mailbox, null);
 
-        return $this->attempt(fn () => $this->connection->backend()->createFolder($folderName));
+        return $folderName !== null
+            && $this->attempt(fn () => $this->connection->backend()->createFolder($folderName));
     }
 
     public function deleteMailbox(string $mailbox): bool
     {
         $this->connection->ensureOpen();
-        $folderName = MailboxReference::parse($mailbox)->bareReference;
+        $folderName = $this->folderName($mailbox, 'delete mailbox');
 
-        return $this->attempt(fn () => $this->connection->backend()->deleteFolder($folderName));
+        return $folderName !== null
+            && $this->attempt(fn () => $this->connection->backend()->deleteFolder($folderName));
     }
 
     public function renameMailbox(string $from, string $to): bool
     {
         $this->connection->ensureOpen();
-        $fromName = MailboxReference::parse($from)->bareReference;
-        $toName = MailboxReference::parse($to)->bareReference;
+        $fromName = $this->folderName($from, 'rename mailbox');
+        $toName = $fromName !== null ? $this->folderName($to, null) : null;
 
-        return $this->attempt(fn () => $this->connection->backend()->renameFolder($fromName, $toName));
+        return $fromName !== null && $toName !== null
+            && $this->attempt(fn () => $this->connection->backend()->renameFolder($fromName, $toName));
     }
 
     public function subscribe(string $mailbox): bool
     {
         $this->connection->ensureOpen();
-        $folderName = MailboxReference::parse($mailbox)->bareReference;
+        $folderName = $this->folderName($mailbox, 'subscribe to mailbox');
 
-        return $this->attempt(fn () => $this->connection->backend()->subscribeFolder($folderName));
+        return $folderName !== null
+            && $this->attempt(fn () => $this->connection->backend()->subscribeFolder($folderName));
     }
 
     public function unsubscribe(string $mailbox): bool
     {
         $this->connection->ensureOpen();
-        $folderName = MailboxReference::parse($mailbox)->bareReference;
+        $folderName = $this->folderName($mailbox, null);
+
+        if ($folderName === null) {
+            // mail_unsubscribe() finds no driver for the spec and hands the
+            // name to sm_unsubscribe(), c-client's local subscription file,
+            // which says this when there is no such file — and here there
+            // never is one.
+            ErrorStack::push('No subscriptions');
+
+            return false;
+        }
 
         return $this->attempt(fn () => $this->connection->backend()->unsubscribeFolder($folderName));
     }
