@@ -15,7 +15,9 @@ make install-lowest    # re-resolve to the oldest versions composer.json allows
 
 Docker or Podman is required from `test-integration` onwards; `docker-compose.yml` describes the same setup for compose tooling.
 
-The fixtures stay up after a run, so the next one skips starting them; `make fixtures-down` stops them, and is also how an edit to `tests/fixtures/dovecot.conf` takes effect. `FILTER` narrows any phpunit target, parity included: `make test-integration FILTER=ImapSavebodyTest`.
+The fixtures stay up after a run, so the next one skips starting them; one is replaced only when its image, its options or `tests/fixtures/dovecot.conf` changed, and `make fixtures-down` stops them. `FILTER` narrows any phpunit target, parity included: `make test-integration FILTER=ImapSavebodyTest`.
+
+`make check` runs its suites in parallel. Each logs in as a user of its own — `testuser` on the host, `parity` in the parity container, `phpt` for the extension's suite — so none sees another's folders; a new suite run alongside them needs a user of its own too.
 
 No `composer.lock` is committed, since it never reaches the projects that depend on this library. `make install` resolves the newest releases `composer.json` allows into a local, gitignored lock (`composer update` refreshes it), and `make install-lowest` rewrites that lock to the oldest ones, which the test targets then pick up.
 
