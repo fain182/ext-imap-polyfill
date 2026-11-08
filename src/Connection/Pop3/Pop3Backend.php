@@ -7,6 +7,7 @@ use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\MessageCache;
 use ImapPolyfill\Connection\UidTable;
 use ImapPolyfill\Connection\UidMode;
+use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Connection\MessageNotFoundException;
@@ -165,11 +166,11 @@ final class Pop3Backend implements ConnectionBackend
         throw new \RuntimeException('Append not valid for POP3');
     }
 
-    public function fetchBodyStructure(int $messageNum, bool $byUid): array
+    public function fetchBodyStructure(int $messageNum, bool $byUid): BodyPart
     {
         $uid = $byUid ? $this->knownUid($messageNum) : $this->messages->uidTable()->uidOf($messageNum);
 
-        return $this->structure($uid)->toBodyStructure();
+        return $this->structure($uid)->toBodyPart();
     }
 
     public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array

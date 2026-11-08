@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
+use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\BodyStructure;
 use PHPUnit\Framework\TestCase;
 
@@ -11,7 +12,7 @@ class BodyStructureTest extends TestCase
     {
         $parsed = ['text', 'plain', ['charset', 'us-ascii'], null, null, '7BIT', 10, 1, null, null, null];
 
-        $result = BodyStructure::build($parsed);
+        $result = BodyStructure::build(BodyPart::fromBodyStructure($parsed));
 
         $this->assertSame(0, $result->type); // TYPETEXT
         $this->assertSame(0, $result->encoding); // ENC7BIT
@@ -41,7 +42,7 @@ class BodyStructureTest extends TestCase
             null,
         ];
 
-        $result = BodyStructure::build($parsed);
+        $result = BodyStructure::build(BodyPart::fromBodyStructure($parsed));
 
         $this->assertSame(1, $result->type); // TYPEMULTIPART
         $this->assertSame(0, $result->encoding);
@@ -73,7 +74,7 @@ class BodyStructureTest extends TestCase
         $nestedTextPart = ['text', 'plain', null, null, null, '7BIT', 20, 5, null, null, null];
         $parsed = ['message', 'rfc822', null, null, null, '7BIT', 100, ['fake', 'envelope'], $nestedTextPart, 15, null, null, null];
 
-        $result = BodyStructure::build($parsed);
+        $result = BodyStructure::build(BodyPart::fromBodyStructure($parsed));
 
         $this->assertSame(2, $result->type); // TYPEMESSAGE
         $this->assertSame('RFC822', $result->subtype);
@@ -87,7 +88,7 @@ class BodyStructureTest extends TestCase
     {
         $parsed = ['text', 'plain', null, 'part-id-1', 'a description', '7BIT', 10, 1, null, null, null];
 
-        $result = BodyStructure::build($parsed);
+        $result = BodyStructure::build(BodyPart::fromBodyStructure($parsed));
 
         $this->assertSame(1, $result->ifid);
         $this->assertSame('part-id-1', $result->id);
@@ -99,7 +100,7 @@ class BodyStructureTest extends TestCase
     {
         $parsed = ['text', 'plain', null, null, null, '7BIT', 10, 1, null, ['inline', null], null];
 
-        $result = BodyStructure::build($parsed);
+        $result = BodyStructure::build(BodyPart::fromBodyStructure($parsed));
 
         $this->assertSame(1, $result->ifdisposition);
         $this->assertSame('inline', $result->disposition);
@@ -111,7 +112,7 @@ class BodyStructureTest extends TestCase
     {
         $parsed = ['text', null, null, null, null, '7BIT', 10, 1, null, null, null];
 
-        $result = BodyStructure::build($parsed);
+        $result = BodyStructure::build(BodyPart::fromBodyStructure($parsed));
 
         $this->assertSame(0, $result->ifsubtype);
         $this->assertObjectNotHasProperty('subtype', $result);

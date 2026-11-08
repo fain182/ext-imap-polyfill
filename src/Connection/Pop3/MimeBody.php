@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Connection\Pop3;
 
 use ImapPolyfill\Address\Rfc822Cursor;
+use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -134,42 +135,29 @@ final class MimeBody
         return (string) substr($this->raw, $this->mimeOffset, $this->mimeSize);
     }
 
-    /**
-     * The positional BODYSTRUCTURE list ImapSexpParser produces from an IMAP
-     * server, which is what BodyStructure builds ext-imap's object from.
-     *
-     * @return array<int, mixed>
-     */
-    public function toBodyStructure(): array
+    public function toBodyPart(): BodyPart
     {
-        $parameters = self::flatten($this->parameters);
-        $disposition = $this->disposition === null
-            ? null
-            : [$this->disposition, self::flatten($this->dispositionParameters) ?: null];
-
         if ($this->type === 'MULTIPART') {
-            return [
-                ...array_map(static fn (self $part): array => $part->toBodyStructure(), $this->parts),
-                $this->subtype,
-                $parameters ?: null,
-                $disposition,
-            ];
+            $parts = array_map(static fn (self $part): BodyPart => $part->toBodyPart(), $this->parts);
+        } elseif ($this->message !== null) {
+            $parts = [$this->message->toBodyPart()];
+        } else {
+            $parts = [];
         }
 
-        $structure = [$this->type, $this->subtype, $parameters ?: null, $this->id, $this->description, $this->encoding, $this->size];
-
-        if ($this->type === 'TEXT') {
-            $structure[] = $this->lines;
-        } elseif ($this->type === 'MESSAGE' && $this->subtype === 'RFC822') {
-            $structure[] = null; // envelope: not part of imap_fetchstructure()'s answer
-            $structure[] = $this->message?->toBodyStructure();
-            $structure[] = $this->lines;
-        }
-
-        $structure[] = null; // md5
-        $structure[] = $disposition;
-
-        return $structure;
+        return new BodyPart(
+            type: BodyPart::typeCode($this->type),
+            encoding: BodyPart::encodingCode($this->encoding),
+            subtype: $this->subtype,
+            parameters: $this->parameters,
+            id: $this->id,
+            description: $this->description,
+            bytes: $this->type === 'MULTIPART' ? 0 : $this->size,
+            lines: $this->lines,
+            disposition: $this->disposition,
+            dispositionParameters: $this->dispositionParameters,
+            parts: $parts,
+        );
     }
 
     /**
@@ -750,20 +738,5 @@ final class MimeBody
             'AUDIO' => 'BASIC',
             default => 'UNKNOWN',
         };
-    }
-
-    /**
-     * @param list<array{0: string, 1: string}> $pairs
-     * @return list<string>
-     */
-    private static function flatten(array $pairs): array
-    {
-        $flat = [];
-        foreach ($pairs as [$attribute, $value]) {
-            $flat[] = $attribute;
-            $flat[] = $value;
-        }
-
-        return $flat;
     }
 }
