@@ -31,7 +31,10 @@ final class Session
      * unreachable host, missing folder — pushing the cause onto the
      * ErrorStack; the shim in functions.php only adds the user-facing warning.
      */
-    public static function open(string $mailbox, string $user, string $password, int $flags, int $retries): \IMAP\Connection|false
+    /**
+     * @param array<array-key, mixed> $options
+     */
+    public static function open(string $mailbox, string $user, string $password, int $flags, int $retries, array $options = []): \IMAP\Connection|false
     {
         if ($flags && ($flags & ~(OP_READONLY | OP_ANONYMOUS | OP_HALFOPEN | CL_EXPUNGE | OP_DEBUG
                 | OP_SHORTCACHE | OP_SILENT | OP_PROTOTYPE | OP_SECURE)) !== 0) {
@@ -41,6 +44,8 @@ final class Session
         if ($retries < 0) {
             throw new \ValueError('imap_open(): Argument #5 ($retries) must be greater than or equal to 0');
         }
+
+        self::validateOptions($options);
 
         try {
             $spec = MailboxSpec::parse($mailbox);
@@ -123,6 +128,43 @@ final class Session
         }
 
         return $connection;
+    }
+
+    /**
+     * php_imap.c reads one option, DISABLE_AUTHENTICATOR, and hands each
+     * name to c-client, which stops using that SASL mechanism for every
+     * later open in the process. This package has no SASL mechanisms (it
+     * logs in with LOGIN, or USER/PASS over POP3, neither of which is an
+     * authenticator), so the names have nothing to act on here. What
+     * remains is the type check, which the extension makes before dialling.
+     *
+     * The array is walked by position, 0 to count-1, as php_imap.c walks it:
+     * an entry under any other key is never looked at.
+     *
+     * @param array<array-key, mixed> $options
+     */
+    private static function validateOptions(array $options): void
+    {
+        if (!array_key_exists('DISABLE_AUTHENTICATOR', $options)) {
+            return;
+        }
+
+        $disabled = $options['DISABLE_AUTHENTICATOR'];
+        $refusal = 'imap_open(): Argument #6 ($options) option "DISABLE_AUTHENTICATOR" must be a string or an array of strings';
+
+        if (is_string($disabled)) {
+            return;
+        }
+
+        if (!is_array($disabled)) {
+            throw new \TypeError($refusal);
+        }
+
+        for ($i = 0, $count = count($disabled); $i < $count; $i++) {
+            if (array_key_exists($i, $disabled) && !is_string($disabled[$i])) {
+                throw new \TypeError($refusal);
+            }
+        }
     }
 
     public static function connectImap(MailboxSpec $spec, Credentials $credentials, int $retries): ConnectionBackend|false
