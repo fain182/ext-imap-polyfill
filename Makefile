@@ -3,27 +3,70 @@
 SHELL := /bin/bash
 
 CONTAINER_RUNTIME ?= $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null)
+## Prefix of every container, network and image name, so that checkouts of
+## the repository in other directories (git worktrees) run their fixtures side
+## by side instead of removing each other's. A checkout named after the
+## repository keeps the plain names and the default ports.
+##
+## Every other checkout moves its host ports up by a multiple of 100 drawn
+## from a checksum of its name: 1 to 180 hundreds, which keeps the highest
+## port under Linux's ephemeral range (32768). Two names can draw the same
+## offset, and then any port can be passed by hand (`make test
+## PORT_OFFSET=...` or `GREENMAIL_PORT=...`).
+##
+## The name is lowercased and stripped to what container and image names
+## accept: an image repository refuses capitals.
+CHECKOUT := $(shell basename -- '$(subst ','\'',$(CURDIR))' | tr 'A-Z' 'a-z' | tr -c 'a-z0-9_.\n-' '-')
+IS_MAIN_CHECKOUT := $(filter ext-imap-polyfill,$(CHECKOUT))
+INSTANCE ?= ext-imap-polyfill$(if $(IS_MAIN_CHECKOUT),,-$(CHECKOUT))
+PORT_OFFSET ?= $(if $(IS_MAIN_CHECKOUT),0,$(shell printf %s '$(CHECKOUT)' | cksum | awk '{ print ($$1 % 180 + 1) * 100 }'))
+
+## Greenmail's imap, pop3, imaps and pop3s, then Dovecot's imap and pop3.
+## Shifted by a multiple of 100, two of them would collide across checkouts
+## if they ended in the same two digits, so that is refused here.
+FIXTURE_BASE_PORTS := 13143 13110 13993 13995 13144 13111
+ifneq ($(shell printf '%s\n' $(FIXTURE_BASE_PORTS) | awk '{ print $$1 % 100 }' | sort | uniq -d),)
+$(error Two of FIXTURE_BASE_PORTS end in the same two digits, so a PORT_OFFSET can put one checkout's port on another's)
+endif
+FIXTURE_PORTS := $(shell for port in $(FIXTURE_BASE_PORTS); do echo $$((port + $(PORT_OFFSET))); done)
+
 GREENMAIL_IMAGE := docker.io/greenmail/standalone:2.1.12
-GREENMAIL_NAME := ext-imap-polyfill-greenmail
-GREENMAIL_PORT := 13143
-GREENMAIL_POP3_PORT := 13110
-GREENMAIL_IMAPS_PORT := 13993
-GREENMAIL_POP3S_PORT := 13995
+GREENMAIL_NAME := $(INSTANCE)-greenmail
+GREENMAIL_PORT ?= $(word 1,$(FIXTURE_PORTS))
+GREENMAIL_POP3_PORT ?= $(word 2,$(FIXTURE_PORTS))
+GREENMAIL_IMAPS_PORT ?= $(word 3,$(FIXTURE_PORTS))
+GREENMAIL_POP3S_PORT ?= $(word 4,$(FIXTURE_PORTS))
 ## One user per suite that can run at the same time as another: testuser for
 ## the suite on the host, parity for the one in the parity container.
 GREENMAIL_OPTS := -Dgreenmail.setup.test.imap -Dgreenmail.setup.test.pop3 -Dgreenmail.setup.test.imaps -Dgreenmail.setup.test.pop3s -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=testuser:testpass@localhost,parity:testpass@localhost
 DOVECOT_IMAGE := docker.io/dovecot/dovecot:latest
-DOVECOT_NAME := ext-imap-polyfill-dovecot
-DOVECOT_PORT := 13144
-DOVECOT_POP3_PORT := 13111
+DOVECOT_NAME := $(INSTANCE)-dovecot
+DOVECOT_PORT ?= $(word 5,$(FIXTURE_PORTS))
+DOVECOT_POP3_PORT ?= $(word 6,$(FIXTURE_PORTS))
 DOVECOT_SSL_DIR := $(CURDIR)/tests/fixtures/dovecot-ssl
-NETWORK_NAME := ext-imap-polyfill-net
-PARITY_IMAGE := ext-imap-polyfill-parity
+NETWORK_NAME := $(INSTANCE)-net
+PARITY_IMAGE := $(INSTANCE)-parity
+PARITY_VENDOR_VOLUME := $(INSTANCE)-parity-vendor
+
+## What the suite reads to find the fixtures started on the ports above. A
+## port left at the suite's own default is not passed, and one is never
+## passed over a value already exported, so .env and `FOO=bar make test`
+## still point the suite elsewhere.
+fixture_env = $(if $(filter-out $(2),$(3)),$(1)=$${$(1):-$(3)})
+FIXTURE_ENV := \
+	$(call fixture_env,IMAP_POLYFILL_TEST_PORT,$(word 1,$(FIXTURE_BASE_PORTS)),$(GREENMAIL_PORT)) \
+	$(call fixture_env,IMAP_POLYFILL_TEST_POP3_PORT,$(word 2,$(FIXTURE_BASE_PORTS)),$(GREENMAIL_POP3_PORT)) \
+	$(call fixture_env,IMAP_POLYFILL_TEST_IMAPS_PORT,$(word 3,$(FIXTURE_BASE_PORTS)),$(GREENMAIL_IMAPS_PORT)) \
+	$(call fixture_env,IMAP_POLYFILL_TEST_POP3S_PORT,$(word 4,$(FIXTURE_BASE_PORTS)),$(GREENMAIL_POP3S_PORT)) \
+	$(call fixture_env,IMAP_POLYFILL_DOVECOT_PORT,$(word 5,$(FIXTURE_BASE_PORTS)),$(DOVECOT_PORT)) \
+	$(call fixture_env,IMAP_POLYFILL_DOVECOT_POP3_PORT,$(word 6,$(FIXTURE_BASE_PORTS)),$(DOVECOT_POP3_PORT))
 
 ## What a running fixture must have been started with to be reused: a change
-## to the image, to Greenmail's options or to dovecot.conf replaces it.
-GREENMAIL_CONFIG := $(shell echo '$(GREENMAIL_IMAGE) $(GREENMAIL_OPTS)' | cksum | cut -d' ' -f1)
-DOVECOT_CONFIG := $(shell (echo '$(DOVECOT_IMAGE)'; cat tests/fixtures/dovecot.conf) | cksum | cut -d' ' -f1)
+## to the image, its options, its host ports, dovecot.conf or the certificate
+## replaces it. Dovecot's is `=` rather than `:=` so that it is computed when
+## dovecot-up runs, after its prerequisite has generated the certificate.
+GREENMAIL_CONFIG := $(shell echo '$(GREENMAIL_IMAGE) $(GREENMAIL_OPTS) $(GREENMAIL_PORT) $(GREENMAIL_POP3_PORT) $(GREENMAIL_IMAPS_PORT) $(GREENMAIL_POP3S_PORT)' | cksum | cut -d' ' -f1)
+DOVECOT_CONFIG = $(shell (echo '$(DOVECOT_IMAGE) $(DOVECOT_PORT) $(DOVECOT_POP3_PORT)'; cat tests/fixtures/dovecot.conf $(DOVECOT_SSL_DIR)/tls.crt) | cksum | cut -d' ' -f1)
 CONFIG_LABEL := ext-imap-polyfill.config
 
 ## Narrows a phpunit run: `make test-integration FILTER=ImapSavebodyTest`.
@@ -130,17 +173,22 @@ dovecot-up: $(DOVECOT_SSL_DIR)/tls.crt
 dovecot-down:
 	$(CONTAINER_RUNTIME) rm -f $(DOVECOT_NAME) >/dev/null 2>&1 || true
 
-fixtures-down: dovecot-down greenmail-down
+## In this order: greenmail-down also removes the network, which fails while
+## Dovecot is still attached to it, and prerequisites may run in parallel.
+fixtures-down:
+	$(MAKE) dovecot-down
+	$(MAKE) greenmail-down
 
 test-integration: install greenmail-up dovecot-up
-	vendor/bin/phpunit --testsuite integration $(PHPUNIT_FILTER)
+	$(FIXTURE_ENV) vendor/bin/phpunit --testsuite integration $(PHPUNIT_FILTER)
 
 test: test-unit test-integration
 
 ## Everything the CI workflow checks, in one run against one start of the
 ## fixtures. In parallel because nearly all of the time is spent waiting on the
 ## servers, and safe to be: each suite logs in as a user of its own (testuser,
-## parity, phpt), and parity keeps its vendor/ in a volume of its own.
+## parity, a fresh one for phpt), and parity keeps its vendor/ in a volume of
+## its own.
 check:
 	$(MAKE) --jobs --output-sync=target phpstan arch test phpt parity
 
@@ -150,6 +198,7 @@ check:
 ## or this polyfill leans on it — which is how the POP3 uid bug surfaced.
 ## Not part of `make test`: it is an audit to run before a release.
 cross-check: install dovecot-up
+	$(FIXTURE_ENV) \
 	IMAP_POLYFILL_TEST_HOST=127.0.0.1 \
 	IMAP_POLYFILL_TEST_PORT=$(DOVECOT_PORT) \
 	IMAP_POLYFILL_TEST_POP3_PORT=$(DOVECOT_POP3_PORT) \
@@ -171,8 +220,14 @@ parity-build:
 ## An XFAIL that starts passing is only a warning to run-tests, which would
 ## leave the job green while a note in the tree went stale; the grep below
 ## is what turns it into a failure.
+##
+## The setup creates mailboxes with fixed names and refuses to run over one
+## that exists, and the fixture outlives the run, so a run cut short before
+## its --CLEAN-- would break every later one. Each run logs in as a user
+## nobody has used yet: the fixture accepts any name and gives each an empty
+## mail store.
 phpt: install dovecot-up
-	@set -o pipefail; 	IMAP_POLYFILL_DOVECOT_USER=phpt REPORT_EXIT_STATUS=1 TEST_PHP_EXECUTABLE="$$(command -v php)" 		php tests/phpt/run-tests.php -q 			-d auto_prepend_file=$(CURDIR)/tests/bootstrap.php 			tests/phpt/tests | tee tests/phpt/run.log; 	status=$$?; 	if grep -q 'XFAIL section but test passes' tests/phpt/run.log; then 		echo 'An --XFAIL-- test passed: the reason it carries is out of date.'; 		status=1; 	fi; 	rm -f tests/phpt/run.log; 	exit $$status
+	@set -o pipefail; 	$(FIXTURE_ENV) IMAP_POLYFILL_DOVECOT_USER=phpt$$(date +%s%N) REPORT_EXIT_STATUS=1 TEST_PHP_EXECUTABLE="$$(command -v php)" 		php tests/phpt/run-tests.php -q 			-d auto_prepend_file=$(CURDIR)/tests/bootstrap.php 			tests/phpt/tests | tee tests/phpt/run.log; 	status=$$?; 	if grep -q 'XFAIL section but test passes' tests/phpt/run.log; then 		echo 'An --XFAIL-- test passed: the reason it carries is out of date.'; 		status=1; 	fi; 	rm -f tests/phpt/run.log; 	exit $$status
 
 parity: parity-build greenmail-up dovecot-up
 	$(CONTAINER_RUNTIME) run --rm \
@@ -189,7 +244,7 @@ parity: parity-build greenmail-up dovecot-up
 		-e IMAP_POLYFILL_DOVECOT_USER=parity \
 		-e FILTER='$(FILTER)' \
 		-v $(CURDIR):/app:Z \
-		-v ext-imap-polyfill-parity-vendor:/app/vendor \
+		-v $(PARITY_VENDOR_VOLUME):/app/vendor \
 		$(PARITY_IMAGE) \
 		sh -c 'composer install --quiet && php -m | grep -q imap && vendor/bin/phpunit --testsuite integration $${FILTER:+--filter "$$FILTER"}'
 
