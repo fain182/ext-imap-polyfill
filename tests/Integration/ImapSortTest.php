@@ -54,12 +54,21 @@ final class ImapSortTest extends GreenmailTestCase
 
     public function test_sort_with_se_uid_returns_uids(): void
     {
-        $connection = imap_open(self::mailboxSpec($this->seed()), self::user(), self::password());
+        $folderName = 'ImapSort'.random_int(10000, 99999);
+        $client = $this->makeFolder($folderName);
+        $client->burnUid($folderName);
+        $folder = $client->getFolder($folderName);
+        $folder->appendMessage("Subject: B\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nB");
+        $folder->appendMessage("Subject: A\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nA");
 
-        $msgnos = imap_sort($connection, SORTARRIVAL, false);
-        $uids = imap_sort($connection, SORTARRIVAL, false, SE_UID);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
-        $this->assertSame($msgnos, $uids);
+        $msgnos = imap_sort($connection, SORTDATE, false);
+        $uids = imap_sort($connection, SORTDATE, false, SE_UID);
+
+        $this->assertSame([2, 1], $msgnos);
+        $this->assertSame([imap_uid($connection, 2), imap_uid($connection, 1)], $uids);
+        $this->assertNotSame($msgnos, $uids);
 
         imap_close($connection);
     }

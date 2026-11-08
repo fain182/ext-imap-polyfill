@@ -105,6 +105,7 @@ final class ImapThreadTest extends GreenmailTestCase
     {
         $folderName = 'ImapThread'.random_int(10000, 99999);
         $client = $this->makeFolder($folderName);
+        $client->burnUid($folderName);
         $folder = $client->getFolder($folderName);
         $folder->appendMessage("Message-ID: <x1@example.com>\r\nSubject: X\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nX1");
         $folder->appendMessage("Message-ID: <x2@example.com>\r\nIn-Reply-To: <x1@example.com>\r\nReferences: <x1@example.com>\r\nSubject: Re: X\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nX2");
@@ -114,7 +115,15 @@ final class ImapThreadTest extends GreenmailTestCase
         $msgnoTree = imap_thread($connection);
         $uidTree = imap_thread($connection, SE_UID);
 
-        $this->assertSame($msgnoTree, $uidTree);
+        $this->assertIsArray($msgnoTree);
+        $expected = $msgnoTree;
+        foreach ($expected as $key => $value) {
+            if (str_ends_with($key, '.num') && $value !== 0) {
+                $expected[$key] = imap_uid($connection, $value);
+            }
+        }
+        $this->assertNotSame($msgnoTree, $expected);
+        $this->assertSame($expected, $uidTree);
 
         imap_close($connection);
     }
