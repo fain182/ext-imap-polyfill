@@ -18,12 +18,14 @@ use ImapPolyfill\Message\SearchProgram;
 final class Pop3SearchEvaluator
 {
     /**
-     * @param string[] $flags the IMAP flag names set on this message
+     * @param string[]           $flags   the IMAP flag names set on this message
+     * @param SearchCharset|null $charset what the terms are written in; none
+     *                                    named leaves them as they are
      */
-    public static function matches(SearchProgram $program, RawMessage $message, array $flags): bool
+    public static function matches(SearchProgram $program, RawMessage $message, array $flags, ?SearchCharset $charset = null): bool
     {
         foreach ($program->criteria as $criterion) {
-            if (!self::matchesCriterion($criterion, $message, $flags)) {
+            if (!self::matchesCriterion($criterion, $message, $flags, $charset)) {
                 return false;
             }
         }
@@ -34,10 +36,14 @@ final class Pop3SearchEvaluator
     /**
      * @param string[] $flags
      */
-    private static function matchesCriterion(SearchCriterion $criterion, RawMessage $message, array $flags): bool
+    private static function matchesCriterion(SearchCriterion $criterion, RawMessage $message, array $flags, ?SearchCharset $charset): bool
     {
         $fields = $message->getHeaders();
         $argument = $criterion->argument ?? '';
+        // utf8_searchpgm() converts the address, subject, body and text
+        // terms. A keyword is a flag name and a date is a date, so those
+        // are left as written.
+        $term = $charset?->toUtf8($argument) ?? $argument;
 
         return match ($criterion->key) {
             SearchKey::All => true,
@@ -62,9 +68,9 @@ final class Pop3SearchEvaluator
             SearchKey::Old => false,
 
             SearchKey::Bcc, SearchKey::Cc, SearchKey::From,
-            SearchKey::Subject, SearchKey::To => self::substringMatch($fields, strtolower($criterion->key->value), $argument),
-            SearchKey::Body => self::contains($message->getBody(), $argument),
-            SearchKey::Text => self::contains($message->getRaw(), $argument),
+            SearchKey::Subject, SearchKey::To => self::substringMatch($fields, strtolower($criterion->key->value), $term),
+            SearchKey::Body => self::contains($message->getBody(), $term),
+            SearchKey::Text => self::contains($message->getRaw(), $term),
 
             SearchKey::Before, SearchKey::On,
             SearchKey::Since => self::dateMatch($criterion->key, $fields['date'] ?? null, $argument),

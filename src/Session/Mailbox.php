@@ -27,6 +27,9 @@ use ImapPolyfill\Support\ErrorStack;
  */
 final class Mailbox
 {
+    /** mail.h's SE_NOSERVER. */
+    private const SE_NOSERVER = 0x10;
+
     public function __construct(private readonly \IMAP\Connection $connection)
     {
     }
@@ -34,7 +37,7 @@ final class Mailbox
     /**
      * @return int[]|false
      */
-    public function search(string $criteria, int $flags, string $charset): array|false
+    public function search(string $criteria, int $flags, ?string $charset): array|false
     {
         if ($flags !== 0 && ($flags & ~(SE_UID | SE_FREE)) !== 0) {
             throw new \ValueError('imap_search(): Argument #3 ($flags) must be a bitmask of SE_FREE, and SE_UID');
@@ -890,8 +893,11 @@ final class Mailbox
                 return [];
             }
 
-            if ($program !== null) {
-                $ids = $this->connection->backend()->search($program, UidMode::Msgno);
+            // mail_sort_msgs() searches with the sort's charset before it
+            // sorts, an absent program included, so a charset it cannot
+            // read fails the sort. With neither there is nothing to ask.
+            if ($program !== null || $charset !== null) {
+                $ids = $this->connection->backend()->search($program ?? SearchProgram::parse('ALL'), UidMode::Msgno, $charset);
 
                 if ($ids === []) {
                     return [];
@@ -962,7 +968,11 @@ final class Mailbox
             // algorithm asked for, and only falls back to its own REFERENCES
             // implementation otherwise (imap4r1.c imap_thread). php_imap.c
             // always asks for REFERENCES over the whole mailbox ("ALL").
-            if ($this->connection->backend()->hasCapability('THREAD=REFERENCES')) {
+            //
+            // php_imap.c passes $flags through unchecked, and SE_NOSERVER
+            // keeps the server out of it. PHP registers no constant for that
+            // bit: its SO_NOSERVER is 0x8, which mail.h calls SO_FREE.
+            if (!($flags & self::SE_NOSERVER) && $this->connection->backend()->hasCapability('THREAD=REFERENCES')) {
                 $byUid = (bool) ($flags & SE_UID);
                 $groups = $this->connection->backend()->thread(
                     'REFERENCES',

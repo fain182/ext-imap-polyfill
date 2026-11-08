@@ -76,7 +76,9 @@ final class Protocol implements ConnectionBackend
                 $connection->loginAnonymous(gethostname() ?: 'localhost');
             } else {
                 $credentials->assertPlaintextLoginAllowed($connection->capabilities());
-                $connection->login($credentials->user, $credentials->password);
+                LoginTrials::attempt(static function () use ($connection, $credentials): void {
+                    $connection->login($credentials->user, $credentials->password);
+                });
             }
         } catch (ImapConnectionFailedException $e) {
             // c-client reports "Can't connect to host,port: reason", and
@@ -127,6 +129,21 @@ final class Protocol implements ConnectionBackend
         $this->selectedFolder = null;
 
         return $this->selectOrExamineFolder($folder, $readOnly);
+    }
+
+    public function unselect(): void
+    {
+        $this->selectedFolder = null;
+        $this->connection->messages()->reset();
+
+        // c-client sends it and never reads the answer (imap4r1.c,
+        // imap_open), so a server refusing it, because nothing was
+        // selected, leaves the error stack alone. A socket that is gone
+        // still surfaces, as ConnectionClosedException.
+        try {
+            $this->connection->sendAndCollect('UNSELECT');
+        } catch (CommandFailedException) {
+        }
     }
 
     public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState
@@ -182,7 +199,7 @@ final class Protocol implements ConnectionBackend
     /**
      * @return int[]
      */
-    public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array
+    public function search(SearchProgram $program, UidMode $uidMode, ?string $charset = null): array
     {
         $tokens = self::searchTokens($program);
         $command = $uidMode === UidMode::Uid ? 'UID SEARCH' : 'SEARCH';
@@ -190,7 +207,7 @@ final class Protocol implements ConnectionBackend
         // CHARSET comes before the criteria, as in c-client's imap_search():
         // without it the server has no way to read a term whose bytes fall
         // outside ASCII, and answers BAD rather than searching.
-        if ($charset !== '') {
+        if ($charset !== null && $charset !== '') {
             $tokens = ['CHARSET', self::astring($charset), ...$tokens];
         }
 

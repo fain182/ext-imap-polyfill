@@ -178,6 +178,17 @@ final class Connection
     }
 
     /**
+     * The half-open state reached on a connection that stays open: the
+     * server is told to leave the folder too, so a command that goes to the
+     * wire anyway finds nothing selected rather than the folder from before.
+     */
+    public function unselect(): void
+    {
+        $this->backend->unselect();
+        $this->halfOpen = true;
+    }
+
+    /**
      * Matches ext-imap: any function used on a stream after imap_close()
      * throws, rather than failing silently.
      */

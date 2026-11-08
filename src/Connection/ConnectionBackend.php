@@ -34,6 +34,12 @@ interface ConnectionBackend
      */
     public function reselectFolder(string $folder, bool $readOnly): FolderState;
 
+    /**
+     * Leaves the selected folder without expunging it, which is RFC 3691's
+     * UNSELECT. Sent only where hasCapability('UNSELECT') said so.
+     */
+    public function unselect(): void;
+
     public function host(): string;
 
     /**
@@ -68,12 +74,13 @@ interface ConnectionBackend
     /**
      * @param SearchProgram $program the parsed criteria; the IMAP backend writes
      *                               a SEARCH from them, the POP3 one evaluates them
-     * @param string        $charset how the server should read the criteria's
-     *                               bytes; empty when the caller named none
+     * @param string|null   $charset how the criteria's bytes are to be read;
+     *                               null when the caller named none, which is
+     *                               not the same as naming ''
      *
      * @return int[]
      */
-    public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array;
+    public function search(SearchProgram $program, UidMode $uidMode, ?string $charset = null): array;
 
     public function hasCapability(string $capability): bool;
 

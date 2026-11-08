@@ -19,11 +19,11 @@ if (!function_exists('imap_rfc822_parse_adrlist')) {
 
 if (!function_exists('imap_open')) {
     /**
-     * @param array<string, mixed> $options ignored — see README limitations
+     * @param array<array-key, mixed> $options
      */
     function imap_open(string $mailbox, string $user, string $password, int $flags = 0, int $retries = 0, array $options = []): \IMAP\Connection|false
     {
-        $connection = \ImapPolyfill\Session\Session::open($mailbox, $user, $password, $flags, $retries);
+        $connection = \ImapPolyfill\Session\Session::open($mailbox, $user, $password, $flags, $retries, $options);
 
         if ($connection === false) {
             trigger_error("imap_open(): Couldn't open stream {$mailbox}", E_USER_WARNING);
@@ -105,7 +105,9 @@ if (!function_exists('imap_search')) {
      */
     function imap_search(\IMAP\Connection $imap, string $criteria, int $flags = SE_FREE, string $charset = ''): array|false
     {
-        return (new \ImapPolyfill\Session\Mailbox($imap))->search($criteria, $flags, $charset);
+        // php_imap.c's charset stays NULL unless one is passed, and c-client
+        // treats NULL and "" differently: only "" is a name to look up.
+        return (new \ImapPolyfill\Session\Mailbox($imap))->search($criteria, $flags, func_num_args() > 3 ? $charset : null);
     }
 }
 

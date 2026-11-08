@@ -7,6 +7,8 @@ use ImapPolyfill\Connection\ConnectionBackend;
 use ImapPolyfill\Connection\ConnectionClosedException;
 use ImapPolyfill\Connection\Credentials;
 use ImapPolyfill\Connection\FolderState;
+use ImapPolyfill\Connection\LoginRefused;
+use ImapPolyfill\Connection\LoginTrials;
 use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Mailbox\MailboxSpec;
 use ImapPolyfill\Mailbox\Service;
@@ -26,12 +28,16 @@ final class Session
 
     /**
      * The body of imap_open(): builds a connection from the mailbox spec,
-     * connects (retrying up to $retries extra times), and selects the spec's
+     * connects (a nonzero $retries setting how many logins it tries; see
+     * LoginTrials), and selects the spec's
      * folder. Returns false instead of throwing on any failure — bad spec,
      * unreachable host, missing folder — pushing the cause onto the
      * ErrorStack; the shim in functions.php only adds the user-facing warning.
      */
-    public static function open(string $mailbox, string $user, string $password, int $flags, int $retries): \IMAP\Connection|false
+    /**
+     * @param array<array-key, mixed> $options
+     */
+    public static function open(string $mailbox, string $user, string $password, int $flags, int $retries, array $options = []): \IMAP\Connection|false
     {
         if ($flags && ($flags & ~(OP_READONLY | OP_ANONYMOUS | OP_HALFOPEN | CL_EXPUNGE | OP_DEBUG
                 | OP_SHORTCACHE | OP_SILENT | OP_PROTOTYPE | OP_SECURE)) !== 0) {
@@ -40,6 +46,12 @@ final class Session
 
         if ($retries < 0) {
             throw new \ValueError('imap_open(): Argument #5 ($retries) must be greater than or equal to 0');
+        }
+
+        self::validateOptions($options);
+
+        if ($retries > 0) {
+            LoginTrials::limitTo($retries);
         }
 
         try {
@@ -73,8 +85,8 @@ final class Session
 
         $isPop3 = $spec->service === Service::Pop3;
         $backend = $isPop3
-            ? self::connectPop3($spec, $mailbox, $credentials, $retries)
-            : self::connectImap($spec, $credentials, $retries);
+            ? self::connectPop3($spec, $mailbox, $credentials)
+            : self::connectImap($spec, $credentials);
 
         if ($backend === false) {
             return false;
@@ -125,21 +137,55 @@ final class Session
         return $connection;
     }
 
-    public static function connectImap(MailboxSpec $spec, Credentials $credentials, int $retries): ConnectionBackend|false
+    /**
+     * php_imap.c reads one option, DISABLE_AUTHENTICATOR, and hands each
+     * name to c-client, which stops using that SASL mechanism for every
+     * later open in the process. This package has no SASL mechanisms (it
+     * logs in with LOGIN, or USER/PASS over POP3, neither of which is an
+     * authenticator), so the names have nothing to act on here. What
+     * remains is the type check, which the extension makes before dialling.
+     *
+     * The array is walked by position, 0 to count-1, as php_imap.c walks it:
+     * an entry under any other key is never looked at.
+     *
+     * @param array<array-key, mixed> $options
+     */
+    private static function validateOptions(array $options): void
     {
-        $attempts = 1 + max(0, $retries);
-        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
-            try {
-                return Backends::imap($spec, $credentials);
-            } catch (\Throwable $e) {
-                ErrorStack::push($e->getMessage());
-            }
+        if (!array_key_exists('DISABLE_AUTHENTICATOR', $options)) {
+            return;
         }
 
-        return false;
+        $disabled = $options['DISABLE_AUTHENTICATOR'];
+        $refusal = 'imap_open(): Argument #6 ($options) option "DISABLE_AUTHENTICATOR" must be a string or an array of strings';
+
+        if (is_string($disabled)) {
+            return;
+        }
+
+        if (!is_array($disabled)) {
+            throw new \TypeError($refusal);
+        }
+
+        for ($i = 0, $count = count($disabled); $i < $count; $i++) {
+            if (array_key_exists($i, $disabled) && !is_string($disabled[$i])) {
+                throw new \TypeError($refusal);
+            }
+        }
     }
 
-    public static function connectPop3(MailboxSpec $spec, string $mailbox, Credentials $credentials, int $retries): ConnectionBackend|false
+    public static function connectImap(MailboxSpec $spec, Credentials $credentials): ConnectionBackend|false
+    {
+        try {
+            return Backends::imap($spec, $credentials);
+        } catch (\Throwable $e) {
+            self::reportFailedConnection($e);
+
+            return false;
+        }
+    }
+
+    public static function connectPop3(MailboxSpec $spec, string $mailbox, Credentials $credentials): ConnectionBackend|false
     {
         // pop3.c refuses before it dials: the protocol has no anonymous
         // access to offer, so there is nothing to try.
@@ -149,16 +195,20 @@ final class Session
             return false;
         }
 
-        $attempts = 1 + max(0, $retries);
-        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
-            try {
-                return Backends::pop3($spec, $mailbox, $credentials);
-            } catch (\Throwable $e) {
-                ErrorStack::push($e->getMessage());
-            }
-        }
+        try {
+            return Backends::pop3($spec, $mailbox, $credentials);
+        } catch (\Throwable $e) {
+            self::reportFailedConnection($e);
 
-        return false;
+            return false;
+        }
+    }
+
+    private static function reportFailedConnection(\Throwable $e): void
+    {
+        foreach ($e instanceof LoginRefused ? $e->messages() : [$e->getMessage()] as $message) {
+            ErrorStack::push($message);
+        }
     }
 
     public function close(int $flags): bool
@@ -360,6 +410,10 @@ final class Session
             throw new \ValueError('imap_reopen(): Argument #4 ($retries) must be greater than or equal to 0');
         }
 
+        if ($retries > 0) {
+            LoginTrials::limitTo($retries);
+        }
+
         try {
             $spec = MailboxSpec::parse($mailbox);
         } catch (\ValueError $e) {
@@ -371,6 +425,9 @@ final class Session
         // Like imap_open(): a /readonly flag in the spec counts as OP_READONLY.
         $readOnly = (bool) ($flags & OP_READONLY) || $spec->switches->readOnly;
         $isPop3 = $spec->service === Service::Pop3;
+        // pop3.c has no half-open state: the flag reaches the driver, which
+        // never reads it, and the reopened session is the mailbox as usual.
+        $halfOpen = (bool) ($flags & OP_HALFOPEN) && !$isPop3;
 
         if ($spec->service === Service::Nntp) {
             throw \ImapPolyfill\Support\UnsupportedFeature::nntp($mailbox);
@@ -398,8 +455,13 @@ final class Session
         // lacking DR_RECYCLE: the session is closed, committing the DELEs an
         // expunge sent, and a new one numbers the messages afresh with no
         // flags set.
-        if ($isPop3 || $prefix !== $this->connection->mailboxPrefix() || $credentials->user !== $this->connection->user()) {
-            $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $retries);
+        //
+        // Nor can c-client leave a selection behind on a server without
+        // UNSELECT: going half-open there logs out and dials again
+        // (imap4r1.c, imap_open).
+        if ($isPop3 || $prefix !== $this->connection->mailboxPrefix() || $credentials->user !== $this->connection->user()
+            || ($halfOpen && !$this->connection->backend()->hasCapability('UNSELECT'))) {
+            $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $halfOpen);
 
             if ($status === false) {
                 return false;
@@ -413,13 +475,17 @@ final class Session
         }
 
         try {
-            $status = $this->connection->reselectFolder($spec->folder, $readOnly);
+            if ($halfOpen) {
+                $this->connection->unselect();
+            } else {
+                $this->connection->reselectFolder($spec->folder, $readOnly);
+            }
         } catch (ConnectionClosedException) {
             // Losing the socket is not losing the connection: c-client
             // dials the host again and logs back in rather than reporting
             // a dead stream, which is what makes a session survive a server
             // that hangs up on it. Same host as before — the prefix matched.
-            $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $retries);
+            $status = $this->redial($spec, $mailbox, $isPop3, $credentials, $readOnly, $halfOpen);
 
             if ($status === false) {
                 return false;
@@ -430,7 +496,13 @@ final class Session
             return false;
         }
 
+        // The folder is remembered even when nothing is selected, as
+        // imap_open() remembers it, for a later imap_reopen() to land on.
         $this->connection->reselect($spec->folder, $readOnly);
+
+        if ($halfOpen) {
+            $this->connection->markHalfOpen();
+        }
 
         // Mirrors php_imap.c: a nonzero $flags overrides the remembered
         // CL_EXPUNGE state outright (even clearing it if CL_EXPUNGE isn't in
@@ -449,13 +521,13 @@ final class Session
      * mail_open() does to a stream it is reopening elsewhere, and to one
      * whose socket is gone.
      */
-    private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, Credentials $credentials, bool $readOnly, int $retries): FolderState|false
+    private function redial(MailboxSpec $spec, string $mailbox, bool $isPop3, Credentials $credentials, bool $readOnly, bool $halfOpen): FolderState|false
     {
         $this->connection->disconnect();
 
         $backend = $isPop3
-            ? self::connectPop3($spec, $mailbox, $credentials, $retries)
-            : self::connectImap($spec, $credentials, $retries);
+            ? self::connectPop3($spec, $mailbox, $credentials)
+            : self::connectImap($spec, $credentials);
 
         // mail_open() answers NIL with the old stream already gone, and
         // php_imap.c leaves the IMAP\Connection without one.
@@ -474,6 +546,10 @@ final class Session
             $readOnly,
             $credentials->anonymous,
         );
+
+        if ($halfOpen) {
+            $this->connection->markHalfOpen();
+        }
 
         try {
             return $this->connection->selectOrExamine();

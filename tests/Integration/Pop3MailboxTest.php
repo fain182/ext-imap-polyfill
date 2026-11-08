@@ -138,6 +138,90 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * The charsets c-client's utf8_csvalid table knows, as its refusal lists
+     * them. POP3 has no SEARCH, so the charset is c-client's to check rather
+     * than a server's.
+     */
+    private const BADCHARSET = '[BADCHARSET (US-ASCII UTF-8 UTF-7 ISO-8859-1 ISO-8859-2 ISO-8859-3 ISO-8859-4 '
+        .'ISO-8859-5 ISO-8859-6 ISO-8859-7 ISO-8859-8 ISO-8859-9 ISO-8859-10 ISO-8859-11 ISO-8859-13 ISO-8859-14 '
+        .'ISO-8859-15 ISO-8859-16 KOI8-R KOI8-U KOI8-RU TIS-620 VISCII GBK GB2312 CN-GB ISO-2022-CN CN-GB-12345 '
+        .'BIG5 CN-BIG5 BIG-5 ISO-2022-JP EUC-JP SHIFT_JIS SHIFT-JIS ISO-2022-JP-1 ISO-2022-JP-2 ISO-2022-KR EUC-KR '
+        .'KSC5601 KSC_5601 KS_C_5601-1987 KS_C_5601-1989 KS_C_5601-1992 KS_C_5601-1997 WINDOWS-874 CP874 '
+        .'WINDOWS-936 CP936 WINDOWS-949 CP949 X-WINDOWS-949 WINDOWS-1250 CP1250 WINDOWS-1251 CP1251 WINDOWS-1252 '
+        .'CP1252 WINDOWS-1253 CP1253 WINDOWS-1254 CP1254 WINDOWS-1255 CP1255 WINDOWS-1256 CP1256 WINDOWS-1257 '
+        .'CP1257 WINDOWS-1258 CP1258 IBM367 IBM437 IBM737 IBM775 IBM850 IBM852 IBM855 IBM857 IBM860 IBM861 IBM862 '
+        .'IBM863 IBM864 IBM865 IBM866 IBM869 IBM874 ANSI_X3.4-1968 UNICODE-1-1-UTF-7 UCS-2 UCS-4 UTF-16)] '
+        .'Unknown charset: ';
+
+    public function test_search_refuses_a_charset_c_client_does_not_know(): void
+    {
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        imap_errors();
+
+        $this->assertFalse(imap_search($connection, 'ALL', SE_FREE, 'X-NO-SUCH'));
+        $this->assertSame([self::BADCHARSET.'X-NO-SUCH'], imap_errors());
+
+        imap_close($connection);
+    }
+
+    /**
+     * Left out, the charset is php_imap.c's NULL and nothing is checked.
+     * Passed as '', it is a name, and not one in the table.
+     */
+    public function test_search_refuses_an_empty_charset_but_not_an_omitted_one(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Pop3 Charset\r\n\r\nBody");
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        imap_errors();
+
+        $this->assertFalse(imap_search($connection, 'ALL', SE_FREE, ''));
+        $this->assertSame([self::BADCHARSET], imap_errors());
+        $this->assertContains(imap_num_msg($connection), imap_search($connection, 'ALL', SE_FREE) ?: []);
+
+        imap_close($connection);
+    }
+
+    /**
+     * The terms are converted from the charset named to UTF-8 before they
+     * are compared, so a Latin-1 term finds the same word in a UTF-8 body.
+     */
+    public function test_search_reads_the_terms_in_the_charset_given(): void
+    {
+        $marker = 'Pop3Latin'.random_int(10000, 99999);
+        self::seedClient()->getFolder('INBOX')->appendMessage(
+            "Subject: {$marker}\r\n"
+            ."Content-Type: text/plain; charset=UTF-8\r\n"
+            ."Content-Transfer-Encoding: 8bit\r\n"
+            ."\r\n"
+            ."A caf\u{e9}{$marker} in the body\r\n"
+        );
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame([$count], imap_search($connection, "BODY \"caf\xe9{$marker}\"", SE_FREE, 'ISO-8859-1'));
+
+        imap_close($connection);
+    }
+
+    /**
+     * POP3 sorts locally, and the local sort searches first, criteria or
+     * not: the charset is checked either way, and a sort that cannot search
+     * comes back empty.
+     */
+    public function test_sort_refuses_a_charset_c_client_does_not_know(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Pop3 Sort Charset\r\n\r\nBody");
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        imap_errors();
+
+        $this->assertSame([], imap_sort($connection, SORTARRIVAL, false, 0, 'ALL', 'X-NO-SUCH'));
+        $this->assertSame([], imap_sort($connection, SORTARRIVAL, false, 0, null, 'X-NO-SUCH'));
+        $this->assertSame([self::BADCHARSET.'X-NO-SUCH', self::BADCHARSET.'X-NO-SUCH'], imap_errors());
+
+        imap_close($connection);
+    }
+
     public function test_setflag_and_delete(): void
     {
         $client = self::seedClient();
@@ -238,6 +322,24 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
         $this->assertTrue(imap_reopen($connection, self::pop3MailboxSpec()));
         $this->assertSame('N', imap_headerinfo($connection, $count)->Recent);
+
+        imap_close($connection);
+    }
+
+    /**
+     * OP_HALFOPEN means nothing to the POP3 driver: the reopened session is
+     * the mailbox, the way any reopen's is.
+     */
+    public function test_reopen_with_op_halfopen_still_opens_the_mailbox(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Pop3 Reopen Half\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertTrue(imap_reopen($connection, self::pop3MailboxSpec(), OP_HALFOPEN));
+        $this->assertSame($count, imap_num_msg($connection));
+        $this->assertStringEndsWith('}INBOX', imap_check($connection)->Mailbox);
 
         imap_close($connection);
     }
