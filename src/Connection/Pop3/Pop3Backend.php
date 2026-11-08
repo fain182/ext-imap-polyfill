@@ -69,6 +69,11 @@ final class Pop3Backend implements ConnectionBackend
         return 'pop3';
     }
 
+    public function hasOverview(): bool
+    {
+        return false;
+    }
+
     public function upgradedToTls(): bool
     {
         return $this->protocol->upgradedToTls();
@@ -197,7 +202,7 @@ final class Pop3Backend implements ConnectionBackend
     /**
      * POP3 has no SORT command; null hands imap_sort() back to its local sort.
      */
-    public function sort(string $program, string $charset, array $searchTokens, UidMode $uidMode): ?array
+    public function sort(string $program, string $charset, ?SearchProgram $search, UidMode $uidMode): ?array
     {
         return null;
     }
@@ -205,7 +210,7 @@ final class Pop3Backend implements ConnectionBackend
     /**
      * Likewise no THREAD; imap_thread() threads locally over POP3.
      */
-    public function thread(string $algorithm, string $charset, array $searchTokens, UidMode $uidMode): ?array
+    public function thread(string $algorithm, string $charset, ?SearchProgram $search, UidMode $uidMode): ?array
     {
         return null;
     }

@@ -7,6 +7,8 @@ use ImapPolyfill\Connection\MessageNotFoundException;
 use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Connection\UidTable;
 use ImapPolyfill\Mailbox\MailboxReference;
+use ImapPolyfill\Mailbox\MalformedSpec;
+use ImapPolyfill\Mailbox\Service;
 use ImapPolyfill\Message\BodyStructure;
 use ImapPolyfill\Message\HeaderInfo;
 use ImapPolyfill\Message\HeadersLine;
@@ -764,7 +766,14 @@ final class Mailbox
     {
         $this->connection->ensureOpen();
 
-        $folderName = MailboxReference::parse($folder)->bareReference;
+        try {
+            $folderName = MailboxReference::parse($folder, Service::from($this->connection->backend()->driverName()))->bareReference;
+        } catch (MalformedSpec) {
+            ErrorStack::push(MalformedSpec::of($folder, 'append to mailbox')->getMessage());
+
+            return false;
+        }
+
         $flags = $options !== null ? (preg_split('/\s+/', trim($options)) ?: []) : null;
 
         try {
@@ -865,7 +874,7 @@ final class Mailbox
                 $sorted = $this->connection->backend()->sort(
                     ($reverse ? 'REVERSE ' : '').SortKey::wireName($criterion),
                     $charset ?? 'US-ASCII',
-                    $program === null ? ['ALL'] : $program->tokens,
+                    $program,
                     UidMode::fromFlags($flags, SE_UID),
                 );
 
@@ -958,7 +967,7 @@ final class Mailbox
                 $groups = $this->connection->backend()->thread(
                     'REFERENCES',
                     'US-ASCII',
-                    ['ALL'],
+                    null,
                     $byUid ? UidMode::Uid : UidMode::Msgno,
                 );
 
@@ -982,7 +991,7 @@ final class Mailbox
             return self::emptyTree();
         }
 
-        $messages = ThreadBuilder::messagesFromFetch($data, $ids);
+        $messages = ThreadBuilder::messagesFromFetch($data, $ids, $this->connection->backend()->hasOverview());
         $root = ThreadBuilder::build($messages);
         $tree = ThreadBuilder::flatten($root, (bool) ($flags & SE_UID));
 

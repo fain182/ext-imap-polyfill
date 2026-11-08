@@ -78,4 +78,27 @@ class ImapMailboxManagementTest extends GreenmailTestCase
         $this->assertFalse(imap_deletemailbox($connection, self::mailboxSpec($missing)));
         $this->assertStringContainsString($suffix, implode('|', imap_errors() ?: []));
     }
+
+    /**
+     * mail_valid() says why only when its caller gave it a purpose:
+     * delete and rename do, create and the new name of a rename do not.
+     */
+    public function test_refuses_a_prefix_the_imap_driver_does_not_serve(): void
+    {
+        $folderName = 'RefusedBox'.uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
+        imap_errors();
+        $refused = '{'.self::host().':0}';
+
+        $this->assertFalse(imap_createmailbox($connection, $refused.$folderName.'New'));
+        $this->assertFalse(imap_deletemailbox($connection, $refused.$folderName));
+        $this->assertFalse(imap_renamemailbox($connection, $refused.$folderName, self::mailboxSpec($folderName.'Renamed')));
+        $this->assertFalse(imap_renamemailbox($connection, self::mailboxSpec($folderName), $refused.$folderName.'Renamed'));
+        $this->assertSame([
+            "Can't delete mailbox {$refused}{$folderName}: invalid remote specification",
+            "Can't rename mailbox {$refused}{$folderName}: invalid remote specification",
+        ], imap_errors());
+        $this->assertSame([self::mailboxSpec($folderName)], imap_list($connection, self::mailboxSpec(''), $folderName.'*'));
+    }
 }

@@ -92,11 +92,12 @@ final class Address
 
     /**
      * rfc822_parse_routeaddr(): the "<...>" form, and the source route that
-     * may precede the address inside it.
+     * may precede the address inside it. Threading reads Message-IDs with it
+     * too, which is why it is reachable from outside an address list.
      *
      * @return Address[]|null
      */
-    private static function parseRouteAddress(Rfc822Cursor $cursor, string $defaultHostname): ?array
+    public static function parseRouteAddress(Rfc822Cursor $cursor, string $defaultHostname): ?array
     {
         $cursor->skipWhitespaceAndComments();
 

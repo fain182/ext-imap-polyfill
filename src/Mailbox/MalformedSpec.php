@@ -15,12 +15,16 @@ namespace ImapPolyfill\Mailbox;
  */
 final class MalformedSpec extends \ValueError
 {
-    public static function of(string $mailbox): self
+    /**
+     * @param string $purpose mail_valid()'s purpose argument, which names the
+     *                        operation that refused the spec
+     */
+    public static function of(string $mailbox, string $purpose = 'open mailbox'): self
     {
-        // "Can't %s %.80s: %s" in mail.c, with "open mailbox" as the purpose:
-        // the spec is truncated at 80 bytes, however long it was.
+        // "Can't %s %.80s: %s" in mail.c: the spec is truncated at 80 bytes,
+        // however long it was.
         return new self(
-            "Can't open mailbox ".substr($mailbox, 0, 80).': '
+            "Can't ".$purpose.' '.substr($mailbox, 0, 80).': '
             .(str_starts_with($mailbox, '{') ? 'invalid remote specification' : 'no such mailbox')
         );
     }

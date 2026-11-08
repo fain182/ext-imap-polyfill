@@ -32,7 +32,13 @@ class BaseSubjectTest extends TestCase
             'fwd-looking blob with text after is a plain blob' => ['[Fwd: hi] there', 'there'],
             'bare blob leaving empty base is kept' => ['[tag]', '[tag]'],
             'malformed nested blob voids the marker' => ['[bad [nested] blob', '[bad [nested] blob'],
-            'whitespace collapse' => ["  spaced \t  out  ", 'spaced out'],
+            'whitespace collapse' => ["spaced \t  out", 'spaced out'],
+            // Step 2's first pass measures the string before step 1 shortened
+            // it, so it starts past the end and strips nothing.
+            'trailing whitespace after a collapse stays' => ["  spaced \t  out  ", 'spaced out '],
+            '(fwd) after a collapse stays' => ['Hello  world (fwd)', 'hello world (fwd)'],
+            'an encoded re is a re' => ['=?utf-8?q?Re=3A_foo?=', 'foo'],
+            'an encoded subject is decoded' => ['Re: =?utf-8?b?Y2Fmw6g=?=', "caf\xc3\xa8"],
             'reply is not re' => ['Reply: no', 'reply: no'],
             'fwd trailer chain' => ['topic (fwd) (FWD) ', 'topic'],
             'leading (fwd) is not a trailer' => ['(fwd) leading', '(fwd) leading'],

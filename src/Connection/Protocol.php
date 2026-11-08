@@ -101,6 +101,11 @@ final class Protocol implements ConnectionBackend
         return 'imap';
     }
 
+    public function hasOverview(): bool
+    {
+        return true;
+    }
+
     public function host(): string
     {
         return $this->host;
@@ -179,9 +184,7 @@ final class Protocol implements ConnectionBackend
      */
     public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array
     {
-        // The criteria go out as written: they have been checked against
-        // the vocabulary c-client would accept, and the server does the rest.
-        $tokens = $program->tokens;
+        $tokens = self::searchTokens($program);
         $command = $uidMode === UidMode::Uid ? 'UID SEARCH' : 'SEARCH';
 
         // CHARSET comes before the criteria, as in c-client's imap_search():
@@ -210,16 +213,14 @@ final class Protocol implements ConnectionBackend
      * Returns null when the server rejects the command outright (BAD), which
      * is c-client's cue to sort locally instead.
      *
-     * @param string[] $searchTokens
-     *
      * @return int[]|null
      */
-    public function sort(string $program, string $charset, array $searchTokens, UidMode $uidMode): ?array
+    public function sort(string $program, string $charset, ?SearchProgram $search, UidMode $uidMode): ?array
     {
         $tokens = $this->delegated(
             $uidMode === UidMode::Uid ? 'UID SORT' : 'SORT',
             'SORT',
-            ["({$program})", self::astring($charset), ...$searchTokens],
+            ["({$program})", self::astring($charset), ...self::searchTokens($search)],
         );
 
         return $tokens === null
@@ -237,16 +238,14 @@ final class Protocol implements ConnectionBackend
      * leaving the tree shaping to Message\ThreadBuilder. Null when the
      * server rejects the command, c-client's cue to thread locally.
      *
-     * @param string[] $searchTokens
-     *
      * @return array<int, mixed>|null
      */
-    public function thread(string $algorithm, string $charset, array $searchTokens, UidMode $uidMode): ?array
+    public function thread(string $algorithm, string $charset, ?SearchProgram $search, UidMode $uidMode): ?array
     {
         $tokens = $this->delegated(
             $uidMode === UidMode::Uid ? 'UID THREAD' : 'THREAD',
             'THREAD',
-            [$algorithm, self::astring($charset), ...$searchTokens],
+            [$algorithm, self::astring($charset), ...self::searchTokens($search)],
         );
 
         return $tokens === null
@@ -263,7 +262,7 @@ final class Protocol implements ConnectionBackend
      * Null for that BAD; otherwise the untagged response's tokens, which the
      * caller reads as the ids or the tree it asked for.
      *
-     * @param string[] $arguments
+     * @param list<string|array{0: string, 1: string}> $arguments
      *
      * @return array<int, Token|Data>|null
      */
@@ -699,6 +698,53 @@ final class Protocol implements ConnectionBackend
      * quoted where c-client sends it bare is enough for a strict server (e.g.
      * GreenMail) to reject the whole command.
      */
+    /**
+     * The search program as SEARCH, SORT and THREAD carry it, written from
+     * the parsed criteria the way imap_send_spgm() writes c-client's: each
+     * keyword in capitals, each value as an IMAP string, each date as
+     * imap_send_sdate() prints it. No program, or one that names nothing, is
+     * "ALL". The keywords keep the caller's order rather than c-client's
+     * fixed one; a SEARCH is an AND, and the order changes nothing it finds.
+     *
+     * @return list<string|array{0: string, 1: string}>
+     */
+    private static function searchTokens(?SearchProgram $program): array
+    {
+        $tokens = [];
+
+        foreach ($program === null ? [] : $program->criteria as $criterion) {
+            $tokens[] = $criterion->key->value;
+
+            if ($criterion->argument !== null) {
+                $tokens[] = $criterion->key->takesDate() ? $criterion->argument : self::searchString($criterion->argument);
+            }
+        }
+
+        return $tokens === [] ? ['ALL'] : $tokens;
+    }
+
+    /**
+     * imap_send_astring(): an atom where nothing in the value needs more, a
+     * quoted string for the empty value, a control character or an atom
+     * special, and a literal for anything a quoted string cannot carry —
+     * 8-bit bytes, NUL, CR, LF, and the quote and backslash IMAP2 had no
+     * escape for.
+     *
+     * @return string|array{0: string, 1: string}
+     */
+    private static function searchString(string $value): string|array
+    {
+        if (strpbrk($value, "\0\r\n\"\\") !== false || preg_match('/[\x80-\xFF]/', $value) === 1) {
+            return ['{'.strlen($value).'}', $value];
+        }
+
+        if ($value === '' || preg_match('/[\x00-\x20\x7F(){*%]/', $value) === 1) {
+            return '"'.$value.'"';
+        }
+
+        return $value;
+    }
+
     private static function astring(string $value): string
     {
         // Str::literal() answers a two-part literal, an array, for a value

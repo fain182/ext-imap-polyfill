@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Tests\Integration;
 
 use ImapPolyfill\Tests\CapturesWarnings;
+use PHPUnit\Framework\Attributes\Group;
 
 final class ImapThreadTest extends GreenmailTestCase
 {
@@ -49,6 +50,152 @@ final class ImapThreadTest extends GreenmailTestCase
             '2.num' => 3, '2.next' => 0, '2.branch' => 0,
             '0.branch' => 0,
         ], imap_thread($connection));
+
+        imap_close($connection);
+    }
+
+    /**
+     * c-client's base subject, not RFC 5256's: once whitespace has been
+     * collapsed, the "(fwd)" trailer is no longer stripped. Greenmail has no
+     * THREAD, so this runs c-client's own algorithm; Dovecot threads on the
+     * server, by the RFC.
+     */
+    #[Group('greenmail-only')]
+    public function test_a_fwd_trailer_survives_when_the_subject_had_whitespace_to_collapse(): void
+    {
+        $folderName = 'ImapThread'.random_int(10000, 99999);
+        $client = $this->makeFolder($folderName);
+        $folder = $client->getFolder($folderName);
+        $folder->appendMessage("Message-ID: <a@example.com>\r\nSubject: Hello world\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nA");
+        $folder->appendMessage("Message-ID: <b@example.com>\r\nSubject: Hello  world (fwd)\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nB");
+        $folder->appendMessage("Message-ID: <c@example.com>\r\nSubject: Hello world (fwd)\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nC");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->assertSame([
+            '0.num' => 1, '0.next' => 1,
+            '1.num' => 3, '1.next' => 0, '1.branch' => 0,
+            '0.branch' => 2,
+            '2.num' => 2, '2.next' => 0, '2.branch' => 0,
+        ], imap_thread($connection));
+
+        imap_close($connection);
+    }
+
+    /**
+     * References are read as route-addresses, not split on whitespace: two
+     * ids with nothing between them are both read, a comma ends the list,
+     * spaces inside the brackets do not matter, and an id with no brackets
+     * is no id. Greenmail has no THREAD, so this is c-client's own parser.
+     */
+    #[Group('greenmail-only')]
+    public function test_references_are_parsed_as_rfc822_message_ids(): void
+    {
+        $folderName = 'ImapThread'.random_int(10000, 99999);
+        $folder = $this->makeFolder($folderName)->getFolder($folderName);
+        $folder->appendMessage("Message-ID: <a@example.com>\r\nSubject: One\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nA");
+        $folder->appendMessage("Message-ID: <b@example.com>\r\nReferences: < a @ example.com >\r\nSubject: Two\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nB");
+        $folder->appendMessage("Message-ID: <c@example.com>\r\nReferences: <a@example.com><b@example.com>\r\nSubject: Three\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nC");
+        $folder->appendMessage("Message-ID: <d@example.com>\r\nReferences: <a@example.com>,<c@example.com>\r\nSubject: Four\r\nDate: Tue, 07 Jul 2026 12:00:00 +0000\r\n\r\nD");
+        $folder->appendMessage("Message-ID: <e@example.com>\r\nReferences: a@example.com\r\nSubject: Five\r\nDate: Tue, 07 Jul 2026 13:00:00 +0000\r\n\r\nE");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->assertSame(['a' => null, 'b' => 'a', 'c' => 'b', 'd' => 'a', 'e' => null], self::parents(imap_thread($connection), ['a', 'b', 'c', 'd', 'e']));
+
+        imap_close($connection);
+    }
+
+    /**
+     * c-client reads an IMAP message's references from the overview, where
+     * a message without References has none: In-Reply-To is not consulted.
+     */
+    #[Group('greenmail-only')]
+    public function test_in_reply_to_is_not_read_over_imap(): void
+    {
+        $folderName = 'ImapThread'.random_int(10000, 99999);
+        $folder = $this->makeFolder($folderName)->getFolder($folderName);
+        $folder->appendMessage("Message-ID: <a@example.com>\r\nSubject: One\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nA");
+        $folder->appendMessage("Message-ID: <b@example.com>\r\nIn-Reply-To: <a@example.com>\r\nSubject: Two\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nB");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->assertSame(['a' => null, 'b' => null], self::parents(imap_thread($connection), ['a', 'b']));
+
+        imap_close($connection);
+    }
+
+    /**
+     * Over POP3 c-client reads the envelope instead, and falls back to
+     * In-Reply-To where References gives no id — but only to its first id.
+     * Asserted on the seeded messages alone, the POP3 INBOX being shared.
+     */
+    public function test_pop3_falls_back_to_the_first_in_reply_to_id(): void
+    {
+        $tag = (string) random_int(10000, 99999);
+        $folder = self::seedClient()->getFolder('INBOX');
+        $folder->appendMessage("Message-ID: <a{$tag}@example.com>\r\nSubject: One {$tag}\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nA");
+        $folder->appendMessage("Message-ID: <b{$tag}@example.com>\r\nSubject: Two {$tag}\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nB");
+        $folder->appendMessage("Message-ID: <c{$tag}@example.com>\r\nIn-Reply-To: <a{$tag}@example.com> <b{$tag}@example.com>\r\nSubject: Three {$tag}\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nC");
+        $folder->appendMessage("Message-ID: <d{$tag}@example.com>\r\nReferences: garbage\r\nIn-Reply-To: <b{$tag}@example.com>\r\nSubject: Four {$tag}\r\nDate: Tue, 07 Jul 2026 12:00:00 +0000\r\n\r\nD");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+        $names = [$count - 3 => 'a', $count - 2 => 'b', $count - 1 => 'c', $count => 'd'];
+
+        $this->assertSame(['a' => null, 'b' => null, 'c' => 'a', 'd' => 'b'], self::parents(imap_thread($connection), $names));
+
+        imap_close($connection);
+    }
+
+    /**
+     * Each named message's parent, by name: null for a message at the top,
+     * or under a node that is no message (the dummy grouping a subject).
+     *
+     * @param array<string, int> $tree
+     * @param array<int, string> $names msgno => name; a list names 1..n
+     *
+     * @return array<string, ?string>
+     */
+    private static function parents(array $tree, array $names): array
+    {
+        if (array_is_list($names)) {
+            $names = array_combine(range(1, count($names)), $names);
+        }
+
+        $parent = [];
+        foreach ($tree as $key => $value) {
+            [$node, $field] = explode('.', $key);
+            if ($field === 'next' && $value !== 0) {
+                for ($child = $value; $child !== 0; $child = $tree[$child.'.branch']) {
+                    $parent[$tree[$child.'.num']] = $tree[$node.'.num'];
+                }
+            }
+        }
+
+        $result = [];
+        foreach ($names as $msgno => $name) {
+            $result[$name] = $names[$parent[$msgno] ?? 0] ?? null;
+        }
+
+        return $result;
+    }
+
+    /**
+     * The base subject is taken from the decoded subject, so an encoded
+     * "Re:" files the message under the one it answers.
+     */
+    #[Group('greenmail-only')]
+    public function test_an_encoded_reply_prefix_groups_by_subject(): void
+    {
+        $folderName = 'ImapThread'.random_int(10000, 99999);
+        $folder = $this->makeFolder($folderName)->getFolder($folderName);
+        $folder->appendMessage("Message-ID: <a@example.com>\r\nSubject: Shared Topic\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nA");
+        $folder->appendMessage("Message-ID: <b@example.com>\r\nSubject: =?utf-8?q?Re=3A_Shared_Topic?=\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nB");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->assertSame(['a' => null, 'b' => 'a'], self::parents(imap_thread($connection), ['a', 'b']));
 
         imap_close($connection);
     }
