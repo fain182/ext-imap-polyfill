@@ -14,7 +14,7 @@
 \define('IMAP_SERVER', IMAP_SERVER_NO_DEBUG);
 const IMAP_DEFAULT_MAILBOX = IMAP_SERVER . 'INBOX';
 const IMAP_MAIL_DOMAIN = 'example.com';
-const IMAP_ADMIN_USER = 'testuser'; // local modification: the fixture's user
+\define('IMAP_ADMIN_USER', \getenv('IMAP_POLYFILL_DOVECOT_USER') ?: 'testuser'); // local modification: the fixture's user
 const IMAP_MAILBOX_USERNAME = IMAP_ADMIN_USER;
 const IMAP_MAILBOX_PASSWORD = 'testpass';
 const IMAP_MAILBOX_PHPT_PREFIX = 'phpttest';

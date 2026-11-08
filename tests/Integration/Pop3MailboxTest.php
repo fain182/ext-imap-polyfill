@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Tests\Integration;
 
 use ImapPolyfill\Tests\CapturesWarnings;
+use PHPUnit\Framework\Attributes\Group;
 
 /**
  * POP3 message reading, flags/delete, search, and structure. Greenmail's
@@ -259,6 +260,11 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * A reopen keeps the password, so an unknown /user= is the only way to
+     * make its login fail, and Dovecot's passdb accepts any username.
+     */
+    #[Group('greenmail-only')]
     public function test_a_reopen_that_cannot_log_in_closes_the_stream(): void
     {
         $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
