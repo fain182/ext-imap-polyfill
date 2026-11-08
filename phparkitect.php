@@ -23,14 +23,14 @@ return static function (Config $config): void {
         )
         ->that(new ResideInOneOfTheseNamespaces('ImapPolyfill', 'IMAP'))
         ->should(new NotDependsOnTheseNamespaces(['ImapPolyfill\Connection\MessageCache']))
-        ->because('the message cache is the backend\'s, reached from above only as counts and a UidTable');
+        ->because('only the backend sees the responses that change it (untagged EXISTS, RECENT and EXPUNGE over IMAP; STAT and expunge over POP3), and a count or uid read from it anywhere else is a second copy that goes stale');
 
     $rules[] = Rule::allClasses()
         ->except('ImapPolyfill\Connection\Protocol')
         ->that(new ResideInOneOfTheseNamespaces('ImapPolyfill', 'IMAP'))
         ->andThat(new NotResideInTheseNamespaces('ImapPolyfill\Connection\Imap'))
         ->should(new NotDependsOnTheseNamespaces(['DirectoryTree\ImapEngine']))
-        ->because('ImapEngine stops at the wire layer, so swapping the library again stays a change there');
+        ->because('replacing the IMAP library must stay a change to the wire layer, so the layers above catch and type only the polyfill\'s own classes');
 
     $rules[] = Rule::allClasses()
         ->that(new ResideInOneOfTheseNamespaces('ImapPolyfill\Session'))
@@ -39,17 +39,17 @@ return static function (Config $config): void {
             'ImapPolyfill\Connection\Imap',
             'ImapPolyfill\Connection\Pop3',
         ]))
-        ->because('the imap_* layer talks to IMAP\Connection and ConnectionBackend, never to a protocol\'s implementation');
+        ->because('the imap_* contract has to hold identically over IMAP and POP3, which it can only if it reaches both through the same ConnectionBackend');
 
     $rules[] = Rule::allClasses()
         ->that(new ResideInOneOfTheseNamespaces('IMAP\Connection'))
         ->should(new NotDependsOnTheseNamespaces(['ImapPolyfill\Support\ErrorStack']))
-        ->because('IMAP\Connection knows nothing about the imap_* error contract');
+        ->because('whether a failure becomes a stack message, a false or nothing at all is each imap_* function\'s decision (imap_ping() logs nothing for a dead stream), so the connection throws and lets the wrapper choose');
 
     $rules[] = Rule::allClasses()
         ->that(new ResideInOneOfTheseNamespaces('ImapPolyfill\Message', 'ImapPolyfill\Mime', 'ImapPolyfill\Address'))
         ->should(new NotDependsOnTheseNamespaces(['ImapPolyfill\Session']))
-        ->because('the builders and parsers sit below the imap_* contract layer');
+        ->because('they also serve the connectionless functions (imap_utf8(), imap_rfc822_parse_adrlist(), imap_rfc822_parse_headers(), imap_mail_compose()), which have no session to reach');
 
     $rules[] = Rule::allClasses()
         ->that(new ResideInOneOfTheseNamespaces('ImapPolyfill\Message'))
@@ -57,7 +57,7 @@ return static function (Config $config): void {
             ['ImapPolyfill\Connection'],
             ['ImapPolyfill\Connection\UidMode', 'ImapPolyfill\Connection\UidTable'],
         ))
-        ->because('message shapes are built from what the backend answered, not from the backend; the id-space types are shared values');
+        ->because('the builders turn what the server already answered into ext-imap\'s shapes and must work on that data alone, as imap_rfc822_parse_headers() does; UidMode and UidTable are plain values both layers hold, not wire');
 
     $config->add($src, ...$rules);
 };
