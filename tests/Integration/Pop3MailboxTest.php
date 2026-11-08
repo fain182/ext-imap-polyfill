@@ -366,6 +366,113 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * POP3 has no BODYSTRUCTURE, so c-client parses the message itself:
+     * the sections are cut out of the RETR'd text by that parse.
+     */
+    public function test_fetchbody_and_fetchmime_cut_the_parts_out_of_a_multipart(): void
+    {
+        $count = $this->seedPop3(
+            "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=B\r\n\r\n"
+            ."--B\r\n\r\nfirst\r\nline\r\n"
+            ."--B\r\nContent-Type: application/pdf; name=x.pdf\r\nContent-Disposition: attachment; filename=\"x.pdf\"\r\nContent-Transfer-Encoding: base64\r\n\r\nQUJD\r\n"
+            ."--B--\r\n"
+        );
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+
+        $this->assertSame("first\r\nline", imap_fetchbody($connection, $count, '1'));
+        $this->assertSame('QUJD', imap_fetchbody($connection, $count, '2'));
+        $this->assertSame('', imap_fetchbody($connection, $count, '3'));
+        $this->assertSame(
+            "Content-Type: application/pdf; name=x.pdf\r\nContent-Disposition: attachment; filename=\"x.pdf\"\r\nContent-Transfer-Encoding: base64\r\n\r\n",
+            imap_fetchmime($connection, $count, '2'),
+        );
+
+        $structure = imap_fetchstructure($connection, $count);
+        $this->assertCount(2, $structure->parts);
+        $this->assertSame(1, $structure->parts[0]->lines);
+        $this->assertSame(11, $structure->parts[0]->bytes);
+        $this->assertSame('US-ASCII', $structure->parts[0]->parameters[0]->value);
+        $this->assertSame('ATTACHMENT', $structure->parts[1]->disposition);
+        $this->assertSame('x.pdf', $structure->parts[1]->dparameters[0]->value);
+
+        imap_close($connection);
+    }
+
+    public function test_a_delimiter_counts_only_at_the_start_of_a_line(): void
+    {
+        $count = $this->seedPop3(
+            "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=XX\r\n\r\npreamble\r\n"
+            ."--XX\r\n\r\nhello --XX world\r\n--XXY\r\nstill the first part\r\n"
+            ."--XX\r\n\r\nsecond\r\n"
+            ."--XX--\r\n"
+        );
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+
+        $this->assertSame("hello --XX world\r\n--XXY\r\nstill the first part", imap_fetchbody($connection, $count, '1'));
+        $this->assertSame('second', imap_fetchbody($connection, $count, '2'));
+
+        imap_close($connection);
+    }
+
+    public function test_an_embedded_message_has_a_structure_of_its_own(): void
+    {
+        $count = $this->seedPop3(
+            "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=B\r\n\r\n"
+            ."--B\r\nContent-Type: message/rfc822\r\n\r\nSubject: inner\r\nFrom: a@example.com\r\n\r\ninner body\r\n"
+            ."--B--\r\n"
+        );
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+
+        $structure = imap_fetchstructure($connection, $count);
+        $this->assertSame(2, $structure->parts[0]->type); // TYPEMESSAGE
+        $this->assertSame('RFC822', $structure->parts[0]->subtype);
+        $this->assertSame(0, $structure->parts[0]->parts[0]->type); // TYPETEXT
+        $this->assertSame('inner body', imap_fetchbody($connection, $count, '1.1'));
+
+        imap_close($connection);
+    }
+
+    public function test_a_quoted_parameter_keeps_its_semicolon(): void
+    {
+        $count = $this->seedPop3("MIME-Version: 1.0\r\nContent-Type: text/plain; name=\"a;b.txt\"; charset=us-ascii\r\n\r\nbody\r\n");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+
+        $parameters = imap_fetchstructure($connection, $count)->parameters;
+        $this->assertSame(['NAME', 'a;b.txt', 'CHARSET', 'us-ascii'], [
+            $parameters[0]->attribute, $parameters[0]->value, $parameters[1]->attribute, $parameters[1]->value,
+        ]);
+
+        imap_close($connection);
+    }
+
+    public function test_a_mime_field_without_mime_version_is_logged_and_read(): void
+    {
+        $count = $this->seedPop3("Content-Type: multipart/mixed; boundary=B\r\n\r\n--B\r\n\r\nx\r\n--B--\r\n");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        imap_errors();
+
+        $this->assertSame('x', imap_fetchbody($connection, $count, '1'));
+        $this->assertSame(['Warning: MIME header encountered in non-MIME message'], imap_errors());
+
+        imap_close($connection);
+    }
+
+    private function seedPop3(string $message): int
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage($message);
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+        imap_close($connection);
+
+        return $count;
+    }
+
     public function test_status_answers_from_the_message_count(): void
     {
         self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Status Me\r\n\r\nBody");

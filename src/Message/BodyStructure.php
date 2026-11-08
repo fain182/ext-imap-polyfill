@@ -149,7 +149,10 @@ final class BodyStructure
             $next++;
         } elseif ($type === self::TYPES['message'] && strtolower((string) $subtype) === 'rfc822') {
             $next++; // skip envelope
-            $parts = [self::build($parsed[$next])];
+            // An empty part of a digest is a message/rfc822 with no body in
+            // it, which _php_imap_add_body() goes on to read through a NULL
+            // pointer. No parts is the nearest answer that does not crash.
+            $parts = is_array($parsed[$next] ?? null) ? [self::build($parsed[$next])] : null;
             $next++;
             $lines = $parsed[$next] ?? null;
             $next++;

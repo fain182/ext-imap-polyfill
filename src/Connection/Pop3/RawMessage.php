@@ -7,7 +7,7 @@ use ImapPolyfill\Message\RawHeaderFields;
 /**
  * A RETR'd message, split into header and body once at construction time.
  * Shared by every POP3-side consumer that needs the split or the parsed
- * header fields (Pop3Backend's own FETCH emulation, Pop3MimeStructure,
+ * header fields (Pop3Backend's own FETCH emulation, MimeBody,
  * Pop3SearchEvaluator) — each of those otherwise ends up parsing the same
  * message's headers independently.
  */
