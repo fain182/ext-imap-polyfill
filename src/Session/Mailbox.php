@@ -406,6 +406,14 @@ final class Mailbox
             return false;
         }
 
+        // Past the empty section (the whole message), mail_body() reads a
+        // section as part numbers and nothing else, so HEADER, TEXT or
+        // 1.MIME never reach the wire: mail_fetch_body() answers an empty
+        // string for them.
+        if ($section !== '' && preg_match('/^\d+(?:\.\d+)*$/', $section) !== 1) {
+            return '';
+        }
+
         // A numbered section may not be there at all, and c-client answers
         // that from the structure rather than from the server: asking for
         // part 2 of a message that has one part is an empty string, not
@@ -417,7 +425,7 @@ final class Mailbox
         // Section 1 is the exception worth making: every structure has
         // one, so the answer is known without asking, and it is the
         // section every caller reaches for first.
-        if ($wireSection !== '1' && preg_match('/^\d+(?:\.\d+)*$/', $wireSection) === 1) {
+        if (!in_array($wireSection, ['', '1', 'HEADER'], true)) {
             try {
                 $structure = $this->connection->backend()->fetchBodyStructure($messageNum, $uidMode === UidMode::Uid);
             } catch (MessageNotFoundException) {

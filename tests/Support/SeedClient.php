@@ -48,6 +48,18 @@ final class SeedClient
     }
 
     /**
+     * Uses up the folder's next uid, so the messages appended afterwards
+     * have uid = msgno + 1.
+     */
+    public function burnUid(string $folderName): void
+    {
+        $this->getFolder($folderName)->appendMessage("Subject: Throwaway\r\n\r\nDiscard me");
+        $this->openFolder($folderName);
+        $this->command('STORE', ['1', '+FLAGS.SILENT', '(\\Deleted)']);
+        $this->expunge();
+    }
+
+    /**
      * @param list<string> $tokens
      */
     public function command(string $command, array $tokens = []): ResponseCollection

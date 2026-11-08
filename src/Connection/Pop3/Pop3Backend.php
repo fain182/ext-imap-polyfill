@@ -7,6 +7,7 @@ use ImapPolyfill\Connection\FolderState;
 use ImapPolyfill\Connection\MessageCache;
 use ImapPolyfill\Connection\UidTable;
 use ImapPolyfill\Connection\UidMode;
+use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Connection\MessageNotFoundException;
@@ -51,6 +52,9 @@ final class Pop3Backend implements ConnectionBackend
 
     /** @var array<int, RawMessage> uid => RETR answer, for the lifetime of the connection */
     private array $rawMessageCache = [];
+
+    /** @var array<int, MimeBody> uid => the RETR answer parsed */
+    private array $structureCache = [];
 
     public function __construct(
         private readonly Pop3Protocol $protocol,
@@ -162,11 +166,11 @@ final class Pop3Backend implements ConnectionBackend
         throw new \RuntimeException('Append not valid for POP3');
     }
 
-    public function fetchBodyStructure(int $messageNum, bool $byUid): array
+    public function fetchBodyStructure(int $messageNum, bool $byUid): BodyPart
     {
         $uid = $byUid ? $this->knownUid($messageNum) : $this->messages->uidTable()->uidOf($messageNum);
 
-        return Pop3MimeStructure::parse($this->rawMessage($uid));
+        return $this->structure($uid)->toBodyPart();
     }
 
     public function search(SearchProgram $program, UidMode $uidMode, string $charset = ''): array
@@ -237,7 +241,7 @@ final class Pop3Backend implements ConnectionBackend
             $item === 'RFC822.SIZE' => (string) strlen($message->getRaw()),
             $item === 'RFC822.HEADER' => $message->getRawHeader()."\r\n",
             $item === 'UID' => (string) $uid,
-            str_starts_with($item, 'BODY.PEEK[') || str_starts_with($item, 'BODY[') => $this->fetchSection($item, $message),
+            str_starts_with($item, 'BODY.PEEK[') || str_starts_with($item, 'BODY[') => $this->fetchSection($item, $uid, $message),
             // Not a condition a caller can be in: every item the polyfill
             // asks for has an arm above. Answering '' for the rest would
             // make a new one look answered — which is how a raw
@@ -250,16 +254,32 @@ final class Pop3Backend implements ConnectionBackend
         };
     }
 
-    private function fetchSection(string $item, RawMessage $message): string
+    /**
+     * mail_fetch_body() and mail_fetch_mime() over the parsed message: a
+     * section that names no body is an empty string, as c-client answers
+     * it from the structure.
+     */
+    private function fetchSection(string $item, int $uid, RawMessage $message): string
     {
         $section = substr($item, strpos($item, '[') + 1, -1);
 
-        return match (true) {
-            $section === 'TEXT' => $message->getBody(),
-            $section === 'HEADER' => $message->getRawHeader()."\r\n",
-            str_ends_with($section, '.MIME') => $message->getRawHeader()."\r\n",
-            default => $message->getBody(),
-        };
+        if ($section === '') {
+            return $message->getRaw();
+        }
+
+        if ($section === 'TEXT') {
+            return $message->getBody();
+        }
+
+        if ($section === 'HEADER') {
+            return $message->getRawHeader()."\r\n";
+        }
+
+        if (str_ends_with($section, '.MIME')) {
+            return $this->structure($uid)->section(substr($section, 0, -5))?->mimeText() ?? '';
+        }
+
+        return $this->structure($uid)->section($section)?->text() ?? '';
     }
 
     public function uidTable(): UidTable
@@ -370,6 +390,15 @@ final class Pop3Backend implements ConnectionBackend
     private function rawMessage(int $uid): RawMessage
     {
         return $this->rawMessageCache[$uid] ??= new RawMessage($this->protocol->retr($uid));
+    }
+
+    /**
+     * Parsed once per message, as c-client keeps the BODY in the message
+     * cache: what the parse logs is logged the first time only.
+     */
+    private function structure(int $uid): MimeBody
+    {
+        return $this->structureCache[$uid] ??= MimeBody::parse($this->rawMessage($uid));
     }
 
     /**

@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Connection;
 
+use ImapPolyfill\Message\BodyPart;
+
 use ImapPolyfill\Message\SearchProgram;
 
 /**
@@ -54,10 +56,7 @@ interface ConnectionBackend
      */
     public function appendMessage(string $folder, string $message, ?array $flags, ?string $internalDate): void;
 
-    /**
-     * @return array<int, mixed>
-     */
-    public function fetchBodyStructure(int $messageNum, bool $byUid): array;
+    public function fetchBodyStructure(int $messageNum, bool $byUid): BodyPart;
 
     /**
      * @param SearchProgram $program the parsed criteria; the IMAP backend sends

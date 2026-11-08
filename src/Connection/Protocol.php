@@ -13,6 +13,7 @@ use DirectoryTree\ImapEngine\Support\Str;
 use ImapPolyfill\Connection\Imap\ImapEngineConnection;
 use ImapPolyfill\Connection\Imap\TimedStream;
 use ImapPolyfill\Mailbox\MailboxSpec;
+use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Support\CommandArgument;
 use ImapPolyfill\Support\Timeouts;
@@ -439,10 +440,7 @@ final class Protocol implements ConnectionBackend
         $this->connection->sendAndCollect('APPEND', $tokens);
     }
 
-    /**
-     * @return array<int, mixed>
-     */
-    public function fetchBodyStructure(int $messageNum, bool $byUid): array
+    public function fetchBodyStructure(int $messageNum, bool $byUid): BodyPart
     {
         $data = $this->fetch(['BODYSTRUCTURE'], [$messageNum], null, $byUid ? UidMode::Uid : UidMode::Msgno);
 
@@ -459,7 +457,7 @@ final class Protocol implements ConnectionBackend
             throw new \RuntimeException('no BODYSTRUCTURE in FETCH response');
         }
 
-        return $structure;
+        return BodyPart::fromBodyStructure($structure);
     }
 
     /**
