@@ -366,6 +366,26 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * Dovecot stores the appended message with the bare LF already rewritten
+     * as CRLF, so RETR has none left to send.
+     */
+    #[Group('greenmail-only')]
+    public function test_a_bare_lf_in_the_body_is_data_not_a_line_break(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage(
+            "Subject: Bare LF\r\n\r\nline one\nline two\r\n"
+        );
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame("line one\nline two\r\n", imap_body($connection, $count));
+        $this->assertSame(19, imap_fetchstructure($connection, $count)->bytes);
+
+        imap_close($connection);
+    }
+
     public function test_status_answers_from_the_message_count(): void
     {
         self::seedClient()->getFolder('INBOX')->appendMessage("Subject: Status Me\r\n\r\nBody");
