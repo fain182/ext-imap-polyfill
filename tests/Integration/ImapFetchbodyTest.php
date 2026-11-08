@@ -69,6 +69,26 @@ class ImapFetchbodyTest extends GreenmailTestCase
         $this->assertSame("Subject: Hi\r\n", imap_fetchbody($connection, 1, '0'));
     }
 
+    public function test_a_section_that_is_not_a_part_number_is_an_empty_string(): void
+    {
+        $folderName = 'FetchBodyBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage(
+            "Subject: Hi\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=B\r\n\r\n--B\r\n\r\nOne\r\n--B--\r\n"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+        imap_errors();
+
+        $answers = [];
+        foreach (['TEXT', 'HEADER', '1.MIME', '1.TEXT', 'x', '1.', '.1'] as $section) {
+            $answers[$section] = imap_fetchbody($connection, 1, $section);
+        }
+
+        $this->assertSame(['TEXT' => '', 'HEADER' => '', '1.MIME' => '', '1.TEXT' => '', 'x' => '', '1.' => '', '.1' => ''], $answers);
+        $this->assertFalse(imap_errors());
+    }
+
     public function test_nested_subpart_section(): void
     {
         $folderName = 'FetchBodyBox' . uniqid();
