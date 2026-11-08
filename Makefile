@@ -17,7 +17,7 @@ DOVECOT_SSL_DIR := $(CURDIR)/tests/fixtures/dovecot-ssl
 NETWORK_NAME := ext-imap-polyfill-net
 PARITY_IMAGE := ext-imap-polyfill-parity
 
-.PHONY: fuzz install install-lowest test test-unit test-integration cross-check phpstan phpt greenmail-up greenmail-down dovecot-up dovecot-down parity parity-build
+.PHONY: arch fuzz install install-lowest test test-unit test-integration cross-check phpstan phpt greenmail-up greenmail-down dovecot-up dovecot-down parity parity-build
 
 install:
 	composer install
@@ -30,6 +30,9 @@ install-lowest:
 
 phpstan: install
 	vendor/bin/phpstan analyse --memory-limit=1G
+
+arch: install
+	vendor/bin/phparkitect check
 
 test-unit: install
 	vendor/bin/phpunit --testsuite unit

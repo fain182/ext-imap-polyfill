@@ -1,3 +1,7 @@
+rules:
+    - ImapPolyfill\Tests\PHPStan\NoErrorSuppressionRule
+    - ImapPolyfill\Tests\PHPStan\ErrorHandlerOnlyInDiagnosticsRule
+
 parameters:
     level: 6
     paths:

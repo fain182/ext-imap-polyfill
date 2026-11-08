@@ -88,6 +88,26 @@ jobs:
       - name: PHPStan
         run: make phpstan
 
+  arch:
+    name: "Architecture rules"
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: ':imap'
+          coverage: none
+
+      - name: Composer install
+        run: make install
+
+      - name: phparkitect
+        run: make arch
+
   parity:
     name: "Parity vs real ext-imap (PHP 8.3)"
     if: github.event_name == 'push' || github.event.pull_request.head.repo.fork
