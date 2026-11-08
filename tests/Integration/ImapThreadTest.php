@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Tests\Integration;
 
 use ImapPolyfill\Tests\CapturesWarnings;
+use PHPUnit\Framework\Attributes\Group;
 
 final class ImapThreadTest extends GreenmailTestCase
 {
@@ -48,6 +49,34 @@ final class ImapThreadTest extends GreenmailTestCase
             '1.num' => 2, '1.next' => 0, '1.branch' => 2,
             '2.num' => 3, '2.next' => 0, '2.branch' => 0,
             '0.branch' => 0,
+        ], imap_thread($connection));
+
+        imap_close($connection);
+    }
+
+    /**
+     * c-client's base subject, not RFC 5256's: once whitespace has been
+     * collapsed, the "(fwd)" trailer is no longer stripped. Greenmail has no
+     * THREAD, so this runs c-client's own algorithm; Dovecot threads on the
+     * server, by the RFC.
+     */
+    #[Group('greenmail-only')]
+    public function test_a_fwd_trailer_survives_when_the_subject_had_whitespace_to_collapse(): void
+    {
+        $folderName = 'ImapThread'.random_int(10000, 99999);
+        $client = $this->makeFolder($folderName);
+        $folder = $client->getFolder($folderName);
+        $folder->appendMessage("Message-ID: <a@example.com>\r\nSubject: Hello world\r\nDate: Tue, 07 Jul 2026 09:00:00 +0000\r\n\r\nA");
+        $folder->appendMessage("Message-ID: <b@example.com>\r\nSubject: Hello  world (fwd)\r\nDate: Tue, 07 Jul 2026 10:00:00 +0000\r\n\r\nB");
+        $folder->appendMessage("Message-ID: <c@example.com>\r\nSubject: Hello world (fwd)\r\nDate: Tue, 07 Jul 2026 11:00:00 +0000\r\n\r\nC");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $this->assertSame([
+            '0.num' => 1, '0.next' => 1,
+            '1.num' => 3, '1.next' => 0, '1.branch' => 0,
+            '0.branch' => 2,
+            '2.num' => 2, '2.next' => 0, '2.branch' => 0,
         ], imap_thread($connection));
 
         imap_close($connection);
