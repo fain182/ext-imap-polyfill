@@ -16,6 +16,13 @@ interface ConnectionBackend
     /** The value ext-imap reports as imap_check()'s stdClass->Driver. */
     public function driverName(): string;
 
+    /**
+     * Whether c-client's driver for this protocol has an overview
+     * (DRIVER->overview), which decides where its local threading reads a
+     * message's references from.
+     */
+    public function hasOverview(): bool;
+
     public function selectOrExamineFolder(string $folder, bool $readOnly): FolderState;
 
     /**

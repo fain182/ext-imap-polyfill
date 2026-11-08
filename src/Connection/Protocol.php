@@ -100,6 +100,11 @@ final class Protocol implements ConnectionBackend
         return 'imap';
     }
 
+    public function hasOverview(): bool
+    {
+        return true;
+    }
+
     public function host(): string
     {
         return $this->host;

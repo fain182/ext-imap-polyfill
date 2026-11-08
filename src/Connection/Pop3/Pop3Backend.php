@@ -65,6 +65,11 @@ final class Pop3Backend implements ConnectionBackend
         return 'pop3';
     }
 
+    public function hasOverview(): bool
+    {
+        return false;
+    }
+
     public function upgradedToTls(): bool
     {
         return $this->protocol->upgradedToTls();

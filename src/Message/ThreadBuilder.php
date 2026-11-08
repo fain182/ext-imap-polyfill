@@ -19,12 +19,20 @@ final class ThreadBuilder
      * wire fetch — the same "Mailbox fetches, Message/* interprets" split
      * every other imap_* builder in this namespace follows.
      *
+     * Where the references come from depends on the driver, as it does in
+     * c-client. One with an overview (IMAP) fills the sort cache from it in
+     * mail_thread_loadcache(), which leaves an empty list where there is no
+     * References header — so In-Reply-To is never read. One without (POP3)
+     * reads the envelope, falling back to the first In-Reply-To id when
+     * References yields none.
+     *
      * @param array<int, array<string, mixed>> $data msgno => wire fetch data
      * @param int[] $ids msgnos to include, in order
+     * @param bool $fromOverview whether the driver has an overview
      *
      * @return array<int, array{msgno: int, uid: int, messageId: ?string, refs: string[], subject: string, date: int}>
      */
-    public static function messagesFromFetch(array $data, array $ids): array
+    public static function messagesFromFetch(array $data, array $ids, bool $fromOverview): array
     {
         $messages = [];
 
@@ -35,13 +43,18 @@ final class ThreadBuilder
 
             $message = $data[$msgno];
             $fields = RawHeaderFields::parse($message['RFC822.HEADER'])->toArray();
-            $refsHeader = $fields['references'] ?? $fields['in-reply-to'] ?? '';
+            $refs = MessageId::all($fields['references'] ?? '');
+
+            if ($refs === [] && !$fromOverview) {
+                $first = MessageId::first($fields['in-reply-to'] ?? '');
+                $refs = $first === null ? [] : [$first];
+            }
 
             $messages[] = [
                 'msgno' => $msgno,
                 'uid' => (int) $message['UID'],
-                'messageId' => isset($fields['message-id']) ? self::normalizeId($fields['message-id']) : null,
-                'refs' => $refsHeader === '' ? [] : (preg_split('/\s+/', trim($refsHeader)) ?: []),
+                'messageId' => MessageId::first($fields['message-id'] ?? ''),
+                'refs' => $refs,
                 'subject' => $fields['subject'] ?? '',
                 'date' => strtotime($fields['date'] ?? '') ?: (strtotime($message['INTERNALDATE']) ?: 0),
             ];
@@ -86,11 +99,6 @@ final class ThreadBuilder
 
             $refParent = null;
             foreach ($message['refs'] as $refId) {
-                $refId = self::normalizeId($refId);
-                if ($refId === null) {
-                    continue;
-                }
-
                 $refContainer = self::containerFor($refId, $byId, $all);
 
                 if ($refParent !== null) {
@@ -160,13 +168,6 @@ final class ThreadBuilder
         }
 
         return $container;
-    }
-
-    private static function normalizeId(string $raw): ?string
-    {
-        $id = trim($raw, " \t<>");
-
-        return $id === '' ? null : $id;
     }
 
     /**

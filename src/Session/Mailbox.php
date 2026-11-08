@@ -978,7 +978,7 @@ final class Mailbox
             return self::emptyTree();
         }
 
-        $messages = ThreadBuilder::messagesFromFetch($data, $ids);
+        $messages = ThreadBuilder::messagesFromFetch($data, $ids, $this->connection->backend()->hasOverview());
         $root = ThreadBuilder::build($messages);
         $tree = ThreadBuilder::flatten($root, (bool) ($flags & SE_UID));
 
