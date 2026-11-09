@@ -108,13 +108,35 @@ class BodyStructureTest extends TestCase
         $this->assertObjectNotHasProperty('dparameters', $result);
     }
 
-    public function test_ifsubtype_is_zero_when_subtype_is_absent(): void
+    /**
+     * imap_parse_body_structure() fills in what a server left out rather
+     * than passing the hole on: a missing subtype is rfc822_default_subtype()
+     * of the type, a missing parameter attribute or value is "UNKNOWN".
+     */
+    public function test_a_subtype_the_server_left_out_is_the_default_one_for_the_type(): void
     {
-        $parsed = ['text', null, null, null, null, '7BIT', 10, 1, null, null, null];
+        $single = BodyStructure::build(BodyPart::fromBodyStructure(['application', null, null, null, null, '7BIT', 4]));
+        $this->assertSame(1, $single->ifsubtype);
+        $this->assertSame('OCTET-STREAM', $single->subtype);
 
-        $result = BodyStructure::build(BodyPart::fromBodyStructure($parsed));
+        $text = BodyStructure::build(BodyPart::fromBodyStructure(['text', null, null, null, null, '7BIT', 10, 1]));
+        $this->assertSame('PLAIN', $text->subtype);
 
-        $this->assertSame(0, $result->ifsubtype);
-        $this->assertObjectNotHasProperty('subtype', $result);
+        $multi = BodyStructure::build(BodyPart::fromBodyStructure([
+            ['text', 'plain', null, null, null, '7BIT', 1, 1],
+            null,
+        ]));
+        $this->assertSame(1, $multi->ifsubtype);
+        $this->assertSame('MIXED', $multi->subtype);
+    }
+
+    public function test_a_parameter_without_attribute_or_value_reads_as_unknown(): void
+    {
+        $result = BodyStructure::build(BodyPart::fromBodyStructure(['text', 'plain', ['charset', null, null, 'x'], null, null, '7BIT', 1, 1]));
+
+        $this->assertSame('charset', $result->parameters[0]->attribute);
+        $this->assertSame('UNKNOWN', $result->parameters[0]->value);
+        $this->assertSame('UNKNOWN', $result->parameters[1]->attribute);
+        $this->assertSame('x', $result->parameters[1]->value);
     }
 }

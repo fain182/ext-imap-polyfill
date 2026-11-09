@@ -85,7 +85,7 @@ final class BodyPart
             return new self(
                 type: self::TYPE_MULTIPART,
                 encoding: 0, // ENC7BIT: multipart bodies carry no encoding atom of their own
-                subtype: self::upper($parsed[$i] ?? null),
+                subtype: self::upper($parsed[$i] ?? null) ?? self::defaultSubtype(self::TYPE_MULTIPART),
                 parameters: self::pairs($parsed[$i + 1] ?? null),
                 id: null,
                 description: null,
@@ -98,7 +98,7 @@ final class BodyPart
         }
 
         $type = self::typeCode((string) $parsed[0]);
-        $subtype = self::upper($parsed[1] ?? null);
+        $subtype = self::upper($parsed[1] ?? null) ?? self::defaultSubtype($type);
         $lines = 0;
         $parts = [];
 
@@ -138,6 +138,23 @@ final class BodyPart
         return $value === null ? null : strtoupper((string) $value);
     }
 
+    /**
+     * rfc822_default_subtype(), which imap_parse_body_structure() puts in
+     * place of a subtype the server left out — a body reaches the caller
+     * with one whatever the server sent.
+     */
+    private static function defaultSubtype(int $type): string
+    {
+        return match ($type) {
+            self::TYPES['TEXT'] => 'PLAIN',
+            self::TYPES['MULTIPART'] => 'MIXED',
+            self::TYPES['MESSAGE'] => 'RFC822',
+            self::TYPES['APPLICATION'] => 'OCTET-STREAM',
+            self::TYPES['AUDIO'] => 'BASIC',
+            default => 'UNKNOWN',
+        };
+    }
+
     private static function stringOrNull(mixed $value): ?string
     {
         return $value === null ? null : (string) $value;
@@ -157,10 +174,12 @@ final class BodyPart
             return [];
         }
 
+        // imap_parse_body_parameter() names an attribute or a value the
+        // server left out, or sent as NIL, "UNKNOWN".
         $pairs = [];
         $flat = array_values($flat);
         for ($i = 0; $i < count($flat); $i += 2) {
-            $pairs[] = [(string) $flat[$i], (string) ($flat[$i + 1] ?? '')];
+            $pairs[] = [(string) ($flat[$i] ?? 'UNKNOWN'), (string) ($flat[$i + 1] ?? 'UNKNOWN')];
         }
 
         return $pairs;
