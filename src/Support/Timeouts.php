@@ -23,6 +23,8 @@ final class Timeouts
     {
         self::init();
 
+        // PHP_FUNCTION(imap_timeout)'s default arm: a type it does not know
+        // is RETURN_FALSE, not an error.
         return self::$values[$type] ?? false;
     }
 

@@ -100,7 +100,9 @@ final class Pop3SearchEvaluator
      */
     private static function substringMatch(array $fields, string $field, string $needle): bool
     {
-        return self::contains($fields[$field] ?? '', $needle);
+        // mail_search_addr() and mail_search_header_text() answer NIL for a
+        // header the message does not have, whatever the needle.
+        return isset($fields[$field]) && self::contains($fields[$field], $needle);
     }
 
     private static function contains(string $haystack, string $needle): bool
