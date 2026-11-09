@@ -19,9 +19,13 @@ final class SortKey
     {
         $fields = RawHeaderFields::parse($message['RFC822.HEADER'])->toArray();
 
+        $arrival = strtotime($message['INTERNALDATE']) ?: 0;
+
         return match ($criteria) {
-            SortCriterion::Date => strtotime($fields['date'] ?? '') ?: 0,
-            SortCriterion::Arrival => strtotime($message['INTERNALDATE']) ?: 0,
+            // mail_sort_loadcache() sorts a message whose Date: is missing or
+            // unparseable by its internal date, not ahead of every other.
+            SortCriterion::Date => strtotime($fields['date'] ?? '') ?: $arrival,
+            SortCriterion::Arrival => $arrival,
             SortCriterion::Size => (int) $message['RFC822.SIZE'],
             SortCriterion::From => self::mailboxKey($fields['from'] ?? null, $defaultHost),
             SortCriterion::To => self::mailboxKey($fields['to'] ?? null, $defaultHost),
