@@ -451,6 +451,26 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * pop3_list() reports the INBOX with a NIL delimiter and
+     * LATT_NOINFERIORS, and php_imap.c writes a NIL delimiter as the NUL
+     * character it is in c-client, not as an empty string.
+     */
+    public function test_getmailboxes_reports_inbox_without_delimiter_or_inferiors(): void
+    {
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+
+        $list = imap_getmailboxes($connection, self::pop3MailboxSpec(), '*');
+
+        $this->assertIsArray($list);
+        $this->assertCount(1, $list);
+        $this->assertStringEndsWith('}INBOX', $list[0]->name);
+        $this->assertSame(LATT_NOINFERIORS, $list[0]->attributes);
+        $this->assertSame("\0", $list[0]->delimiter);
+
+        imap_close($connection);
+    }
+
     public function test_fetchstructure_single_part(): void
     {
         $client = self::seedClient();

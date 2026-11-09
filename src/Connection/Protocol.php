@@ -369,7 +369,7 @@ final class Protocol implements ConnectionBackend
     }
 
     /**
-     * @return array<string, array<string, mixed>>
+     * @return list<ListedFolder>
      */
     public function folders(string $reference, string $pattern): array
     {
@@ -377,7 +377,7 @@ final class Protocol implements ConnectionBackend
     }
 
     /**
-     * @return array<string, array<string, mixed>>
+     * @return list<ListedFolder>
      */
     public function subscribedFolders(string $reference, string $pattern): array
     {
@@ -669,7 +669,11 @@ final class Protocol implements ConnectionBackend
     }
 
     /**
-     * @return array<string, array<string, mixed>>
+     * imap_parse_unsolicited() passes a LIST or LSUB response on only when
+     * it opens with its attribute list and goes on to a name; one that does
+     * not is not a folder it reports, so it is not one here either.
+     *
+     * @return list<ListedFolder>
      */
     private function folderList(string $command, string $reference, string $pattern): array
     {
@@ -681,13 +685,19 @@ final class Protocol implements ConnectionBackend
                 continue;
             }
 
-            $flags = $response->tokenAt(2);
-            $name = (string) self::value($response->tokenAt(4));
+            $attributes = $response->tokenAt(2);
+            $delimiter = $response->tokenAt(3);
+            $name = $response->tokenAt(4);
 
-            $result[$name] = [
-                'delimiter' => (string) self::value($response->tokenAt(3)),
-                'flags' => $flags instanceof Data ? self::value($flags) : [],
-            ];
+            if (!$attributes instanceof ListData || $delimiter === null || !$name instanceof Token || $name instanceof Nil) {
+                continue;
+            }
+
+            $result[] = new ListedFolder(
+                (string) self::value($name),
+                $delimiter instanceof Nil ? null : (string) self::value($delimiter),
+                array_map('strval', $attributes->tokens()),
+            );
         }
 
         return $result;

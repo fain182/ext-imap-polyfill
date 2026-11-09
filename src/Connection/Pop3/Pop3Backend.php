@@ -4,6 +4,7 @@ namespace ImapPolyfill\Connection\Pop3;
 
 use ImapPolyfill\Connection\ConnectionBackend;
 use ImapPolyfill\Connection\FolderState;
+use ImapPolyfill\Connection\ListedFolder;
 use ImapPolyfill\Connection\MessageCache;
 use ImapPolyfill\Connection\UidTable;
 use ImapPolyfill\Connection\UidMode;
@@ -332,9 +333,13 @@ final class Pop3Backend implements ConnectionBackend
         }
     }
 
+    /**
+     * pop3_list(): the one mailbox there is, with no hierarchy delimiter
+     * and no inferiors.
+     */
     public function folders(string $reference, string $pattern): array
     {
-        return ['INBOX' => ['delimiter' => '.', 'flags' => []]];
+        return [new ListedFolder('INBOX', null, ['\\NoInferiors'])];
     }
 
     public function subscribedFolders(string $reference, string $pattern): array
