@@ -204,11 +204,13 @@ final class Mailbox
             return $whenRefused;
         }
 
-        if ($data === []) {
+        if (!array_key_exists($messageNum, $data)) {
             return $this->absent($function, $uidMode);
         }
 
-        return $data[$messageNum] ?? reset($data);
+        // Every item asked for here is an nstring, and NIL is a legal
+        // answer to it: c-client caches no text, and hands back "".
+        return (string) $data[$messageNum];
     }
 
     public function fetchHeader(int $messageNum, int $flags): string|false
@@ -260,11 +262,11 @@ final class Mailbox
             return false;
         }
 
-        $message = $data[$messageNum] ?? reset($data);
-
-        if (!is_array($message)) {
+        if (!isset($data[$messageNum])) {
             return false;
         }
+
+        $message = $data[$messageNum];
 
         return HeaderInfo::build(
             $message['RFC822.HEADER'],
