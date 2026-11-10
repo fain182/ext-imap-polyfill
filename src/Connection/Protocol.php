@@ -312,11 +312,13 @@ final class Protocol implements ConnectionBackend
      */
     public function fetch(array $items, array $ids, ?int $to, UidMode $uidMode): array
     {
-        $set = $to === null
-            ? implode(',', $ids)
-            : ((int) reset($ids)).':'.$to;
+        if ($to === null) {
+            return $this->fetchSet(implode(',', $ids), $items, $uidMode, static fn (int $id): bool => in_array($id, $ids, true));
+        }
 
-        return $this->fetchSet($set, $items, $uidMode);
+        $from = (int) reset($ids);
+
+        return $this->fetchSet($from.':'.$to, $items, $uidMode, static fn (int $id): bool => $id >= $from && $id <= $to);
     }
 
     /**
@@ -332,7 +334,7 @@ final class Protocol implements ConnectionBackend
         // Nothing selected, so nothing cached to read or fill.
         if ($messages->count() === null) {
             /** @var array<int, int> $uids */
-            $uids = $this->fetchSet('1:*', ['UID'], UidMode::Msgno);
+            $uids = $this->fetchSet('1:*', ['UID'], UidMode::Msgno, static fn (int $msgno): bool => true);
 
             return new UidTable($uids);
         }
@@ -342,7 +344,11 @@ final class Protocol implements ConnectionBackend
         // An empty folder has no uids, and asking it for the ones it has is
         // itself an error on some servers ("1:*" over nothing).
         if ($unknown !== []) {
-            foreach ($this->fetchSet($unknown[0].':'.end($unknown), ['UID'], UidMode::Msgno) as $msgno => $uid) {
+            $first = $unknown[0];
+            $last = end($unknown);
+            $asked = static fn (int $msgno): bool => $msgno >= $first && $msgno <= $last;
+
+            foreach ($this->fetchSet($first.':'.$last, ['UID'], UidMode::Msgno, $asked) as $msgno => $uid) {
                 $messages->learnUid($msgno, (int) $uid);
             }
 
@@ -363,7 +369,7 @@ final class Protocol implements ConnectionBackend
     }
 
     /**
-     * @return array<string, array<string, mixed>>
+     * @return list<ListedFolder>
      */
     public function folders(string $reference, string $pattern): array
     {
@@ -371,7 +377,7 @@ final class Protocol implements ConnectionBackend
     }
 
     /**
-     * @return array<string, array<string, mixed>>
+     * @return list<ListedFolder>
      */
     public function subscribedFolders(string $reference, string $pattern): array
     {
@@ -460,17 +466,17 @@ final class Protocol implements ConnectionBackend
     {
         $data = $this->fetch(['BODYSTRUCTURE'], [$messageNum], null, $byUid ? UidMode::Uid : UidMode::Msgno);
 
-        // An empty response is the server saying the message is not there,
-        // which the caller answers for; a response that came back without
-        // the item asked for is the server breaking its own contract.
-        if ($data === []) {
+        // No response for the message is the server saying it is not
+        // there, which the caller answers for; fetchSet() has already
+        // refused one that came back without the item asked for.
+        if (!isset($data[$messageNum])) {
             throw new MessageNotFoundException('message not found: '.$messageNum);
         }
 
-        $structure = $data[$messageNum] ?? reset($data);
+        $structure = $data[$messageNum];
 
         if (!is_array($structure)) {
-            throw new \RuntimeException('no BODYSTRUCTURE in FETCH response');
+            throw new \RuntimeException('BODYSTRUCTURE in FETCH response is not a list');
         }
 
         return BodyPart::fromBodyStructure($structure);
@@ -595,24 +601,32 @@ final class Protocol implements ConnectionBackend
      * A single requested item collapses to its scalar value per id instead of
      * a one-key array, the shape the imap_* layer has always consumed.
      *
+     * c-client never reads a FETCH response as the answer to the command in
+     * flight: imap_parse_unsolicited() files every one under the message it
+     * names, item by item, and the caller then reads its own message's
+     * cache. So a FETCH for a message nobody asked about — a flag change
+     * another session made, volunteered mid-command as RFC 3501 §7 allows —
+     * answers nothing here either, and two responses for one message add up
+     * rather than the second replacing the first. A message that was asked
+     * for and came back without an item it was asked for is the server
+     * breaking its contract, not a value to make up: the wrappers report it
+     * as they report any other failed command.
+     *
      * @param string[] $items
+     * @param \Closure(int): bool $asked whether the set sent names this id
      *
      * @return array<int, mixed>
      */
-    private function fetchSet(string $set, array $items, UidMode $uidMode): array
+    private function fetchSet(string $set, array $items, UidMode $uidMode, \Closure $asked): array
     {
         $responses = $this->connection->sendAndCollect(
             $uidMode === UidMode::Uid ? 'UID FETCH' : 'FETCH',
             [$set, Str::list($items)],
         );
 
-        // BODY.PEEK[...] is a request-only spelling; the server answers with
-        // the plain BODY[...] name.
-        $wanted = count($items) === 1 ? str_replace('.PEEK[', '[', $items[0]) : null;
-
-        $result = [];
+        $byId = [];
         foreach ($responses as $response) {
-            if ((string) ($response->tokenAt(2) ?? '') !== 'FETCH') {
+            if (strtoupper((string) ($response->tokenAt(2) ?? '')) !== 'FETCH') {
                 continue;
             }
 
@@ -622,36 +636,44 @@ final class Protocol implements ConnectionBackend
             }
 
             $pairs = self::pairs($data);
-            $key = $uidMode === UidMode::Uid ? (int) ($pairs['UID'] ?? 0) : (int) (string) $response->type();
 
-            if ($key === 0) {
+            // An unsolicited FETCH carries no UID even during a UID FETCH,
+            // which leaves it naming no message this command is about.
+            $id = $uidMode === UidMode::Uid
+                ? (isset($pairs['UID']) ? (int) $pairs['UID'] : null)
+                : (int) (string) $response->type();
+
+            if ($id === null || !$asked($id)) {
                 continue;
             }
 
-            $result[$key] = $wanted === null ? $pairs : self::soleItem($pairs, $wanted);
+            $byId[$id] = array_merge($byId[$id] ?? [], $pairs);
+        }
+
+        // BODY.PEEK[...] is a request-only spelling; the server answers with
+        // the plain BODY[...] name.
+        $wanted = array_map(static fn (string $item): string => str_replace('.PEEK[', '[', strtoupper($item)), $items);
+
+        $result = [];
+        foreach ($byId as $id => $pairs) {
+            foreach ($wanted as $item) {
+                if (!array_key_exists($item, $pairs)) {
+                    throw new \RuntimeException("FETCH response for {$id} lacks {$item}");
+                }
+            }
+
+            $result[$id] = count($wanted) === 1 ? $pairs[$wanted[0]] : $pairs;
         }
 
         return $result;
     }
 
     /**
-     * @param array<string, mixed> $pairs
-     */
-    private static function soleItem(array $pairs, string $wanted): mixed
-    {
-        if (array_key_exists($wanted, $pairs)) {
-            return $pairs[$wanted];
-        }
-
-        // A UID FETCH always carries a UID back whether or not it was asked
-        // for, so it can never be the item the caller wanted.
-        unset($pairs['UID']);
-
-        return $pairs === [] ? null : reset($pairs);
-    }
-
-    /**
-     * @return array<string, array<string, mixed>>
+     * imap_parse_unsolicited() passes a LIST or LSUB response on only when
+     * it opens with its attribute list and goes on to a name; one that does
+     * not is not a folder it reports, so it is not one here either.
+     *
+     * @return list<ListedFolder>
      */
     private function folderList(string $command, string $reference, string $pattern): array
     {
@@ -663,13 +685,19 @@ final class Protocol implements ConnectionBackend
                 continue;
             }
 
-            $flags = $response->tokenAt(2);
-            $name = (string) self::value($response->tokenAt(4));
+            $attributes = $response->tokenAt(2);
+            $delimiter = $response->tokenAt(3);
+            $name = $response->tokenAt(4);
 
-            $result[$name] = [
-                'delimiter' => (string) self::value($response->tokenAt(3)),
-                'flags' => $flags instanceof Data ? self::value($flags) : [],
-            ];
+            if (!$attributes instanceof ListData || $delimiter === null || !$name instanceof Token || $name instanceof Nil) {
+                continue;
+            }
+
+            $result[] = new ListedFolder(
+                (string) self::value($name),
+                $delimiter instanceof Nil ? null : (string) self::value($delimiter),
+                array_map('strval', $attributes->tokens()),
+            );
         }
 
         return $result;
@@ -785,7 +813,9 @@ final class Protocol implements ConnectionBackend
 
         $pairs = [];
         for ($i = 0; $i < $count;) {
-            $name = (string) $tokens[$i++];
+            // imap_parse_unsolicited() ucase()s the name before it compares
+            // it: an atom is an atom whatever case the server spells it in.
+            $name = strtoupper((string) $tokens[$i++]);
 
             // Item names carry their section in brackets (BODY[TEXT]), which
             // the tokenizer splits off into a group of its own.

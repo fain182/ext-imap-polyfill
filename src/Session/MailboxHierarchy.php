@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Session;
 
+use ImapPolyfill\Connection\ListedFolder;
 use ImapPolyfill\Mailbox\MailboxReference;
 use ImapPolyfill\Mailbox\MalformedSpec;
 use ImapPolyfill\Mailbox\Service;
@@ -70,7 +71,7 @@ final class MailboxHierarchy
             return false;
         }
 
-        return array_map(static fn (string $name): string => $ref->displayPrefix.$name, array_keys($folders));
+        return array_map(static fn (ListedFolder $folder): string => $ref->displayPrefix.$folder->name, $folders);
     }
 
     /**
@@ -103,16 +104,21 @@ final class MailboxHierarchy
         }
 
         $result = [];
-        foreach ($folders as $name => $info) {
+        foreach ($folders as $folder) {
+            // imap_parse_unsolicited() knows these six and ignores every
+            // other attribute, extensions included.
             $attributes = 0;
-            foreach ($info['flags'] as $flag) {
-                $attributes |= $flagBits[strtolower($flag)] ?? 0;
+            foreach ($folder->attributes as $attribute) {
+                $attributes |= $flagBits[strtolower($attribute)] ?? 0;
             }
 
             $mailbox = new \stdClass();
-            $mailbox->name = $ref->displayPrefix.$name;
+            $mailbox->name = $ref->displayPrefix.$folder->name;
             $mailbox->attributes = $attributes;
-            $mailbox->delimiter = $info['delimiter'];
+            // php_imap.c writes the delimiter as ZSTR_CHAR() of c-client's
+            // char, which a NIL delimiter leaves at '\0': a one-byte string
+            // holding a NUL, not an empty one.
+            $mailbox->delimiter = $folder->delimiter ?? "\0";
             $result[] = $mailbox;
         }
 
@@ -168,7 +174,7 @@ final class MailboxHierarchy
     }
 
     /**
-     * @return array<string, array<string, mixed>>|false
+     * @return list<ListedFolder>|false
      */
     private function foldersMatching(MailboxReference $ref, string $pattern, bool $subscribedOnly): array|false
     {

@@ -88,7 +88,7 @@ final class MessageCache
         }
 
         $unknown = [];
-        foreach ($this->uids ?? [] as $index => $uid) {
+        foreach ($this->counted() as $index => $uid) {
             if ($uid === null) {
                 $unknown[] = $index + 1;
             }
@@ -117,7 +117,7 @@ final class MessageCache
         }
 
         $byMsgno = [];
-        foreach ($this->uids ?? [] as $index => $uid) {
+        foreach ($this->counted() as $index => $uid) {
             if ($uid === null) {
                 throw new \LogicException('uid of message '.($index + 1).' asked for before it was learned');
             }
@@ -126,5 +126,18 @@ final class MessageCache
         }
 
         return $this->table = new UidTable($byMsgno);
+    }
+
+    /**
+     * The entries, for a question that only has an answer once the folder
+     * has said how many messages it holds. Before that there is no folder
+     * to ask about, not an empty one — which is what reading null as []
+     * would answer.
+     *
+     * @return list<?int>
+     */
+    private function counted(): array
+    {
+        return $this->uids ?? throw new \LogicException('the uids of a folder asked for before its message count arrived');
     }
 }

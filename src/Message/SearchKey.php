@@ -61,7 +61,12 @@ enum SearchKey: string
     {
         return match ($this) {
             self::Before, self::On, self::Since => true,
-            default => false,
+
+            self::All, self::Answered, self::Bcc, self::Body, self::Cc,
+            self::Deleted, self::Flagged, self::From, self::Keyword,
+            self::New, self::Old, self::Recent, self::Seen, self::Subject,
+            self::Text, self::To, self::Unanswered, self::Undeleted,
+            self::Unflagged, self::Unkeyword, self::Unseen => false,
         };
     }
 }

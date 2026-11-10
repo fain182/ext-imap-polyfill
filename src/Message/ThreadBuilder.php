@@ -455,6 +455,8 @@ final class ThreadBuilder
     private static function flattenNode(object $cur, int &$numNodes, bool $byUid): array
     {
         $thisNode = $numNodes;
+        // A dummy container kept as the parent of a subject group has no
+        // message; c-client's THREADNODE carries num 0 for it.
         $tree = ["{$thisNode}.num" => ($byUid ? $cur->uid : $cur->num) ?? 0];
 
         if ($cur->next !== null) {

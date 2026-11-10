@@ -132,12 +132,12 @@ interface ConnectionBackend
     public function store(string $command, array $args): void;
 
     /**
-     * @return array<string, array<string, mixed>>
+     * @return list<ListedFolder>
      */
     public function folders(string $reference, string $pattern): array;
 
     /**
-     * @return array<string, array<string, mixed>>
+     * @return list<ListedFolder>
      */
     public function subscribedFolders(string $reference, string $pattern): array;
 
