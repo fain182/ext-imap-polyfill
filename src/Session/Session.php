@@ -22,6 +22,12 @@ use ImapPolyfill\Support\ErrorStack;
  */
 final class Session
 {
+    /**
+     * c-client's rfc822_date(), which imap_check() and imap_mailboxmsginfo()
+     * report as Date. It reads the zone from libc's TZ; this reads PHP's.
+     */
+    private const RFC822_DATE = 'D, j M Y H:i:s O (T)';
+
     public function __construct(private readonly \IMAP\Connection $connection)
     {
     }
@@ -300,7 +306,7 @@ final class Session
         }
 
         $result = new \stdClass();
-        $result->Date = date('r');
+        $result->Date = date(self::RFC822_DATE);
         $result->Driver = $this->connection->backend()->driverName();
         $result->Mailbox = $this->connection->mailboxString();
         $result->Nmsgs = $status->exists;
@@ -354,7 +360,7 @@ final class Session
         $result->Unread = $unread;
         $result->Deleted = $deleted;
         $result->Size = $size;
-        $result->Date = date('r');
+        $result->Date = date(self::RFC822_DATE);
         $result->Driver = $this->connection->backend()->driverName();
         $result->Mailbox = $this->connection->mailboxString();
         $result->Nmsgs = $exists;
