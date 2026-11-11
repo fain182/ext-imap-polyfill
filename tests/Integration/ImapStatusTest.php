@@ -67,4 +67,18 @@ class ImapStatusTest extends GreenmailTestCase
         $this->assertFalse(imap_status($connection, $mailbox, SA_MESSAGES));
         $this->assertSame(["Can't get status of mailbox {$mailbox}: invalid remote specification"], imap_errors());
     }
+
+    /**
+     * imap_status() in imap4r1.c tests the tagged reply with imap_OK() and
+     * logs nothing of its own, and imap_OK() hands a NO to mm_notify(),
+     * which php_imap.c only reads for [ALERT]: the refusal is a bare false.
+     */
+    public function test_a_folder_the_server_refuses_records_no_error(): void
+    {
+        $connection = imap_open(self::mailboxSpec(), self::user(), self::password());
+        imap_errors();
+
+        $this->assertFalse(imap_status($connection, self::mailboxSpec('NoSuchFolder'.uniqid()), SA_ALL));
+        $this->assertFalse(imap_errors());
+    }
 }

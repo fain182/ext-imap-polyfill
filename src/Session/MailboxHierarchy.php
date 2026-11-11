@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Session;
 
+use ImapPolyfill\Connection\CommandFailedException;
 use ImapPolyfill\Connection\ListedFolder;
 use ImapPolyfill\Mailbox\MailboxReference;
 use ImapPolyfill\Mailbox\MalformedSpec;
@@ -173,6 +174,19 @@ final class MailboxHierarchy
         }
     }
 
+    /**
+     * imap_status() and imap_list_work() in imap4r1.c read the tagged reply
+     * with imap_OK() and log nothing of their own. imap_OK() passes a NO to
+     * mm_notify() alone, which php_imap.c reads only for [ALERT], so the
+     * refusal never reaches the error stack.
+     */
+    private static function recordRefusal(CommandFailedException $e): void
+    {
+        if ($e->status() !== 'NO') {
+            ErrorStack::push($e->getMessage());
+        }
+    }
+
     private function service(): Service
     {
         return Service::from($this->connection->backend()->driverName());
@@ -187,6 +201,10 @@ final class MailboxHierarchy
             return $subscribedOnly
                 ? $this->connection->backend()->subscribedFolders($ref->bareReference, $pattern)
                 : $this->connection->backend()->folders($ref->bareReference, $pattern);
+        } catch (CommandFailedException $e) {
+            self::recordRefusal($e);
+
+            return false;
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -221,6 +239,10 @@ final class MailboxHierarchy
             $status = $this->connection->backend()->folderStatus($folderName, $items);
         } catch (MalformedSpec) {
             ErrorStack::push(MalformedSpec::of($mailbox, 'get status of mailbox')->getMessage());
+
+            return false;
+        } catch (CommandFailedException $e) {
+            self::recordRefusal($e);
 
             return false;
         } catch (\Throwable $e) {
