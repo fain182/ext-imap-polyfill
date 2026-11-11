@@ -751,4 +751,36 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
         imap_close($connection);
     }
+
+    /**
+     * pop3_status() hands mm_status() the flags it was asked for, and
+     * php_imap.c writes only the items those flags name.
+     */
+    public function test_status_reports_only_the_items_asked_for(): void
+    {
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+
+        $status = imap_status($connection, self::pop3MailboxSpec(), SA_MESSAGES | SA_UNSEEN);
+
+        $this->assertSame(['flags', 'messages', 'unseen'], array_keys(get_object_vars($status)));
+        $this->assertSame(SA_MESSAGES | SA_UNSEEN, $status->flags);
+
+        imap_close($connection);
+    }
+
+    /**
+     * pop3_valid() accepts INBOX and nothing else, so mail_status() finds
+     * no driver for any other name.
+     */
+    public function test_status_of_a_folder_other_than_inbox_is_refused(): void
+    {
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        imap_errors();
+        $mailbox = self::pop3MailboxSpec('Archive');
+
+        $this->assertFalse(imap_status($connection, $mailbox, SA_ALL));
+        $this->assertSame(["Can't get status of mailbox {$mailbox}: invalid remote specification"], imap_errors());
+
+        imap_close($connection);
+    }
 }

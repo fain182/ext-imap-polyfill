@@ -12,6 +12,7 @@ use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Connection\MessageNotFoundException;
+use ImapPolyfill\Mailbox\MalformedSpec;
 
 /**
  * ConnectionBackend implementation speaking raw POP3. Mirrors the real
@@ -398,6 +399,11 @@ final class Pop3Backend implements ConnectionBackend
 
     public function folderStatus(string $folder, array $items): array
     {
+        // pop3_valid(): no POP3 mailbox but INBOX exists to report on.
+        if (strcasecmp($folder, 'INBOX') !== 0) {
+            throw new MalformedSpec();
+        }
+
         $unseen = 0;
         foreach ($this->messages->uidTable()->uids() as $uid) {
             if (!in_array('\\Seen', $this->flags[$uid] ?? [], true)) {
@@ -407,13 +413,15 @@ final class Pop3Backend implements ConnectionBackend
 
         $count = (int) $this->messages->count();
 
-        return [
+        $status = [
             'messages' => $count,
             'recent' => $count,
             'unseen' => $unseen,
             'uidnext' => $this->uidLast + 1,
             'uidvalidity' => 1,
         ];
+
+        return array_intersect_key($status, array_flip(array_map(strtolower(...), $items)));
     }
 
     public function getAcl(string $mailbox): array

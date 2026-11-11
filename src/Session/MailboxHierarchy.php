@@ -219,6 +219,10 @@ final class MailboxHierarchy
 
         try {
             $status = $this->connection->backend()->folderStatus($folderName, $items);
+        } catch (MalformedSpec) {
+            ErrorStack::push(MalformedSpec::of($mailbox, 'get status of mailbox')->getMessage());
+
+            return false;
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
