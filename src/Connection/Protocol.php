@@ -14,6 +14,7 @@ use ImapPolyfill\Connection\Imap\ImapEngineConnection;
 use ImapPolyfill\Connection\Imap\TimedStream;
 use ImapPolyfill\Mailbox\MailboxSpec;
 use ImapPolyfill\Message\BodyPart;
+use ImapPolyfill\Message\SearchKey;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Support\CommandArgument;
 use ImapPolyfill\Support\Timeouts;
@@ -201,6 +202,21 @@ final class Protocol implements ConnectionBackend
      */
     public function search(SearchProgram $program, UidMode $uidMode, ?string $charset = null): array
     {
+        // imap_search() answers a program that asks for nothing but ALL from
+        // the stream, without a command and without the charset, which is
+        // never looked at: its "silly ALL or seq-only search" branch.
+        if (self::onlyAll($program)) {
+            $count = $this->connection->messages()->count();
+
+            if ($uidMode === UidMode::Msgno && $count !== null) {
+                return $count === 0 ? [] : range(1, $count);
+            }
+
+            $table = $this->uidTable();
+
+            return $uidMode === UidMode::Uid ? $table->uids() : array_keys($table->byMsgno());
+        }
+
         $tokens = self::searchTokens($program);
         $command = $uidMode === UidMode::Uid ? 'UID SEARCH' : 'SEARCH';
 
@@ -743,6 +759,17 @@ final class Protocol implements ConnectionBackend
      * quoted where c-client sends it bare is enough for a strict server (e.g.
      * GreenMail) to reject the whole command.
      */
+    private static function onlyAll(SearchProgram $program): bool
+    {
+        foreach ($program->criteria as $criterion) {
+            if ($criterion->key !== SearchKey::All) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /**
      * The search program as SEARCH, SORT and THREAD carry it, written from
      * the parsed criteria the way imap_send_spgm() writes c-client's: each

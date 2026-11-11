@@ -45,7 +45,7 @@ class WireArgumentTest extends TestCase
         // line break is quoted as a literal — a shape this refusal keeps
         // out of the one place that answers a plain string.
         yield 'a search charset' => [
-            fn (Protocol $p) => $p->search(SearchProgram::parse('ALL'), UidMode::Msgno, "UTF-8\r\nX9 LOGOUT"),
+            fn (Protocol $p) => $p->search(SearchProgram::parse('SEEN'), UidMode::Msgno, "UTF-8\r\nX9 LOGOUT"),
             'X9 LOGOUT',
         ];
     }
