@@ -169,6 +169,25 @@ class ImapHeaderinfoTest extends GreenmailTestCase
         $this->assertSame('jane@', imap_headerinfo($connection, 1, 5, 0)->fetchfrom);
     }
 
+    /**
+     * mail_fetchfrom() passes over the entries that have no host, so a
+     * From that opens a group shows its first member. Over POP3, because
+     * there c-client parses the header itself; over IMAP the address list
+     * is whatever the server's ENVELOPE made of the group.
+     */
+    public function test_fetchfrom_skips_the_group_name_to_the_first_member(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage(
+            "From: Team: a@example.com, b@example.com;\r\nSubject: S\r\n\r\nBody"
+        );
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+
+        $result = imap_headerinfo($connection, imap_num_msg($connection), 20, 0);
+
+        $this->assertSame('a@example.com       ', $result->fetchfrom);
+    }
+
     public function test_fetchfrom_and_fetchsubject_are_absent_when_lengths_are_omitted(): void
     {
         $folderName = 'HeaderinfoBox' . uniqid();

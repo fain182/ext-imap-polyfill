@@ -48,7 +48,7 @@ final class HeaderInfo
         int $fromLength = 0,
         int $subjectLength = 0,
     ): \stdClass {
-        $result = self::buildFromHeaderOnly($rawHeader, $defaultHost);
+        [$result, $from] = self::envelope($rawHeader, $defaultHost);
 
         $result->Recent = in_array('\\Recent', $flags, true)
             ? (in_array('\\Seen', $flags, true) ? 'R' : 'N')
@@ -66,8 +66,8 @@ final class HeaderInfo
 
         // Like ext-imap: only present when a length was requested and the
         // envelope has the source field.
-        if ($fromLength !== 0 && isset($result->from)) {
-            $result->fetchfrom = self::fixedWidthFrom($result->from, $fromLength);
+        if ($fromLength !== 0 && $from !== null) {
+            $result->fetchfrom = $from->fetchFrom($fromLength);
         }
         if ($subjectLength !== 0 && isset($result->subject)) {
             $result->fetchsubject = substr($result->subject, 0, $subjectLength);
@@ -77,32 +77,23 @@ final class HeaderInfo
     }
 
     /**
-     * c-client's mail_fetchfrom(): exactly $length characters, space-padded
-     * — the first address's personal name if it has one, else
-     * "mailbox@host" with each side capped at 256 characters.
-     *
-     * @param \stdClass[] $from
-     */
-    private static function fixedWidthFrom(array $from, int $length): string
-    {
-        $address = $from[0] ?? null;
-        if ($address === null) {
-            return str_repeat(' ', $length);
-        }
-
-        $text = $address->personal
-            ?? sprintf('%s@%s', substr($address->mailbox, 0, 256), substr($address->host, 0, 256));
-
-        return str_pad(substr($text, 0, $length), $length);
-    }
-
-    /**
      * The subset shared with imap_rfc822_parse_headers(): header-derived
      * fields only, none of the connection/message-state properties
      * (Recent/Unseen/.../Msgno/MailDate/Size/udate) a standalone header
      * string has no data for.
      */
     public static function buildFromHeaderOnly(string $rawHeader, string $defaultHost): \stdClass
+    {
+        return self::envelope($rawHeader, $defaultHost)[0];
+    }
+
+    /**
+     * The envelope object, and the From list it was written from: what
+     * mail_fetchfrom() reads is the parsed list, not the legacy objects.
+     *
+     * @return array{\stdClass, ?AddressList}
+     */
+    private static function envelope(string $rawHeader, string $defaultHost): array
     {
         $fields = RawHeaderFields::parse($rawHeader);
         $result = new \stdClass();
@@ -175,6 +166,6 @@ final class HeaderInfo
             }
         }
 
-        return $result;
+        return [$result, isset($result->from) ? $parsed['from'] : null];
     }
 }

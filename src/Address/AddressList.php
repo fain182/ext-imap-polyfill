@@ -325,6 +325,28 @@ final class AddressList
         return $written;
     }
 
+    /**
+     * c-client's mail_fetchfrom(): exactly $length characters, space-padded,
+     * of the first entry that has a host — so a group's name is passed over
+     * for its first member — as its personal name if it has one, else
+     * "mailbox@host" with each side capped at 256 characters.
+     */
+    public function fetchFrom(int $length): string
+    {
+        foreach ($this->addresses as $address) {
+            if ($address->host === null) {
+                continue;
+            }
+
+            $text = $address->personal
+                ?? sprintf('%.256s@%.256s', (string) $address->mailbox, $address->host);
+
+            return str_pad(substr($text, 0, $length), $length);
+        }
+
+        return str_repeat(' ', $length);
+    }
+
     public function firstAsString(): ?string
     {
         return $this->first()?->format();

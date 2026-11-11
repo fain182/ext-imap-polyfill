@@ -34,7 +34,7 @@ final class HeadersLine
         return self::flagChars($flags)
             .sprintf('%4d)', $msgno)
             .self::dateField($internalDate)
-            .' '.str_pad(substr(self::fromField($fields, $defaultHost), 0, self::FROM_WIDTH), self::FROM_WIDTH)
+            .' '.AddressList::parse($fields['from'] ?? '', $defaultHost)->fetchFrom(self::FROM_WIDTH)
             .' '.self::userFlagsField($flags, $registeredUserFlags)
             .substr($subject, 0, self::SUBJECT_WIDTH)
             .sprintf(' (%d chars)', $size);
@@ -60,24 +60,6 @@ final class HeadersLine
     private static function dateField(string $internalDate): string
     {
         return substr(InternalDate::padDay($internalDate), 0, 11);
-    }
-
-    /**
-     * @param array<string, string> $fields
-     */
-    private static function fromField(array $fields, string $defaultHost): string
-    {
-        if (!isset($fields['from'])) {
-            return '';
-        }
-
-        $address = AddressList::parse($fields['from'], $defaultHost)->first();
-
-        if ($address === null) {
-            return '';
-        }
-
-        return $address->personal ?? "{$address->mailbox}@{$address->host}";
     }
 
     /**

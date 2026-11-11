@@ -93,6 +93,26 @@ final class ImapHeadersTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * The from column skips the group name to the first member, as
+     * imap_headerinfo()'s fetchfrom does: both are mail_fetchfrom(). Over
+     * POP3, where c-client parses the header itself.
+     */
+    public function test_headers_from_column_skips_the_group_name_to_the_first_member(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage(
+            "From: Team: a@example.com, b@example.com;\r\nSubject: S\r\n\r\nBody"
+        );
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+
+        $headers = imap_headers($connection);
+
+        $this->assertSame(' a@example.com        S', substr((string) end($headers), 22, 23));
+
+        imap_close($connection);
+    }
+
     public function test_headers_empty_mailbox_returns_empty_array(): void
     {
         $folderName = self::randomFolderName(__FUNCTION__);
