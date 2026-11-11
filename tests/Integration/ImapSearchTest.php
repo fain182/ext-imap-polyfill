@@ -41,6 +41,21 @@ class ImapSearchTest extends GreenmailTestCase
         $this->assertSame([$survivorUid], imap_search($connection, 'ALL', SE_UID));
     }
 
+    public function test_an_all_only_search_ignores_the_charset(): void
+    {
+        [$folderName, $survivorUid] = $this->makeMsgnoUidMismatchFixture(
+            'SearchAllBox'.uniqid(),
+            "Subject: Survivor\r\n\r\nKeep me"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+        imap_errors();
+
+        $this->assertSame([1], imap_search($connection, 'ALL', SE_FREE, 'X-NO-SUCH'));
+        $this->assertSame([$survivorUid], imap_search($connection, 'ALL ALL', SE_UID, 'X-NO-SUCH'));
+        $this->assertFalse(imap_errors());
+    }
+
     public function test_filters_by_flag_keywords(): void
     {
         $folderName = 'SearchBox' . uniqid();
