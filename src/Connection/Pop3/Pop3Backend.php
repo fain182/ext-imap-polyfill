@@ -373,9 +373,13 @@ final class Pop3Backend implements ConnectionBackend
         return $subject !== '' && $subject[0] === $pattern[0] && self::pmatch(substr($subject, 1), substr($pattern, 1));
     }
 
+    /**
+     * pop3_lsub() reads c-client's local subscription file, which
+     * subscribeFolder() never writes.
+     */
     public function subscribedFolders(string $reference, string $pattern): array
     {
-        return $this->folders($reference, $pattern);
+        return [];
     }
 
     public function copy(string $sequence, string $folder, UidMode $uidMode): void

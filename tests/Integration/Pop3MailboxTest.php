@@ -531,6 +531,20 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * pop3_lsub() answers from c-client's local subscription file, not from
+     * the server, so a session that subscribed nothing has nothing to list.
+     */
+    public function test_lsub_lists_nothing_that_was_not_subscribed(): void
+    {
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+
+        $this->assertFalse(imap_lsub($connection, self::pop3MailboxSpec(''), '*'));
+        $this->assertFalse(imap_getsubscribed($connection, self::pop3MailboxSpec(''), '*'));
+
+        imap_close($connection);
+    }
+
     public function test_list_returns_only_inbox(): void
     {
         $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
