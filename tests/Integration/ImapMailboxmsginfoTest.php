@@ -48,4 +48,22 @@ class ImapMailboxmsginfoTest extends GreenmailTestCase
         $this->assertSame(0, $info->Deleted);
         $this->assertSame(0, $info->Size);
     }
+
+    /**
+     * c-client's rfc822_date(): the day of the month unpadded, and the zone
+     * name after the offset.
+     */
+    public function test_date_is_written_by_rfc822_date(): void
+    {
+        $folderName = 'DateBox' . uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $date = imap_mailboxmsginfo($connection)->Date;
+
+        $this->assertMatchesRegularExpression(
+            '/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), [1-9]\d? [A-Z][a-z]{2} \d{4} \d\d:\d\d:\d\d [+-]\d{4} \(\S+\)$/',
+            $date,
+        );
+    }
 }

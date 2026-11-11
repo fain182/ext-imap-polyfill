@@ -155,7 +155,9 @@ interface ConnectionBackend
     /**
      * @param string[] $items
      *
-     * @return array<string, int>
+     * @return array<string, int> the items asked for, keyed in lowercase
+     *
+     * @throws \ImapPolyfill\Mailbox\MalformedSpec for a name this protocol cannot hold a mailbox under
      */
     public function folderStatus(string $folder, array $items): array;
 

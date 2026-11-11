@@ -131,9 +131,13 @@ class ImapErrorPathsTest extends GreenmailTestCase
         $this->makeFolder($folderName);
         $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
 
-        // Greenmail rejects a '*' that isn't the last character of the pattern.
+        imap_errors();
+
+        // Greenmail rejects a '*' that isn't the last character of the
+        // pattern with a NO, which imap_list_work() reads with imap_OK() and
+        // never logs.
         $this->assertFalse(imap_list($connection, self::mailboxSpec(''), 'No*Such'));
-        $this->assertIsString(imap_last_error());
+        $this->assertFalse(imap_errors());
     }
 
     public function test_imap_getmailboxes_returns_false_on_a_protocol_error(): void
