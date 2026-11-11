@@ -2,9 +2,11 @@
 
 namespace ImapPolyfill\Connection\Pop3;
 
+use ImapPolyfill\Message\MailDate;
 use ImapPolyfill\Message\SearchCriterion;
 use ImapPolyfill\Message\SearchKey;
 use ImapPolyfill\Message\SearchProgram;
+use ImapPolyfill\Mime\MimeText;
 
 /**
  * Client-side evaluator for a parsed search program — POP3 has no SEARCH
@@ -19,13 +21,16 @@ final class Pop3SearchEvaluator
 {
     /**
      * @param string[]           $flags   the IMAP flag names set on this message
+     * @param \Closure(): MimeBody $structure the message's parsed body, asked
+     *                                      for only by BODY and TEXT, as
+     *                                      c-client parses it only for those
      * @param SearchCharset|null $charset what the terms are written in; none
      *                                    named leaves them as they are
      */
-    public static function matches(SearchProgram $program, RawMessage $message, array $flags, ?SearchCharset $charset = null): bool
+    public static function matches(SearchProgram $program, RawMessage $message, \Closure $structure, array $flags, ?SearchCharset $charset = null): bool
     {
         foreach ($program->criteria as $criterion) {
-            if (!self::matchesCriterion($criterion, $message, $flags, $charset)) {
+            if (!self::matchesCriterion($criterion, $message, $structure, $flags, $charset)) {
                 return false;
             }
         }
@@ -34,9 +39,10 @@ final class Pop3SearchEvaluator
     }
 
     /**
+     * @param \Closure(): MimeBody $structure
      * @param string[] $flags
      */
-    private static function matchesCriterion(SearchCriterion $criterion, RawMessage $message, array $flags, ?SearchCharset $charset): bool
+    private static function matchesCriterion(SearchCriterion $criterion, RawMessage $message, \Closure $structure, array $flags, ?SearchCharset $charset): bool
     {
         $fields = $message->getHeaders();
         $argument = $criterion->argument ?? '';
@@ -69,8 +75,11 @@ final class Pop3SearchEvaluator
 
             SearchKey::Bcc, SearchKey::Cc, SearchKey::From,
             SearchKey::Subject, SearchKey::To => self::substringMatch($fields, strtolower($criterion->key->value), $term),
-            SearchKey::Body => self::contains($message->getBody(), $term),
-            SearchKey::Text => self::contains($message->getRaw(), $term),
+            SearchKey::Body => self::containedInAny($structure()->searchableTexts(false), $term),
+            // mail_search_text() reads the header through utf8_mime2text()
+            // before it goes on to the body.
+            SearchKey::Text => self::contains(MimeText::decode($message->getRawHeader()), $term)
+                || self::containedInAny($structure()->searchableTexts(true), $term),
 
             SearchKey::Before, SearchKey::On,
             SearchKey::Since => self::dateMatch($criterion->key, $fields['date'] ?? null, $argument),
@@ -101,8 +110,24 @@ final class Pop3SearchEvaluator
     private static function substringMatch(array $fields, string $field, string $needle): bool
     {
         // mail_search_addr() and mail_search_header_text() answer NIL for a
-        // header the message does not have, whatever the needle.
-        return isset($fields[$field]) && self::contains($fields[$field], $needle);
+        // header the message does not have, whatever the needle, and both
+        // end in mail_search_header(), which compares against the header
+        // as utf8_mime2text() decodes it.
+        return isset($fields[$field]) && self::contains(MimeText::decode($fields[$field]), $needle);
+    }
+
+    /**
+     * @param list<string> $haystacks
+     */
+    private static function containedInAny(array $haystacks, string $needle): bool
+    {
+        foreach ($haystacks as $haystack) {
+            if (self::contains($haystack, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function contains(string $haystack, string $needle): bool
@@ -110,26 +135,27 @@ final class Pop3SearchEvaluator
         return str_contains(strtolower($haystack), strtolower($needle));
     }
 
-    private static function dateMatch(SearchKey $key, ?string $headerDate, string $needle): bool
+    /**
+     * BEFORE, ON and SINCE compare the internal date, and over POP3 that is
+     * what pop3_fetchfast() makes of the Date: header: the day as written,
+     * in the header's own zone, and January 1st where mail_parse_date()
+     * leaves no day — no Date: at all included, which is then 1970.
+     */
+    private static function dateMatch(SearchKey $key, ?string $headerDate, string $criterion): bool
     {
-        if ($headerDate === null || $needle === '') {
-            return false;
+        $date = $headerDate === null ? null : MailDate::writtenBy($headerDate);
+
+        if ($date === null || $date->day === 0) {
+            $date = new MailDate($date->year ?? MailDate::BASE_YEAR, 1, 1);
         }
 
-        $messageTime = strtotime($headerDate);
-        $criterionTime = strtotime($needle);
-
-        if ($messageTime === false || $criterionTime === false) {
-            return false;
-        }
-
-        $messageDay = strtotime(date('Y-m-d', $messageTime));
-        $criterionDay = strtotime(date('Y-m-d', $criterionTime));
+        $wanted = MailDate::parse($criterion)
+            ?? throw new \LogicException('SearchProgram let an unreadable date through: '.$criterion);
 
         return match ($key) {
-            SearchKey::Since => $messageDay >= $criterionDay,
-            SearchKey::Before => $messageDay < $criterionDay,
-            SearchKey::On => $messageDay === $criterionDay,
+            SearchKey::Since => $date->packed() >= $wanted->packed(),
+            SearchKey::Before => $date->packed() < $wanted->packed(),
+            SearchKey::On => $date->packed() === $wanted->packed(),
             default => throw new \LogicException('Not a date criterion: '.$key->value),
         };
     }

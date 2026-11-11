@@ -138,6 +138,99 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    public function test_search_matches_header_terms_against_the_decoded_header(): void
+    {
+        $marker = 'Pop3Mime'.random_int(10000, 99999);
+        self::seedClient()->getFolder('INBOX')->appendMessage(
+            "From: =?UTF-8?Q?Jos=C3=A9_{$marker}?= <jose@example.com>\r\n"
+            ."Subject: =?UTF-8?B?".base64_encode("Caf\u{e9} {$marker}")."?=\r\n"
+            ."\r\n"
+            ."Body\r\n"
+        );
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame([$count], imap_search($connection, "SUBJECT \"Caf\u{e9} {$marker}\""));
+        $this->assertSame([$count], imap_search($connection, "SUBJECT \"caf\u{e9} ".strtolower($marker).'"'));
+        $this->assertSame([$count], imap_search($connection, "FROM \"Jos\u{e9} {$marker}\""));
+        $this->assertSame([$count], imap_search($connection, "TEXT \"Caf\u{e9} {$marker}\""));
+        $this->assertFalse(imap_search($connection, 'SUBJECT "=?UTF-8?B?"'.' FROM '.$marker));
+
+        imap_close($connection);
+    }
+
+    public function test_search_body_reads_the_decoded_text_parts(): void
+    {
+        $marker = 'Pop3Body'.random_int(10000, 99999);
+        self::seedClient()->getFolder('INBOX')->appendMessage(
+            "MIME-Version: 1.0\r\n"
+            ."Subject: {$marker}\r\n"
+            ."Content-Type: multipart/mixed; boundary=\"b\"\r\n"
+            ."\r\n"
+            ."--b\r\n"
+            ."Content-Type: text/plain; charset=UTF-8\r\n"
+            ."Content-Transfer-Encoding: base64\r\n"
+            ."Content-Description: Desc{$marker}\r\n"
+            ."\r\n"
+            .base64_encode("Z\u{fc}rich{$marker}")."\r\n"
+            ."--b\r\n"
+            ."Content-Type: text/plain; charset=ISO-8859-1\r\n"
+            ."Content-Transfer-Encoding: quoted-printable\r\n"
+            ."\r\n"
+            ."caf=E9 Qp{$marker}\r\n"
+            ."--b\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."Content-Transfer-Encoding: 8bit\r\n"
+            ."\r\n"
+            ."Stra\u{df}e{$marker}\r\n"
+            ."--b\r\n"
+            ."Content-Type: application/octet-stream\r\n"
+            ."Content-Transfer-Encoding: base64\r\n"
+            ."\r\n"
+            .base64_encode("Hidden{$marker}")."\r\n"
+            ."--b\r\n"
+            ."Content-Type: message/rfc822\r\n"
+            ."\r\n"
+            ."Subject: Nested{$marker}\r\n"
+            ."\r\n"
+            ."Inner{$marker}\r\n"
+            ."--b--\r\n"
+        );
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame([$count], imap_search($connection, "BODY \"Z\u{fc}rich{$marker}\""));
+        $this->assertSame([$count], imap_search($connection, "BODY \"caf\u{e9} Qp{$marker}\""));
+        $this->assertSame([$count], imap_search($connection, "BODY \"Stra\u{df}e{$marker}\""));
+        $this->assertSame([$count], imap_search($connection, "BODY Inner{$marker}"));
+        $this->assertFalse(imap_search($connection, "BODY Hidden{$marker}"));
+        $this->assertFalse(imap_search($connection, "BODY Desc{$marker}"));
+        $this->assertFalse(imap_search($connection, "BODY Nested{$marker}"));
+        $this->assertSame([$count], imap_search($connection, "TEXT Desc{$marker}"));
+        $this->assertSame([$count], imap_search($connection, "TEXT Nested{$marker}"));
+        $this->assertFalse(imap_search($connection, "TEXT Hidden{$marker}"));
+
+        imap_close($connection);
+    }
+
+    public function test_search_dates_compare_the_date_header_as_written(): void
+    {
+        $marker = 'Pop3Date'.random_int(10000, 99999);
+        $folder = self::seedClient()->getFolder('INBOX');
+        $folder->appendMessage("Date: Mon, 1 Jan 2024 23:30:00 -0500\r\nSubject: {$marker}Zone\r\n\r\nBody\r\n");
+        $folder->appendMessage("Date: 5 Feb 2025 25:00:00 +0000\r\nSubject: {$marker}BadTime\r\n\r\nBody\r\n");
+        $folder->appendMessage("Subject: {$marker}NoDate\r\n\r\nBody\r\n");
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame([$count - 2], imap_search($connection, "ON 1-Jan-2024 SUBJECT {$marker}Zone"));
+        $this->assertSame([$count - 1], imap_search($connection, "ON 5-Feb-2025 SUBJECT {$marker}BadTime"));
+        $this->assertSame([$count], imap_search($connection, "BEFORE 2-Jan-1970 SUBJECT {$marker}NoDate"));
+        $this->assertFalse(imap_search($connection, "SINCE 2-Jan-1970 SUBJECT {$marker}NoDate"));
+
+        imap_close($connection);
+    }
+
     /**
      * The charsets c-client's utf8_csvalid table knows, as its refusal lists
      * them. POP3 has no SEARCH, so the charset is c-client's to check rather

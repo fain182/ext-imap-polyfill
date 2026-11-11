@@ -28,6 +28,9 @@ final class SearchCharset
         'UNICODE-1-1-UTF-7', 'UCS-2', 'UCS-4', 'UTF-16',
     ];
 
+    /** The names utf8_text_cs() reads as CT_ASCII or CT_UTF8, which it does not convert. */
+    private const IDENTITY = ['US-ASCII', 'UTF-8', 'IBM367', 'ANSI_X3.4-1968'];
+
     private function __construct(private readonly string $name)
     {
     }
@@ -53,6 +56,32 @@ final class SearchCharset
 
     public function toUtf8(string $term): string
     {
-        return MimeText::toUtf8From($this->name, $term);
+        return self::convert($this->name, $term);
+    }
+
+    /**
+     * mail_search_string() on a body part: utf8_text() from the charset its
+     * CHARSET parameter names. A name outside the table, or none, leaves
+     * the bytes as they are, which is where its retry with no charset ends
+     * up for any text that is not ISO-2022.
+     */
+    public static function textToUtf8(?string $charset, string $text): string
+    {
+        foreach (self::KNOWN as $known) {
+            if ($charset !== null && strcasecmp($known, $charset) === 0) {
+                return self::convert($known, $text);
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * utf8_text_cs(): US-ASCII and UTF-8 are taken as they are, 8-bit bytes
+     * included, where iconv would drop what is not ASCII.
+     */
+    private static function convert(string $name, string $bytes): string
+    {
+        return in_array(strtoupper($name), self::IDENTITY, true) ? $bytes : MimeText::toUtf8From($name, $bytes);
     }
 }

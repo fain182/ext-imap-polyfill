@@ -16,7 +16,7 @@ namespace ImapPolyfill\Message;
  */
 final class MailDate
 {
-    private const BASE_YEAR = 1970;
+    public const BASE_YEAR = 1970;
 
     /** BASEYEAR plus the largest value MESSAGECACHE's 7-bit year holds. */
     private const MAX_YEAR = self::BASE_YEAR + 127;
@@ -26,7 +26,7 @@ final class MailDate
 
     private const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-    private function __construct(
+    public function __construct(
         public readonly int $year,
         public readonly int $month,
         public readonly int $day,
@@ -35,11 +35,32 @@ final class MailDate
 
     public static function parse(string $text): ?self
     {
+        [$date, $complete] = self::scan($text);
+
+        return $complete ? $date : null;
+    }
+
+    /**
+     * What mail_parse_date() leaves in the MESSAGECACHE it was handed,
+     * whatever it answers: it writes the date before it reads the time, so
+     * a date followed by a malformed time is refused and still there.
+     * pop3_fetchfast() looks at the cache rather than the answer.
+     */
+    public static function writtenBy(string $text): ?self
+    {
+        return self::scan($text)[0];
+    }
+
+    /**
+     * @return array{?self, bool} the date, and whether the time after it read
+     */
+    private static function scan(string $text): array
+    {
         $nul = strpos($text, "\0");
         $text = $nul === false ? $text : substr($text, 0, $nul);
 
         if ($text === '' || strlen($text) >= self::MAX_LENGTH) {
-            return null;
+            return [null, false];
         }
 
         $s = strtr($text, 'abcdefghijklmnopqrstuvwxyz', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')."\0";
@@ -55,7 +76,7 @@ final class MailDate
         }
 
         if (($m = self::strtoul($s, $i)) === 0) {
-            return null;
+            return [null, false];
         }
 
         $d = $y = 0;
@@ -70,7 +91,7 @@ final class MailDate
                     }
                 }
 
-                return null;
+                return [null, false];
 
             case ' ':
                 while ($s[$i + 1] === ' ') {
@@ -87,19 +108,19 @@ final class MailDate
                         break;
                     }
 
-                    return null;
+                    return [null, false];
                 }
 
                 $d = $m;
 
                 if (strcspn($s, "\0", $i) < 5) {
-                    return null;
+                    return [null, false];
                 }
 
                 $m = self::month($s[$i + 1], $s[$i + 2], $s[$i + 3]);
 
                 if ($m === null) {
-                    return null;
+                    return [null, false];
                 }
 
                 if ($s[$i + 4] === $s[$i]) {
@@ -110,7 +131,7 @@ final class MailDate
                     for ($i += 4; ctype_alpha($s[$i]); $i++);
 
                     if ($delimiter !== $s[$i++]) {
-                        return null;
+                        return [null, false];
                     }
                 }
 
@@ -129,7 +150,7 @@ final class MailDate
                 // a month number is always too small to be
             case "\0":
                 if ($m < self::BASE_YEAR * 10000) {
-                    return null;
+                    return [null, false];
                 }
 
                 $y = intdiv($m, 10000);
@@ -138,11 +159,11 @@ final class MailDate
                 break;
 
             default:
-                return null;
+                return [null, false];
         }
 
         if ($d > 31 || $m > 12) {
-            return null;
+            return [null, false];
         }
 
         if ($y < 49) {
@@ -152,8 +173,10 @@ final class MailDate
         }
 
         if ($y < self::BASE_YEAR || $y > self::MAX_YEAR) {
-            return null;
+            return [null, false];
         }
+
+        $date = new self($y, $m, $d);
 
         // A time, when there is one, has to read as one; whatever zone
         // follows it is accepted, an unknown one being taken as local.
@@ -162,7 +185,7 @@ final class MailDate
             $hours = self::strtoul($s, $i);
 
             if ($s[$i] !== ':') {
-                return null;
+                return [$date, false];
             }
 
             $i++;
@@ -175,11 +198,11 @@ final class MailDate
             }
 
             if ($hours > 23 || $minutes > 59 || $seconds > 60) {
-                return null;
+                return [$date, false];
             }
         }
 
-        return new self($y, $m, $d);
+        return [$date, true];
     }
 
     /**
