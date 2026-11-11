@@ -471,6 +471,22 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    public function test_list_reports_inbox_only_where_the_pattern_matches_it(): void
+    {
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $prefix = self::pop3MailboxSpec('');
+
+        $this->assertSame([$prefix.'INBOX'], imap_list($connection, $prefix, 'INBOX'));
+        $this->assertSame([$prefix.'INBOX'], imap_list($connection, $prefix, 'IN%'));
+        $this->assertSame([$prefix.'INBOX'], imap_list($connection, '', $prefix.'*X'));
+        $this->assertFalse(imap_list($connection, $prefix, 'Other'));
+        $this->assertFalse(imap_list($connection, $prefix, 'inbox'));
+        $this->assertFalse(imap_list($connection, $prefix, 'INBOX.%'));
+        $this->assertFalse(imap_list($connection, self::pop3MailboxSpec('Other'), '*'));
+
+        imap_close($connection);
+    }
+
     public function test_fetchstructure_single_part(): void
     {
         $client = self::seedClient();
