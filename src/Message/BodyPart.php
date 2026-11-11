@@ -2,6 +2,8 @@
 
 namespace ImapPolyfill\Message;
 
+use ImapPolyfill\Mime\Tables;
+
 /**
  * c-client's BODY: one body part of a message, as the IMAP backend reads it
  * from BODYSTRUCTURE and the POP3 backend parses it out of the message.
@@ -13,16 +15,6 @@ final class BodyPart
     public const TYPE_MULTIPART = 1;
 
     public const TYPE_MESSAGE = 2;
-
-    /** c-client's body_types[] as it starts out; a name it lacks is TYPEOTHER. */
-    private const TYPES = ['TEXT' => 0, 'MULTIPART' => 1, 'MESSAGE' => 2, 'APPLICATION' => 3, 'AUDIO' => 4, 'IMAGE' => 5, 'VIDEO' => 6, 'MODEL' => 7];
-
-    private const TYPE_OTHER = 8;
-
-    /** c-client's body_encodings[] as it starts out; a name it lacks is ENCOTHER. */
-    private const ENCODINGS = ['7BIT' => 0, '8BIT' => 1, 'BINARY' => 2, 'BASE64' => 3, 'QUOTED-PRINTABLE' => 4];
-
-    private const ENCODING_OTHER = 5;
 
     /**
      * A name c-client registers at run time gets the next free slot of the
@@ -53,12 +45,16 @@ final class BodyPart
 
     public static function typeCode(string $name): int
     {
-        return self::TYPES[strtoupper($name)] ?? self::TYPE_OTHER;
+        $code = array_search(strtoupper($name), Tables::TYPES, true);
+
+        return $code === false ? TYPEOTHER : $code;
     }
 
     public static function encodingCode(string $name): int
     {
-        return self::ENCODINGS[strtoupper($name)] ?? self::ENCODING_OTHER;
+        $code = array_search(strtoupper($name), Tables::ENCODINGS, true);
+
+        return $code === false ? ENCOTHER : $code;
     }
 
     public function isEmbeddedMessage(): bool
@@ -85,7 +81,7 @@ final class BodyPart
             return new self(
                 type: self::TYPE_MULTIPART,
                 encoding: 0, // ENC7BIT: multipart bodies carry no encoding atom of their own
-                subtype: self::upper($parsed[$i] ?? null) ?? self::defaultSubtype(self::TYPE_MULTIPART),
+                subtype: self::upper($parsed[$i] ?? null) ?? Tables::defaultSubtype(self::TYPE_MULTIPART),
                 parameters: self::pairs($parsed[$i + 1] ?? null),
                 id: null,
                 description: null,
@@ -98,7 +94,7 @@ final class BodyPart
         }
 
         $type = self::typeCode((string) $parsed[0]);
-        $subtype = self::upper($parsed[1] ?? null) ?? self::defaultSubtype($type);
+        $subtype = self::upper($parsed[1] ?? null) ?? Tables::defaultSubtype($type);
         $lines = 0;
         $parts = [];
 
@@ -136,23 +132,6 @@ final class BodyPart
     private static function upper(mixed $value): ?string
     {
         return $value === null ? null : strtoupper((string) $value);
-    }
-
-    /**
-     * rfc822_default_subtype(), which imap_parse_body_structure() puts in
-     * place of a subtype the server left out — a body reaches the caller
-     * with one whatever the server sent.
-     */
-    private static function defaultSubtype(int $type): string
-    {
-        return match ($type) {
-            self::TYPES['TEXT'] => 'PLAIN',
-            self::TYPES['MULTIPART'] => 'MIXED',
-            self::TYPES['MESSAGE'] => 'RFC822',
-            self::TYPES['APPLICATION'] => 'OCTET-STREAM',
-            self::TYPES['AUDIO'] => 'BASIC',
-            default => 'UNKNOWN',
-        };
     }
 
     private static function stringOrNull(mixed $value): ?string
