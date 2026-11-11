@@ -54,4 +54,17 @@ class ImapListTest extends GreenmailTestCase
         $this->assertFalse(imap_errors());
         $this->assertSame([self::mailboxSpec($folderName)], imap_list($connection, self::mailboxSpec(''), $folderName));
     }
+
+    public function test_without_a_prefix_on_the_reference_or_the_pattern_lists_nothing(): void
+    {
+        $folderName = 'ListBare'.uniqid();
+        $this->makeFolder($folderName);
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
+        imap_errors();
+
+        $this->assertFalse(imap_list($connection, '', '*'));
+        $this->assertFalse(imap_list($connection, '', $folderName));
+        $this->assertFalse(imap_list($connection, 'INBOX', '*'));
+        $this->assertFalse(imap_errors());
+    }
 }
