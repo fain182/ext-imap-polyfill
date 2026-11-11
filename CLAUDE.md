@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Read `PHILOSOPHY.md` first: it says what must match ext-imap exactly, what is allowed to differ, and what is out of scope.
+
 ## What this is
 
 A drop-in polyfill for PHP's `imap_*` functions (removed from core in 8.4), backed by directorytree/imapengine. `bootstrap.php` is a no-op when the real `ext-imap` is loaded; otherwise it defines the same global constants and functions. Fidelity to the real extension — down to error-path return values, `ValueError` messages, and stdClass property names/casing — is the whole point of the project.
