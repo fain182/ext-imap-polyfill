@@ -21,22 +21,6 @@ final class ComposedMessage
     /** c-client parses "adr <adr@host>" address input against this default host. */
     private const DEFAULT_HOST = 'NO HOST';
 
-    /** Indexes are the TYPE* constants; codes 9..TYPEMAX(15) have no name and are rejected. */
-    private const TYPE_NAMES = [
-        'TEXT', 'MULTIPART', 'MESSAGE', 'APPLICATION', 'AUDIO', 'IMAGE', 'VIDEO',
-        'MODEL', 'X-UNKNOWN',
-    ];
-
-    /** Indexes are the ENC* constants; codes 6..ENCMAX(10) have no name and are rejected. */
-    private const ENCODING_NAMES = [
-        '7BIT', '8BIT', 'BINARY', 'BASE64', 'QUOTED-PRINTABLE', 'X-UNKNOWN',
-    ];
-
-    private const CONTROL_CHARS = "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f";
-
-    /** c-client tspecials: characters forcing a MIME parameter value into a quoted string. */
-    private const TSPECIALS = " ()<>@,;:\\\"[]/?=".self::CONTROL_CHARS;
-
     /** php_imap.c: SENDBUFLEN(16385) - 2 - 2 - 2, despite the "4kb" warning text. */
     private const MAX_BOUNDARY_LENGTH = 16379;
 
@@ -221,14 +205,14 @@ final class ComposedMessage
 
         if (array_key_exists('type', $spec)) {
             $type = (int) $spec['type'];
-            if (isset(self::TYPE_NAMES[$type]) && ($isFirst || $type !== TYPEMULTIPART)) {
+            if (isset(Tables::TYPES[$type]) && ($isFirst || $type !== TYPEMULTIPART)) {
                 $body->type = $type;
             }
         }
 
         if (array_key_exists('encoding', $spec)) {
             $encoding = (int) $spec['encoding'];
-            if (isset(self::ENCODING_NAMES[$encoding])) {
+            if (isset(Tables::ENCODINGS[$encoding])) {
                 $body->encoding = $encoding;
             }
         }
@@ -510,19 +494,19 @@ final class ComposedMessage
 
     private static function renderBodyHeader(ComposedBody $body): string
     {
-        $header = 'Content-Type: '.self::TYPE_NAMES[$body->type]
-            .'/'.($body->subtype ?? self::defaultSubtype($body->type));
+        $header = 'Content-Type: '.Tables::TYPES[$body->type]
+            .'/'.($body->subtype ?? Tables::defaultSubtype($body->type));
 
         if ($body->parameters !== []) {
             foreach ($body->parameters as [$attribute, $value]) {
-                $header .= '; '.$attribute.'='.Rfc822Address::quote($value, self::TSPECIALS);
+                $header .= '; '.$attribute.'='.Rfc822Address::quote($value, Tables::TSPECIALS);
             }
         } elseif ($body->type === TYPETEXT) {
             $header .= '; CHARSET='.($body->encoding === ENC7BIT ? 'US-ASCII' : 'X-UNKNOWN');
         }
 
         if ($body->encoding !== ENC7BIT) {
-            $header .= self::CRLF.'Content-Transfer-Encoding: '.self::ENCODING_NAMES[$body->encoding];
+            $header .= self::CRLF.'Content-Transfer-Encoding: '.Tables::ENCODINGS[$body->encoding];
         }
         if ($body->id !== null) {
             $header .= self::CRLF.'Content-ID: '.$body->id;
@@ -536,23 +520,11 @@ final class ComposedMessage
         if ($body->dispositionType !== null) {
             $header .= self::CRLF.'Content-Disposition: '.$body->dispositionType;
             foreach ($body->dispositionParameters as [$attribute, $value]) {
-                $header .= '; '.$attribute.'='.Rfc822Address::quote($value, self::TSPECIALS);
+                $header .= '; '.$attribute.'='.Rfc822Address::quote($value, Tables::TSPECIALS);
             }
         }
 
         return $header.self::CRLF;
-    }
-
-    private static function defaultSubtype(int $type): string
-    {
-        return match ($type) {
-            TYPETEXT => 'PLAIN',
-            TYPEMULTIPART => 'MIXED',
-            TYPEMESSAGE => 'RFC822',
-            TYPEAPPLICATION => 'OCTET-STREAM',
-            TYPEAUDIO => 'BASIC',
-            default => 'UNKNOWN',
-        };
     }
 
     /**

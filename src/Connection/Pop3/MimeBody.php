@@ -5,6 +5,7 @@ namespace ImapPolyfill\Connection\Pop3;
 use ImapPolyfill\Address\Rfc822Cursor;
 use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Mime\MimeText;
+use ImapPolyfill\Mime\Tables;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -22,16 +23,6 @@ use ImapPolyfill\Support\ErrorStack;
  */
 final class MimeBody
 {
-    /** rfc822.c's tspecials: what a MIME word (type, subtype, parameter) ends at. */
-    private const TSPECIALS = " ()<>@,;:\\\"[]/?=\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
-        ."\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f";
-
-    /** body_types[] as c-client starts out with it. */
-    private const TYPES = ['TEXT', 'MULTIPART', 'MESSAGE', 'APPLICATION', 'AUDIO', 'IMAGE', 'VIDEO', 'MODEL', 'X-UNKNOWN'];
-
-    /** body_encodings[] as c-client starts out with it. */
-    private const ENCODINGS = ['7BIT', '8BIT', 'BINARY', 'BASE64', 'QUOTED-PRINTABLE', 'X-UNKNOWN'];
-
     /** The encodings a multipart or an embedded message may carry (anything else is ignored with a log). */
     private const IDENTITY_ENCODINGS = ['7BIT', '8BIT', 'BINARY'];
 
@@ -333,7 +324,7 @@ final class MimeBody
             ErrorStack::push('Ignoring excessively deep MIME recursion');
         }
 
-        $this->subtype ??= self::defaultSubtype($this->type);
+        $this->subtype ??= Tables::defaultSubtype(BodyPart::typeCode($this->type));
         $this->offset = $start;
         $this->size = $end - $start;
 
@@ -563,7 +554,7 @@ final class MimeBody
         $remaining = $this->mimeSize;
 
         if ($remaining === 0) {
-            $this->subtype = self::defaultSubtype($this->type);
+            $this->subtype = Tables::defaultSubtype(BodyPart::typeCode($this->type));
             if ($this->type === 'TEXT' && $this->parameters === []) {
                 $this->parameters = [['CHARSET', $this->encoding === '7BIT' ? 'US-ASCII' : 'X-UNKNOWN']];
             }
@@ -658,7 +649,7 @@ final class MimeBody
                     break;
                 }
                 $cursor = new Rfc822Cursor($value);
-                $end = $cursor->readWord(self::TSPECIALS);
+                $end = $cursor->readWord(Tables::TSPECIALS);
                 if ($end === null) {
                     break;
                 }
@@ -674,11 +665,11 @@ final class MimeBody
                 break;
             case 'TRANSFER-ENCODING':
                 $cursor = new Rfc822Cursor($value);
-                $end = $cursor->readWord(self::TSPECIALS);
+                $end = $cursor->readWord(Tables::TSPECIALS);
                 if ($end === null) {
                     break;
                 }
-                $this->encoding = self::known(Rfc822Cursor::unquote(substr($value, 0, $end)), self::ENCODINGS);
+                $this->encoding = strtoupper(Rfc822Cursor::unquote(substr($value, 0, $end)));
                 break;
         }
     }
@@ -686,19 +677,19 @@ final class MimeBody
     private function parseContentType(string $value): void
     {
         $cursor = new Rfc822Cursor($value);
-        $end = $cursor->readWord(self::TSPECIALS);
+        $end = $cursor->readWord(Tables::TSPECIALS);
         if ($end === null) {
             return;
         }
 
-        $this->type = self::known(Rfc822Cursor::unquote(substr($value, 0, $end)), self::TYPES);
+        $this->type = strtoupper(Rfc822Cursor::unquote(substr($value, 0, $end)));
         $cursor->skipWhitespaceAndComments();
 
         if ($cursor->peek() === '/') {
             $cursor->skip();
             $cursor->skipWhitespaceAndComments();
             $start = $cursor->position();
-            $end = $cursor->readWord(self::TSPECIALS);
+            $end = $cursor->readWord(Tables::TSPECIALS);
 
             if ($end !== null) {
                 $this->subtype = strtoupper(Rfc822Cursor::unquote($cursor->slice($start, $end)));
@@ -724,7 +715,7 @@ final class MimeBody
             $cursor->skip();
             $cursor->skipWhitespaceAndComments();
             $start = $cursor->position();
-            $end = $cursor->readWord(self::TSPECIALS);
+            $end = $cursor->readWord(Tables::TSPECIALS);
 
             if ($end === null) {
                 $lost = true;
@@ -739,7 +730,7 @@ final class MimeBody
                 $cursor->skip();
                 $cursor->skipWhitespaceAndComments();
                 $start = $cursor->position();
-                $end = $cursor->readWord(self::TSPECIALS);
+                $end = $cursor->readWord(Tables::TSPECIALS);
 
                 if ($end === null) {
                     $lost = true;
@@ -771,23 +762,6 @@ final class MimeBody
     }
 
     /**
-     * The table's own spelling of a name it holds, compared without regard
-     * to case; a name it lacks, upper-cased.
-     *
-     * @param list<string> $table
-     */
-    private static function known(string $name, array $table): string
-    {
-        foreach ($table as $entry) {
-            if (strcasecmp($entry, $name) === 0) {
-                return $entry;
-            }
-        }
-
-        return strtoupper($name);
-    }
-
-    /**
      * The next byte, or $instead where the body has none left: c-client's
      * `(i && i--) ? SNX (bs) : '\012'`.
      */
@@ -800,17 +774,5 @@ final class MimeBody
         --$remaining;
 
         return $this->raw[$position++] ?? "\0";
-    }
-
-    private static function defaultSubtype(string $type): string
-    {
-        return match ($type) {
-            'TEXT' => 'PLAIN',
-            'MULTIPART' => 'MIXED',
-            'MESSAGE' => 'RFC822',
-            'APPLICATION' => 'OCTET-STREAM',
-            'AUDIO' => 'BASIC',
-            default => 'UNKNOWN',
-        };
     }
 }
