@@ -4,6 +4,19 @@ The aim is that code written against ext-imap keeps working unchanged. That
 gives the line: what a caller can observe and rely on must match, and what no
 caller can tell apart does not need to match.
 
+## Mail that exists, not mail that could
+
+The target is the mail people actually send and receive today. That
+includes mail broken the way real mail is broken: badly encoded words,
+malformed address lists, a wrong charset, spam. A decoder is tested on
+exactly those, and most fixes so far were for them.
+
+It does not include mail that only exists in a spec: Usenet headers, a
+message with no `Date:`, constructs no client has sent in decades. A
+divergence that shows only on such input is not worth a port, a test or a
+README row. When in doubt, ask whether a mail client or mailing list in use
+today produces it.
+
 ## Identical, and checked by `make parity`
 
 - Return values, error paths included: `false`, `[]`, `0`, or `true` always,
