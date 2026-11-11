@@ -29,7 +29,8 @@ final class HeadersLine
         array $registeredUserFlags = [],
     ): string {
         $fields = RawHeaderFields::parse($rawHeader)->toArray();
-        $subject = $fields['subject'] ?? '';
+        // mail_fetchsubject() writes a blank where there is no subject.
+        $subject = $fields['subject'] ?? ' ';
 
         return self::flagChars($flags)
             .sprintf('%4d)', $msgno)
