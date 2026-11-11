@@ -7,24 +7,24 @@ use PHPUnit\Framework\TestCase;
 
 class AddressListTest extends TestCase
 {
-    public function test_first_as_string_returns_null_for_empty_input(): void
+    public function test_write_first_returns_null_for_empty_input(): void
     {
-        $this->assertNull(AddressList::parse('', 'example.com')->firstAsString());
+        $this->assertNull(AddressList::parse('', 'example.com')->writeFirst());
     }
 
-    public function test_first_as_string_formats_personal_name_and_address(): void
+    public function test_write_first_formats_personal_name_and_address(): void
     {
         $this->assertSame(
             'Joe Doe <joe@example.com>',
-            AddressList::parse('Joe Doe <joe@example.com>, jane@example.com', 'example.com')->firstAsString()
+            AddressList::parse('Joe Doe <joe@example.com>, jane@example.com', 'example.com')->writeFirst()
         );
     }
 
-    public function test_first_as_string_without_personal_name(): void
+    public function test_write_first_without_personal_name(): void
     {
         $this->assertSame(
             'jane@example.com',
-            AddressList::parse('jane@example.com', 'example.com')->firstAsString()
+            AddressList::parse('jane@example.com', 'example.com')->writeFirst()
         );
     }
 

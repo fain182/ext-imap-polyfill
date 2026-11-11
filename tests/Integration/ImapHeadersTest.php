@@ -93,6 +93,46 @@ final class ImapHeadersTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    /**
+     * The from column skips the group name to the first member, as
+     * imap_headerinfo()'s fetchfrom does: both are mail_fetchfrom(). Over
+     * POP3, where c-client parses the header itself.
+     */
+    public function test_headers_from_column_skips_the_group_name_to_the_first_member(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage(
+            "From: Team: a@example.com, b@example.com;\r\nSubject: S\r\n\r\nBody"
+        );
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+
+        $headers = imap_headers($connection);
+
+        $this->assertSame(' a@example.com        S', substr((string) end($headers), 22, 23));
+
+        imap_close($connection);
+    }
+
+    /**
+     * mail_fetchsubject() writes a single blank where there is no subject,
+     * so the size still stands two spaces after the from column.
+     */
+    public function test_headers_without_a_subject_leaves_a_blank_in_its_place(): void
+    {
+        $folderName = self::randomFolderName(__FUNCTION__);
+        $client = $this->makeFolder($folderName);
+        $message = "From: Ann <a@example.com>\r\n\r\nBody";
+        $client->getFolder($folderName)->appendMessage($message);
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $headers = imap_headers($connection);
+
+        $this->assertSame(' Ann                    ('.strlen($message).' chars)', substr($headers[0], 22));
+
+        imap_close($connection);
+    }
+
     public function test_headers_empty_mailbox_returns_empty_array(): void
     {
         $folderName = self::randomFolderName(__FUNCTION__);

@@ -355,5 +355,14 @@ class ImapMailComposeTest extends TestCase
 
         // The address before it keeps its ordinary separator.
         yield 'an address then a group' => ['a@b.com, Group: c@d.com;', "To: a@b.com, Group: \r\n    ;\r\n"];
+
+        // The name is quoted against the specials a personal name is, where
+        // a space is ordinary and a dot is not.
+        yield 'a group name with a space' => ['"My Team": a@b.com;', "To: My Team: \r\n    ;\r\n"];
+        yield 'a group name with a dot' => ['"a.b": a@b.com;', "To: \"a.b\": \r\n    ;\r\n"];
+
+        // And what follows a group gets its separator.
+        yield 'a group then a group' => ['G: a@b.com;, H: c@d.com;', "To: G: \r\n    ;, H: \r\n    ;\r\n"];
+        yield 'a group then an address' => ['G: a@b.com;, c@d.com', "To: G: \r\n    ;, c@d.com\r\n"];
     }
 }

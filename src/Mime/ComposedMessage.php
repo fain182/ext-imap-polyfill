@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Mime;
 
 use ImapPolyfill\Address\AddressList;
+use ImapPolyfill\Address\Rfc822Address;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -32,10 +33,6 @@ final class ComposedMessage
     ];
 
     private const CONTROL_CHARS = "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f\x7f";
-
-
-    /** c-client wspecials: dot-atom specials (dot handled separately). */
-    private const WSPECIALS = " ()<>@,;:\\\"[]".self::CONTROL_CHARS;
 
     /** c-client tspecials: characters forcing a MIME parameter value into a quoted string. */
     private const TSPECIALS = " ()<>@,;:\\\"[]/?=".self::CONTROL_CHARS;
@@ -441,13 +438,15 @@ final class ComposedMessage
         $lastIndex = count($addresses) - 1;
         $inGroup = false;
 
-        foreach (array_values($addresses) as $i => $address) {
+        $addresses = array_values($addresses);
+
+        foreach ($addresses as $i => $address) {
             // A group is written as its name, then one blank slot per member,
             // then the terminator: c-client keeps the shape of the group and
             // drops the members inside it, and no comma appears anywhere in
             // between. "Group: a@b, c@d;" goes out as "Group: \r\n    \r\n    ;".
             if (self::opensGroup($address)) {
-                $line .= self::cat($address->mailbox ?? '', null).': ';
+                $line .= Rfc822Address::quote($address->mailbox ?? '', Rfc822Address::SPECIALS).': ';
                 $inGroup = true;
 
                 continue;
@@ -456,6 +455,10 @@ final class ComposedMessage
             if (self::closesGroup($address)) {
                 $line .= ';';
                 $inGroup = false;
+
+                if (isset($addresses[$i + 1]->mailbox)) {
+                    $line .= ', ';
+                }
 
                 continue;
             }
@@ -502,17 +505,7 @@ final class ComposedMessage
      */
     private static function renderAddress(\stdClass $address): string
     {
-        $route = self::cat($address->mailbox ?? '', null);
-        if (!str_starts_with($address->host, '@')) {
-            $route .= '@'.self::cat($address->host, null);
-        }
-
-        $personal = $address->personal ?? '';
-        if ($personal !== '') {
-            return \ImapPolyfill\Address\Rfc822Address::quote($personal, \ImapPolyfill\Address\Rfc822Address::SPECIALS).' <'.$route.'>';
-        }
-
-        return $route;
+        return Rfc822Address::write($address->mailbox ?? '', $address->host, $address->personal ?? '');
     }
 
     private static function renderBodyHeader(ComposedBody $body): string
@@ -522,7 +515,7 @@ final class ComposedMessage
 
         if ($body->parameters !== []) {
             foreach ($body->parameters as [$attribute, $value]) {
-                $header .= '; '.$attribute.'='.self::cat($value, self::TSPECIALS);
+                $header .= '; '.$attribute.'='.Rfc822Address::quote($value, self::TSPECIALS);
             }
         } elseif ($body->type === TYPETEXT) {
             $header .= '; CHARSET='.($body->encoding === ENC7BIT ? 'US-ASCII' : 'X-UNKNOWN');
@@ -543,7 +536,7 @@ final class ComposedMessage
         if ($body->dispositionType !== null) {
             $header .= self::CRLF.'Content-Disposition: '.$body->dispositionType;
             foreach ($body->dispositionParameters as [$attribute, $value]) {
-                $header .= '; '.$attribute.'='.self::cat($value, self::TSPECIALS);
+                $header .= '; '.$attribute.'='.Rfc822Address::quote($value, self::TSPECIALS);
             }
         }
 
@@ -560,29 +553,6 @@ final class ComposedMessage
             TYPEAUDIO => 'BASIC',
             default => 'UNKNOWN',
         };
-    }
-
-    /**
-     * rfc822_output_cat: emit verbatim unless quoting is needed — for a given
-     * specials list when any special occurs, or in dot-atom mode (null) on
-     * wspecials plus leading/doubled/trailing dots. Only backslash and
-     * double-quote get escaped inside the quoted form.
-     */
-    private static function cat(string $value, ?string $specials): string
-    {
-        $needsQuoting = $value === ''
-            || ($specials !== null
-                ? strpbrk($value, $specials) !== false
-                : (strpbrk($value, self::WSPECIALS) !== false
-                    || str_starts_with($value, '.')
-                    || str_contains($value, '..')
-                    || str_ends_with($value, '.')));
-
-        if (!$needsQuoting) {
-            return $value;
-        }
-
-        return '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $value).'"';
     }
 
     /**

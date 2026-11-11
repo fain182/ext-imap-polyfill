@@ -325,8 +325,38 @@ final class AddressList
         return $written;
     }
 
-    public function firstAsString(): ?string
+    /**
+     * c-client's mail_fetchfrom(): exactly $length characters, space-padded,
+     * of the first entry that has a host — so a group's name is passed over
+     * for its first member — as its personal name if it has one, else
+     * "mailbox@host" with each side capped at 256 characters.
+     */
+    public function fetchFrom(int $length): string
     {
-        return $this->first()?->format();
+        foreach ($this->addresses as $address) {
+            if ($address->host === null) {
+                continue;
+            }
+
+            $text = $address->personal
+                ?? sprintf('%.256s@%.256s', (string) $address->mailbox, $address->host);
+
+            return str_pad(substr($text, 0, $length), $length);
+        }
+
+        return str_repeat(' ', $length);
+    }
+
+    /**
+     * The first entry written on its own, which is what php_imap.c makes of
+     * imap_fetch_overview()'s from and to: it cuts the list after the first
+     * address and hands it to the same writer as the "*address" strings —
+     * so a group's name comes out as "Team: ", with nothing after it.
+     */
+    public function writeFirst(): ?string
+    {
+        $first = $this->first();
+
+        return $first === null ? null : (new self([$first]))->write();
     }
 }

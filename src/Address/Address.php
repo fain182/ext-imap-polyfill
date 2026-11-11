@@ -424,12 +424,4 @@ final class Address
     {
         return Rfc822Address::write($this->mailbox ?? '', $this->host ?? '', $this->personal ?? '');
     }
-
-    /** Formats as "Personal <mailbox@host>", matching ext-imap's overview shape. */
-    public function format(): string
-    {
-        $mailAtHost = $this->host !== null ? "{$this->mailbox}@{$this->host}" : (string) $this->mailbox;
-
-        return $this->personal !== null ? "{$this->personal} <{$mailAtHost}>" : $mailAtHost;
-    }
 }

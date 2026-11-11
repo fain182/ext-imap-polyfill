@@ -26,11 +26,11 @@ final class Overview
         }
 
         if (isset($fields['from'])) {
-            $result->from = AddressList::parse($fields['from'], $defaultHost)->firstAsString();
+            $result->from = AddressList::parse($fields['from'], $defaultHost)->writeFirst();
         }
 
         if (isset($fields['to'])) {
-            $result->to = AddressList::parse($fields['to'], $defaultHost)->firstAsString();
+            $result->to = AddressList::parse($fields['to'], $defaultHost)->writeFirst();
         }
 
         if (isset($fields['date'])) {

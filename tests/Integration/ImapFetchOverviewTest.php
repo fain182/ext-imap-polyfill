@@ -265,4 +265,44 @@ class ImapFetchOverviewTest extends GreenmailTestCase
         $this->assertSame([], imap_fetch_overview($connection, '*', FT_UID));
         $this->assertSame([], imap_errors() ?: []);
     }
+
+    /**
+     * from and to are the first address *written*, the way the envelope's
+     * "*address" strings are: a personal name holding a special is quoted,
+     * where the header text would only have been copied.
+     */
+    public function test_from_and_to_quote_a_personal_name_that_needs_it(): void
+    {
+        $folderName = 'OverviewQuoteBox'.uniqid();
+        $this->makeFolder($folderName)->getFolder($folderName)->appendMessage(
+            "From: \"Doe, John\" <john@example.com>\r\n"
+            ."To: \"a.b\" <x@example.com>, y@example.com\r\n"
+            ."Subject: S\r\n\r\nBody"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $overview = imap_fetch_overview($connection, '1')[0];
+
+        $this->assertSame('"Doe, John" <john@example.com>', $overview->from);
+        $this->assertSame('"a.b" <x@example.com>', $overview->to);
+    }
+
+    /**
+     * Written alone, a group's first entry is its name and the colon. Over
+     * POP3, because there c-client parses the header itself; over IMAP the
+     * address list is whatever the server's ENVELOPE made of the group.
+     */
+    public function test_a_from_that_opens_a_group_is_the_group_name(): void
+    {
+        self::seedClient()->getFolder('INBOX')->appendMessage(
+            "From: Team: a@example.com, b@example.com;\r\nSubject: S\r\n\r\nBody"
+        );
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+
+        $overview = imap_fetch_overview($connection, (string) imap_num_msg($connection))[0];
+
+        $this->assertSame('Team: ', $overview->from);
+    }
 }
