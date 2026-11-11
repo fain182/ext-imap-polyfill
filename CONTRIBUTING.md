@@ -8,7 +8,8 @@ make test-unit         # pure-PHP tests, no server needed
 make test-integration  # starts the fixtures if they aren't running, runs the suite against them
 make test              # both of the above
 make phpstan           # static analysis at level 6
-make check             # phpstan, arch, test, phpt and parity: what CI runs
+make lint              # parses every file under PHP 8.1, the floor: catches what PHPStan lets through
+make check             # lint, phpstan, arch, test, phpt and parity: what CI runs
 make fixtures-down     # stops both fixtures
 make install-lowest    # re-resolve to the oldest versions composer.json allows
 ```
