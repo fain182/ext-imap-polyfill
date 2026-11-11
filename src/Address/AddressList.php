@@ -347,8 +347,16 @@ final class AddressList
         return str_repeat(' ', $length);
     }
 
-    public function firstAsString(): ?string
+    /**
+     * The first entry written on its own, which is what php_imap.c makes of
+     * imap_fetch_overview()'s from and to: it cuts the list after the first
+     * address and hands it to the same writer as the "*address" strings —
+     * so a group's name comes out as "Team: ", with nothing after it.
+     */
+    public function writeFirst(): ?string
     {
-        return $this->first()?->format();
+        $first = $this->first();
+
+        return $first === null ? null : (new self([$first]))->write();
     }
 }
