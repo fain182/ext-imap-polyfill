@@ -138,6 +138,27 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    public function test_search_matches_header_terms_against_the_decoded_header(): void
+    {
+        $marker = 'Pop3Mime'.random_int(10000, 99999);
+        self::seedClient()->getFolder('INBOX')->appendMessage(
+            "From: =?UTF-8?Q?Jos=C3=A9_{$marker}?= <jose@example.com>\r\n"
+            ."Subject: =?UTF-8?B?".base64_encode("Caf\u{e9} {$marker}")."?=\r\n"
+            ."\r\n"
+            ."Body\r\n"
+        );
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame([$count], imap_search($connection, "SUBJECT \"Caf\u{e9} {$marker}\""));
+        $this->assertSame([$count], imap_search($connection, "SUBJECT \"caf\u{e9} ".strtolower($marker).'"'));
+        $this->assertSame([$count], imap_search($connection, "FROM \"Jos\u{e9} {$marker}\""));
+        $this->assertSame([$count], imap_search($connection, "TEXT \"Caf\u{e9} {$marker}\""));
+        $this->assertFalse(imap_search($connection, 'SUBJECT "=?UTF-8?B?"'.' FROM '.$marker));
+
+        imap_close($connection);
+    }
+
     /**
      * The charsets c-client's utf8_csvalid table knows, as its refusal lists
      * them. POP3 has no SEARCH, so the charset is c-client's to check rather
