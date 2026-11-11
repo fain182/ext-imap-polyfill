@@ -84,6 +84,13 @@ final class Session
         );
 
         $isPop3 = $spec->service === Service::Pop3;
+
+        // mail_open_work() turns OP_HALFOPEN down for a driver without
+        // DR_HALFOPEN, pop3 among them, before it dials and without logging.
+        if ($isPop3 && ($flags & OP_HALFOPEN)) {
+            return false;
+        }
+
         $backend = $isPop3
             ? self::connectPop3($spec, $mailbox, $credentials)
             : self::connectImap($spec, $credentials);
