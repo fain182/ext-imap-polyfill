@@ -159,6 +159,24 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    public function test_search_dates_compare_the_date_header_as_written(): void
+    {
+        $marker = 'Pop3Date'.random_int(10000, 99999);
+        $folder = self::seedClient()->getFolder('INBOX');
+        $folder->appendMessage("Date: Mon, 1 Jan 2024 23:30:00 -0500\r\nSubject: {$marker}Zone\r\n\r\nBody\r\n");
+        $folder->appendMessage("Date: 5 Feb 2025 25:00:00 +0000\r\nSubject: {$marker}BadTime\r\n\r\nBody\r\n");
+        $folder->appendMessage("Subject: {$marker}NoDate\r\n\r\nBody\r\n");
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame([$count - 2], imap_search($connection, "ON 1-Jan-2024 SUBJECT {$marker}Zone"));
+        $this->assertSame([$count - 1], imap_search($connection, "ON 5-Feb-2025 SUBJECT {$marker}BadTime"));
+        $this->assertSame([$count], imap_search($connection, "BEFORE 2-Jan-1970 SUBJECT {$marker}NoDate"));
+        $this->assertFalse(imap_search($connection, "SINCE 2-Jan-1970 SUBJECT {$marker}NoDate"));
+
+        imap_close($connection);
+    }
+
     /**
      * The charsets c-client's utf8_csvalid table knows, as its refusal lists
      * them. POP3 has no SEARCH, so the charset is c-client's to check rather

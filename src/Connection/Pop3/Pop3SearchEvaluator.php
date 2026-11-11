@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Connection\Pop3;
 
+use ImapPolyfill\Message\MailDate;
 use ImapPolyfill\Message\SearchCriterion;
 use ImapPolyfill\Message\SearchKey;
 use ImapPolyfill\Message\SearchProgram;
@@ -116,26 +117,27 @@ final class Pop3SearchEvaluator
         return str_contains(strtolower($haystack), strtolower($needle));
     }
 
-    private static function dateMatch(SearchKey $key, ?string $headerDate, string $needle): bool
+    /**
+     * BEFORE, ON and SINCE compare the internal date, and over POP3 that is
+     * what pop3_fetchfast() makes of the Date: header: the day as written,
+     * in the header's own zone, and January 1st where mail_parse_date()
+     * leaves no day — no Date: at all included, which is then 1970.
+     */
+    private static function dateMatch(SearchKey $key, ?string $headerDate, string $criterion): bool
     {
-        if ($headerDate === null || $needle === '') {
-            return false;
+        $date = $headerDate === null ? null : MailDate::writtenBy($headerDate);
+
+        if ($date === null || $date->day === 0) {
+            $date = new MailDate($date->year ?? MailDate::BASE_YEAR, 1, 1);
         }
 
-        $messageTime = strtotime($headerDate);
-        $criterionTime = strtotime($needle);
-
-        if ($messageTime === false || $criterionTime === false) {
-            return false;
-        }
-
-        $messageDay = strtotime(date('Y-m-d', $messageTime));
-        $criterionDay = strtotime(date('Y-m-d', $criterionTime));
+        $wanted = MailDate::parse($criterion)
+            ?? throw new \LogicException('SearchProgram let an unreadable date through: '.$criterion);
 
         return match ($key) {
-            SearchKey::Since => $messageDay >= $criterionDay,
-            SearchKey::Before => $messageDay < $criterionDay,
-            SearchKey::On => $messageDay === $criterionDay,
+            SearchKey::Since => $date->packed() >= $wanted->packed(),
+            SearchKey::Before => $date->packed() < $wanted->packed(),
+            SearchKey::On => $date->packed() === $wanted->packed(),
             default => throw new \LogicException('Not a date criterion: '.$key->value),
         };
     }
