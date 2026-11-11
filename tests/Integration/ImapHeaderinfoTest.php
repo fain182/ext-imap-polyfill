@@ -53,7 +53,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
         $this->assertSame(' ', $result->Draft);
     }
 
-    public function test_returns_cc_bcc_reply_to_and_multiple_recipients(): void
+    public function test_returns_cc_bcc_reply_to_sender_and_multiple_recipients(): void
     {
         $folderName = 'HeaderinfoBox' . uniqid();
         $seedClient = $this->makeFolder($folderName);
@@ -64,6 +64,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
             ."Cc: carol@example.com\r\n"
             ."Bcc: dave@example.com\r\n"
             ."Reply-To: noreply@example.com\r\n"
+            ."Sender: Eve Moe <eve@example.com>\r\n"
             ."Date: Mon, 6 Jul 2026 12:00:00 +0000\r\n"
             ."\r\n"
             ."Body text"
@@ -84,6 +85,31 @@ class ImapHeaderinfoTest extends GreenmailTestCase
         $this->assertSame('dave@example.com', $result->bccaddress);
         $this->assertSame('noreply', $result->reply_to[0]->mailbox);
         $this->assertSame('noreply@example.com', $result->reply_toaddress);
+        $this->assertSame('eve', $result->sender[0]->mailbox);
+        $this->assertSame('Eve Moe <eve@example.com>', $result->senderaddress);
+    }
+
+    public function test_returns_the_threading_headers_as_written(): void
+    {
+        $folderName = 'HeaderinfoBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage(
+            "Subject: Re: Thread\r\n"
+            ."From: joe@example.com\r\n"
+            ."Message-ID: <c@example.com>\r\n"
+            ."In-Reply-To: <b@example.com>\r\n"
+            ."References: <a@example.com> <b@example.com>\r\n"
+            ."\r\n"
+            ."Body"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $result = imap_headerinfo($connection, 1);
+
+        $this->assertSame('<c@example.com>', $result->message_id);
+        $this->assertSame('<b@example.com>', $result->in_reply_to);
+        $this->assertSame('<a@example.com> <b@example.com>', $result->references);
     }
 
     public function test_omits_optional_address_fields_when_absent(): void
