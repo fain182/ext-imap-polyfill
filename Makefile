@@ -73,7 +73,7 @@ CONFIG_LABEL := ext-imap-polyfill.config
 FILTER ?=
 PHPUNIT_FILTER := $(if $(FILTER),--filter '$(FILTER)')
 
-.PHONY: arch fuzz install install-lowest check test test-unit test-integration cross-check phpstan phpt greenmail-up greenmail-down dovecot-up dovecot-down fixtures-down parity parity-build
+.PHONY: arch fuzz install install-lowest check lint test test-unit test-integration cross-check phpstan phpt greenmail-up greenmail-down dovecot-up dovecot-down fixtures-down parity parity-build
 
 install:
 	composer install
@@ -89,6 +89,16 @@ phpstan: install
 
 arch: install
 	vendor/bin/phparkitect check
+
+## Parses every file under the oldest PHP composer.json allows. PHPStan reads
+## that floor too, but parses with the newest grammar: a standalone `false` or
+## `null` type, a DNF type or a constant in a trait passes it and is a fatal
+## error on 8.1. tests/phpt is left out: its harness only runs on a newer PHP.
+PHP_FLOOR_IMAGE := docker.io/library/php:8.1-cli
+
+lint:
+	$(CONTAINER_RUNTIME) run --rm -v $(CURDIR):/app:Z -w /app $(PHP_FLOOR_IMAGE) \
+		sh -c 'find bootstrap.php src tests -path tests/phpt -prune -o -name "*.php" -print0 | xargs -0 -n1 -P4 php -d display_errors=stderr -l > /dev/null'
 
 test-unit: install
 	vendor/bin/phpunit --testsuite unit $(PHPUNIT_FILTER)
@@ -190,7 +200,7 @@ test: test-unit test-integration
 ## parity, a fresh one for phpt), and parity keeps its vendor/ in a volume of
 ## its own.
 check:
-	$(MAKE) --jobs --output-sync=target phpstan arch test phpt parity
+	$(MAKE) --jobs --output-sync=target lint phpstan arch test phpt parity
 
 ## Runs the Greenmail-targeted suite against Dovecot instead, skipping the
 ## tests tagged greenmail-only (each carries the reason it cannot move).
