@@ -21,13 +21,16 @@ final class Pop3SearchEvaluator
 {
     /**
      * @param string[]           $flags   the IMAP flag names set on this message
+     * @param \Closure(): MimeBody $structure the message's parsed body, asked
+     *                                      for only by BODY and TEXT, as
+     *                                      c-client parses it only for those
      * @param SearchCharset|null $charset what the terms are written in; none
      *                                    named leaves them as they are
      */
-    public static function matches(SearchProgram $program, RawMessage $message, array $flags, ?SearchCharset $charset = null): bool
+    public static function matches(SearchProgram $program, RawMessage $message, \Closure $structure, array $flags, ?SearchCharset $charset = null): bool
     {
         foreach ($program->criteria as $criterion) {
-            if (!self::matchesCriterion($criterion, $message, $flags, $charset)) {
+            if (!self::matchesCriterion($criterion, $message, $structure, $flags, $charset)) {
                 return false;
             }
         }
@@ -36,9 +39,10 @@ final class Pop3SearchEvaluator
     }
 
     /**
+     * @param \Closure(): MimeBody $structure
      * @param string[] $flags
      */
-    private static function matchesCriterion(SearchCriterion $criterion, RawMessage $message, array $flags, ?SearchCharset $charset): bool
+    private static function matchesCriterion(SearchCriterion $criterion, RawMessage $message, \Closure $structure, array $flags, ?SearchCharset $charset): bool
     {
         $fields = $message->getHeaders();
         $argument = $criterion->argument ?? '';
@@ -71,11 +75,11 @@ final class Pop3SearchEvaluator
 
             SearchKey::Bcc, SearchKey::Cc, SearchKey::From,
             SearchKey::Subject, SearchKey::To => self::substringMatch($fields, strtolower($criterion->key->value), $term),
-            SearchKey::Body => self::contains($message->getBody(), $term),
+            SearchKey::Body => self::containedInAny($structure()->searchableTexts(false), $term),
             // mail_search_text() reads the header through utf8_mime2text()
             // before it goes on to the body.
             SearchKey::Text => self::contains(MimeText::decode($message->getRawHeader()), $term)
-                || self::contains($message->getBody(), $term),
+                || self::containedInAny($structure()->searchableTexts(true), $term),
 
             SearchKey::Before, SearchKey::On,
             SearchKey::Since => self::dateMatch($criterion->key, $fields['date'] ?? null, $argument),
@@ -110,6 +114,20 @@ final class Pop3SearchEvaluator
         // end in mail_search_header(), which compares against the header
         // as utf8_mime2text() decodes it.
         return isset($fields[$field]) && self::contains(MimeText::decode($fields[$field]), $needle);
+    }
+
+    /**
+     * @param list<string> $haystacks
+     */
+    private static function containedInAny(array $haystacks, string $needle): bool
+    {
+        foreach ($haystacks as $haystack) {
+            if (self::contains($haystack, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function contains(string $haystack, string $needle): bool

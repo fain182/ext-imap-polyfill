@@ -159,6 +159,60 @@ final class Pop3MailboxTest extends GreenmailTestCase
         imap_close($connection);
     }
 
+    public function test_search_body_reads_the_decoded_text_parts(): void
+    {
+        $marker = 'Pop3Body'.random_int(10000, 99999);
+        self::seedClient()->getFolder('INBOX')->appendMessage(
+            "MIME-Version: 1.0\r\n"
+            ."Subject: {$marker}\r\n"
+            ."Content-Type: multipart/mixed; boundary=\"b\"\r\n"
+            ."\r\n"
+            ."--b\r\n"
+            ."Content-Type: text/plain; charset=UTF-8\r\n"
+            ."Content-Transfer-Encoding: base64\r\n"
+            ."Content-Description: Desc{$marker}\r\n"
+            ."\r\n"
+            .base64_encode("Z\u{fc}rich{$marker}")."\r\n"
+            ."--b\r\n"
+            ."Content-Type: text/plain; charset=ISO-8859-1\r\n"
+            ."Content-Transfer-Encoding: quoted-printable\r\n"
+            ."\r\n"
+            ."caf=E9 Qp{$marker}\r\n"
+            ."--b\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."Content-Transfer-Encoding: 8bit\r\n"
+            ."\r\n"
+            ."Stra\u{df}e{$marker}\r\n"
+            ."--b\r\n"
+            ."Content-Type: application/octet-stream\r\n"
+            ."Content-Transfer-Encoding: base64\r\n"
+            ."\r\n"
+            .base64_encode("Hidden{$marker}")."\r\n"
+            ."--b\r\n"
+            ."Content-Type: message/rfc822\r\n"
+            ."\r\n"
+            ."Subject: Nested{$marker}\r\n"
+            ."\r\n"
+            ."Inner{$marker}\r\n"
+            ."--b--\r\n"
+        );
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame([$count], imap_search($connection, "BODY \"Z\u{fc}rich{$marker}\""));
+        $this->assertSame([$count], imap_search($connection, "BODY \"caf\u{e9} Qp{$marker}\""));
+        $this->assertSame([$count], imap_search($connection, "BODY \"Stra\u{df}e{$marker}\""));
+        $this->assertSame([$count], imap_search($connection, "BODY Inner{$marker}"));
+        $this->assertFalse(imap_search($connection, "BODY Hidden{$marker}"));
+        $this->assertFalse(imap_search($connection, "BODY Desc{$marker}"));
+        $this->assertFalse(imap_search($connection, "BODY Nested{$marker}"));
+        $this->assertSame([$count], imap_search($connection, "TEXT Desc{$marker}"));
+        $this->assertSame([$count], imap_search($connection, "TEXT Nested{$marker}"));
+        $this->assertFalse(imap_search($connection, "TEXT Hidden{$marker}"));
+
+        imap_close($connection);
+    }
+
     public function test_search_dates_compare_the_date_header_as_written(): void
     {
         $marker = 'Pop3Date'.random_int(10000, 99999);

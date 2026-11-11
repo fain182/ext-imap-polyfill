@@ -197,7 +197,7 @@ final class Pop3Backend implements ConnectionBackend
 
         $ids = [];
         foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
-            if (Pop3SearchEvaluator::matches($program, $this->rawMessage($uid), $this->flags[$uid] ?? [], $charset)) {
+            if (Pop3SearchEvaluator::matches($program, $this->rawMessage($uid), fn (): MimeBody => $this->structure($uid), $this->flags[$uid] ?? [], $charset)) {
                 $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
         }

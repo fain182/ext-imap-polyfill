@@ -4,6 +4,7 @@ namespace ImapPolyfill\Connection\Pop3;
 
 use ImapPolyfill\Address\Rfc822Cursor;
 use ImapPolyfill\Message\BodyPart;
+use ImapPolyfill\Mime\MimeText;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -133,6 +134,79 @@ final class MimeBody
     public function mimeText(): string
     {
         return (string) substr($this->raw, $this->mimeOffset, $this->mimeSize);
+    }
+
+    /**
+     * What mail_search_body() reads, in its order: the text of each TEXT
+     * part, and of each MESSAGE part that is not RFC822, with its transfer
+     * encoding undone and converted from its CHARSET. A part of any other
+     * type is not read. With $headers (TEXT rather than BODY) it also reads
+     * each nested part's MIME header and each embedded message's header,
+     * through utf8_mime2text().
+     *
+     * @return list<string>
+     */
+    public function searchableTexts(bool $headers): array
+    {
+        $texts = [];
+        $this->collectSearchable($headers, false, $texts);
+
+        return $texts;
+    }
+
+    /**
+     * @param list<string> $texts
+     */
+    private function collectSearchable(bool $headers, bool $nested, array &$texts): void
+    {
+        if ($headers && $nested) {
+            $texts[] = MimeText::decode($this->mimeText());
+        }
+
+        if ($this->type === 'MULTIPART') {
+            foreach ($this->parts as $part) {
+                $part->collectSearchable($headers, true, $texts);
+            }
+
+            return;
+        }
+
+        if ($this->type === 'MESSAGE' && $this->subtype === 'RFC822') {
+            if ($this->message !== null) {
+                if ($headers) {
+                    $texts[] = MimeText::decode((string) substr($this->raw, $this->offset, $this->message->offset - $this->offset));
+                }
+
+                $this->message->collectSearchable($headers, true, $texts);
+            }
+
+            return;
+        }
+
+        if ($this->type !== 'TEXT' && $this->type !== 'MESSAGE') {
+            return;
+        }
+
+        $text = match ($this->encoding) {
+            'BASE64' => MimeText::fromBase64($this->text()),
+            'QUOTED-PRINTABLE' => MimeText::fromQuotedPrintable($this->text()),
+            default => $this->text(),
+        };
+
+        // rfc822_base64() answering NIL leaves the part unsearched.
+        if ($text === false) {
+            return;
+        }
+
+        $charset = null;
+        foreach ($this->parameters as [$attribute, $value]) {
+            if ($attribute === 'CHARSET') {
+                $charset = $value;
+                break;
+            }
+        }
+
+        $texts[] = SearchCharset::textToUtf8($charset, $text);
     }
 
     public function toBodyPart(): BodyPart
