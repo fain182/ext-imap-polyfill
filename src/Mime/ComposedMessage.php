@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Mime;
 
 use ImapPolyfill\Address\AddressList;
+use ImapPolyfill\Address\Rfc822Address;
 use ImapPolyfill\Support\ErrorStack;
 
 /**
@@ -441,13 +442,15 @@ final class ComposedMessage
         $lastIndex = count($addresses) - 1;
         $inGroup = false;
 
-        foreach (array_values($addresses) as $i => $address) {
+        $addresses = array_values($addresses);
+
+        foreach ($addresses as $i => $address) {
             // A group is written as its name, then one blank slot per member,
             // then the terminator: c-client keeps the shape of the group and
             // drops the members inside it, and no comma appears anywhere in
             // between. "Group: a@b, c@d;" goes out as "Group: \r\n    \r\n    ;".
             if (self::opensGroup($address)) {
-                $line .= self::cat($address->mailbox ?? '', null).': ';
+                $line .= Rfc822Address::quote($address->mailbox ?? '', Rfc822Address::SPECIALS).': ';
                 $inGroup = true;
 
                 continue;
@@ -456,6 +459,10 @@ final class ComposedMessage
             if (self::closesGroup($address)) {
                 $line .= ';';
                 $inGroup = false;
+
+                if (isset($addresses[$i + 1]->mailbox)) {
+                    $line .= ', ';
+                }
 
                 continue;
             }
