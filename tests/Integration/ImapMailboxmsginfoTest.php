@@ -24,6 +24,10 @@ class ImapMailboxmsginfoTest extends GreenmailTestCase
         $info = imap_mailboxmsginfo($connection);
 
         $this->assertIsObject($info);
+        $this->assertSame(
+            ['Unread', 'Deleted', 'Size', 'Date', 'Driver', 'Mailbox', 'Nmsgs', 'Recent'],
+            array_keys(get_object_vars($info)),
+        );
         $this->assertSame(3, $info->Nmsgs);
         $this->assertSame(2, $info->Unread);
         $this->assertSame(1, $info->Deleted);

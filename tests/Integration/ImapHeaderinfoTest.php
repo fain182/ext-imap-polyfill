@@ -74,6 +74,15 @@ class ImapHeaderinfoTest extends GreenmailTestCase
 
         $result = imap_headerinfo($connection, 1);
 
+        $this->assertSame(
+            [
+                'date', 'Date', 'subject', 'Subject',
+                'toaddress', 'to', 'fromaddress', 'from', 'ccaddress', 'cc', 'bccaddress', 'bcc',
+                'reply_toaddress', 'reply_to', 'senderaddress', 'sender',
+                'Recent', 'Unseen', 'Flagged', 'Answered', 'Deleted', 'Draft', 'Msgno', 'MailDate', 'Size', 'udate',
+            ],
+            array_keys(get_object_vars($result)),
+        );
         $this->assertCount(2, $result->to);
         $this->assertSame('jane', $result->to[0]->mailbox);
         $this->assertSame('bob', $result->to[1]->mailbox);
@@ -96,6 +105,7 @@ class ImapHeaderinfoTest extends GreenmailTestCase
         $seedClient->getFolder($folderName)->appendMessage(
             "Subject: Re: Thread\r\n"
             ."From: joe@example.com\r\n"
+            ."Date: Mon, 6 Jul 2026 12:00:00 +0000\r\n"
             ."Message-ID: <c@example.com>\r\n"
             ."In-Reply-To: <b@example.com>\r\n"
             ."References: <a@example.com> <b@example.com>\r\n"
@@ -107,6 +117,14 @@ class ImapHeaderinfoTest extends GreenmailTestCase
 
         $result = imap_headerinfo($connection, 1);
 
+        $this->assertSame(
+            [
+                'date', 'Date', 'subject', 'Subject', 'in_reply_to', 'message_id', 'references',
+                'fromaddress', 'from', 'reply_toaddress', 'reply_to', 'senderaddress', 'sender',
+                'Recent', 'Unseen', 'Flagged', 'Answered', 'Deleted', 'Draft', 'Msgno', 'MailDate', 'Size', 'udate',
+            ],
+            array_keys(get_object_vars($result)),
+        );
         $this->assertSame('<c@example.com>', $result->message_id);
         $this->assertSame('<b@example.com>', $result->in_reply_to);
         $this->assertSame('<a@example.com> <b@example.com>', $result->references);

@@ -13,6 +13,7 @@ class ImapCheckTest extends GreenmailTestCase
         $result = imap_check($connection);
 
         $this->assertInstanceOf(\stdClass::class, $result);
+        $this->assertSame(['Date', 'Driver', 'Mailbox', 'Nmsgs', 'Recent'], array_keys(get_object_vars($result)));
         $this->assertSame('imap', $result->Driver);
         $this->assertStringContainsString($folderName, $result->Mailbox);
         $this->assertSame(0, $result->Nmsgs);

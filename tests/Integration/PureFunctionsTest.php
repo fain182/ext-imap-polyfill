@@ -111,6 +111,9 @@ final class PureFunctionsTest extends TestCase
         }
 
         $this->assertIsArray($decoded);
+        foreach ($decoded as $part) {
+            $this->assertSame(['charset', 'text'], array_keys(get_object_vars($part)));
+        }
         $this->assertSame(
             $expected,
             array_map(static fn (\stdClass $part): array => [$part->charset, $part->text], $decoded),
