@@ -185,7 +185,6 @@ final class ImapThreadTest extends GreenmailTestCase
      * The base subject is taken from the decoded subject, so an encoded
      * "Re:" files the message under the one it answers.
      */
-    #[Group('greenmail-only')]
     public function test_an_encoded_reply_prefix_groups_by_subject(): void
     {
         $folderName = 'ImapThread'.random_int(10000, 99999);
