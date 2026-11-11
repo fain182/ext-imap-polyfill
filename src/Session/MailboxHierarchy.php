@@ -129,8 +129,9 @@ final class MailboxHierarchy
      * The reference and pattern as LIST/LSUB send them. A pattern carrying
      * its own "{host}" prefix overrides the reference (mail_list() drops it),
      * and the prefix then comes off the pattern instead. Null where that
-     * prefix is one the connection's driver refuses, which imap_list_work()
-     * answers by sending nothing and logging nothing.
+     * prefix is one the connection's driver refuses, or where neither the
+     * reference nor the pattern carries one: imap_list_work() and
+     * pop3_list() both answer those by sending nothing and logging nothing.
      *
      * @return array{MailboxReference, string}|null
      */
@@ -141,6 +142,10 @@ final class MailboxHierarchy
                 $spec = MailboxReference::parse($pattern, $this->service());
 
                 return [new MailboxReference($spec->displayPrefix, ''), $spec->bareReference];
+            }
+
+            if (!str_starts_with($reference, '{')) {
+                return null;
             }
 
             return [MailboxReference::parse($reference, $this->service()), $pattern];

@@ -22,6 +22,19 @@ class ImapLsubTest extends GreenmailTestCase
         $this->assertNotContains(self::mailboxSpec($unsubscribedName), $result);
     }
 
+    public function test_without_a_prefix_on_the_reference_or_the_pattern_lists_nothing(): void
+    {
+        $folderName = 'LsubBare'.uniqid();
+        $this->makeFolder($folderName);
+
+        $connection = imap_open(self::mailboxSpec('INBOX'), self::user(), self::password());
+        imap_subscribe($connection, self::mailboxSpec($folderName));
+        imap_errors();
+
+        $this->assertFalse(imap_lsub($connection, '', $folderName));
+        $this->assertFalse(imap_errors());
+    }
+
     public function test_imap_listsubscribed_is_an_alias_of_imap_lsub(): void
     {
         $uniq = uniqid();

@@ -335,11 +335,41 @@ final class Pop3Backend implements ConnectionBackend
 
     /**
      * pop3_list(): the one mailbox there is, with no hierarchy delimiter
-     * and no inferiors.
+     * and no inferiors, listed only where the pattern matches "INBOX" and
+     * the reference names no other mailbox (pop3_valid() takes nothing but
+     * INBOX, with an empty name standing for it).
      */
     public function folders(string $reference, string $pattern): array
     {
+        if (($reference !== '' && strcasecmp($reference, 'INBOX') !== 0) || !self::pmatch('INBOX', $pattern)) {
+            return [];
+        }
+
         return [new ListedFolder('INBOX', null, ['\\NoInferiors'])];
+    }
+
+    /**
+     * pmatch() as pop3_list() calls it, with no delimiter: so "%" matches
+     * across anything "*" does, and the comparison is case-sensitive, "inbox"
+     * matching nothing.
+     */
+    private static function pmatch(string $subject, string $pattern): bool
+    {
+        if ($pattern === '') {
+            return $subject === '';
+        }
+
+        if ($pattern[0] === '*' || $pattern[0] === '%') {
+            for ($i = 0; $i <= strlen($subject); $i++) {
+                if (self::pmatch(substr($subject, $i), substr($pattern, 1))) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return $subject !== '' && $subject[0] === $pattern[0] && self::pmatch(substr($subject, 1), substr($pattern, 1));
     }
 
     public function subscribedFolders(string $reference, string $pattern): array
