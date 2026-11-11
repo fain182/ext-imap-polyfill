@@ -42,6 +42,33 @@ class ImapFetchOverviewTest extends GreenmailTestCase
         $this->assertIsInt($overview->udate);
     }
 
+    /**
+     * php_imap.c writes from and to only when the envelope has an address
+     * there, and a header holding none leaves it NIL.
+     */
+    public function test_a_from_or_to_holding_no_address_sets_no_property(): void
+    {
+        $folderName = 'OverviewBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage(
+            "Subject: Nobody\r\n"
+            ."Date: Mon, 6 Jul 2026 12:00:00 +0000\r\n"
+            ."From: \r\n"
+            ."To: \r\n"
+            ."\r\n"
+            ."Body text"
+        );
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $properties = array_keys(get_object_vars(imap_fetch_overview($connection, '1')[0]));
+
+        $this->assertSame(
+            ['subject', 'date', 'size', 'uid', 'msgno', 'recent', 'flagged', 'answered', 'deleted', 'seen', 'draft', 'udate'],
+            $properties,
+        );
+    }
+
     public function test_returns_multiple_messages_for_a_range_and_a_comma_list(): void
     {
         $folderName = 'OverviewBox' . uniqid();

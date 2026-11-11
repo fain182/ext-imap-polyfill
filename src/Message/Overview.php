@@ -25,12 +25,12 @@ final class Overview
             $result->subject = $fields['subject'];
         }
 
-        if (isset($fields['from'])) {
-            $result->from = AddressList::parse($fields['from'], $defaultHost)->writeFirst();
+        if (isset($fields['from']) && ($sender = AddressList::parse($fields['from'], $defaultHost)->writeFirst()) !== null) {
+            $result->from = $sender;
         }
 
-        if (isset($fields['to'])) {
-            $result->to = AddressList::parse($fields['to'], $defaultHost)->writeFirst();
+        if (isset($fields['to']) && ($recipient = AddressList::parse($fields['to'], $defaultHost)->writeFirst()) !== null) {
+            $result->to = $recipient;
         }
 
         if (isset($fields['date'])) {
