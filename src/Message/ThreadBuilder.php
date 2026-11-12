@@ -138,15 +138,11 @@ final class ThreadBuilder
      */
     public static function flatten(array $root, bool $byUid): array
     {
-        $chain = self::chain($root);
-
-        if ($chain === null) {
-            return [];
-        }
-
+        $tree = [];
         $numNodes = 0;
+        self::flattenSiblings($root, $tree, $numNodes, $byUid);
 
-        return self::flattenNode($chain, $numNodes, $byUid);
+        return $tree;
     }
 
     /**
@@ -423,58 +419,45 @@ final class ThreadBuilder
     }
 
     /**
-     * Converts a root-level forest into c-client's THREADNODE linked
-     * representation — counter-intuitively, ->next is the *child* pointer
-     * and ->branch is the *sibling* pointer (confirmed against c-client's
-     * mail_thread_c2node()/mail_thread_sort() in mail.c, and against real
-     * ext-imap's output via `make parity`); php_imap.c's build_thread_tree
-     * walks these two fields as-is, so the polyfill's own ".num"/".next"/
-     * ".branch" output keys inherit the same swapped meaning.
+     * php_imap.c's build_thread_tree_helper over c-client's THREADNODE list,
+     * where ->next is the *child* pointer and ->branch the *sibling* one
+     * (mail_thread_c2node()/mail_thread_sort() in mail.c, and `make parity`).
+     * The output keys inherit that swapped meaning.
+     *
+     * The helper recurses on both pointers. Here siblings are a loop and only
+     * children recurse: a folder's top-level threads are one sibling list, as
+     * long as the folder has threads, and a PHP recursion that deep exhausts
+     * the C stack where the extension's small C frames do not. The
+     * branch is the helper's tail call, so the loop writes the keys and
+     * numbers the nodes in the same order.
      *
      * @param ThreadContainer[] $siblings
+     * @param array<string, int> $tree
      */
-    private static function chain(array $siblings): ?object
+    private static function flattenSiblings(array $siblings, array &$tree, int &$numNodes, bool $byUid): void
     {
-        $nodes = array_map(static fn (ThreadContainer $c): object => (object) [
-            'num' => $c->msgno,
-            'uid' => $c->uid,
-            'next' => self::chain($c->children),
-            'branch' => null,
-        ], $siblings);
+        $last = count($siblings) - 1;
 
-        for ($i = 0; $i < count($nodes) - 1; $i++) {
-            $nodes[$i]->branch = $nodes[$i + 1];
+        foreach (array_values($siblings) as $position => $container) {
+            $thisNode = $numNodes;
+            // A dummy container kept as the parent of a subject group has no
+            // message; c-client's THREADNODE carries num 0 for it.
+            $tree["{$thisNode}.num"] = ($byUid ? $container->uid : $container->msgno) ?? 0;
+
+            if ($container->children !== []) {
+                $numNodes++;
+                $tree["{$thisNode}.next"] = $numNodes;
+                self::flattenSiblings($container->children, $tree, $numNodes, $byUid);
+            } else {
+                $tree["{$thisNode}.next"] = 0;
+            }
+
+            if ($position < $last) {
+                $numNodes++;
+                $tree["{$thisNode}.branch"] = $numNodes;
+            } else {
+                $tree["{$thisNode}.branch"] = 0;
+            }
         }
-
-        return $nodes[0] ?? null;
-    }
-
-    /**
-     * @return array<string, int>
-     */
-    private static function flattenNode(object $cur, int &$numNodes, bool $byUid): array
-    {
-        $thisNode = $numNodes;
-        // A dummy container kept as the parent of a subject group has no
-        // message; c-client's THREADNODE carries num 0 for it.
-        $tree = ["{$thisNode}.num" => ($byUid ? $cur->uid : $cur->num) ?? 0];
-
-        if ($cur->next !== null) {
-            $numNodes++;
-            $tree["{$thisNode}.next"] = $numNodes;
-            $tree += self::flattenNode($cur->next, $numNodes, $byUid);
-        } else {
-            $tree["{$thisNode}.next"] = 0;
-        }
-
-        if ($cur->branch !== null) {
-            $numNodes++;
-            $tree["{$thisNode}.branch"] = $numNodes;
-            $tree += self::flattenNode($cur->branch, $numNodes, $byUid);
-        } else {
-            $tree["{$thisNode}.branch"] = 0;
-        }
-
-        return $tree;
     }
 }
