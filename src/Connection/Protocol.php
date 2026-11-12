@@ -852,6 +852,9 @@ final class Protocol implements ConnectionBackend
                 $i++;
             }
 
+            // An item the server sent no value for reads as NIL. c-client
+            // raises nothing here either: imap_parse_unsolicited() hands each
+            // item's parser whatever text follows, empty included.
             $pairs[$name] = self::value($tokens[$i++] ?? null);
         }
 

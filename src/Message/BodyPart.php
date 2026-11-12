@@ -114,6 +114,9 @@ final class BodyPart
 
         $next++; // skip md5
 
+        // A field the server left out reads as imap_parse_body_structure()
+        // reads it: bytes and lines as strtoul() of nothing, 0, and the
+        // encoding as an atom it does not know, ENCOTHER.
         return new self(
             type: $type,
             encoding: self::encodingCode((string) ($parsed[5] ?? '')),

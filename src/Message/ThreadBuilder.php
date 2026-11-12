@@ -261,7 +261,7 @@ final class ThreadBuilder
         // forward message, over whatever's currently in the table.
         $table = [];
         foreach ($root as $node) {
-            $subject = $node->isDummy() ? ($node->children[0]->baseSubject ?? '') : $node->baseSubject;
+            $subject = $node->isDummy() ? $node->children[0]->baseSubject : $node->baseSubject;
 
             if ($subject === '') {
                 continue;
@@ -288,7 +288,7 @@ final class ThreadBuilder
         // O(1) instead of scanning $result for it on every merge.
         $resultIndex = [];
         foreach ($root as $node) {
-            $subject = $node->isDummy() ? ($node->children[0]->baseSubject ?? '') : $node->baseSubject;
+            $subject = $node->isDummy() ? $node->children[0]->baseSubject : $node->baseSubject;
 
             if ($subject === '' || $original[$subject] === $node) {
                 // Only place a representative's own slot if nothing has
