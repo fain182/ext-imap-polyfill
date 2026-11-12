@@ -9,6 +9,7 @@ use ImapPolyfill\Connection\MessageCache;
 use ImapPolyfill\Connection\UidTable;
 use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Message\BodyPart;
+use ImapPolyfill\Message\Envelope;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Connection\MessageNotFoundException;
@@ -188,6 +189,20 @@ final class Pop3Backend implements ConnectionBackend
         $uid = $byUid ? $this->knownUid($messageNum) : $this->messages->uidTable()->uidOf($messageNum);
 
         return $this->structure($uid)->toBodyPart();
+    }
+
+    public function fetchEnvelopes(array $ids, UidMode $uidMode, array $with = []): array
+    {
+        $messages = [];
+
+        foreach ($this->fetch([...$with, 'RFC822.HEADER'], $ids, null, $uidMode) as $id => $message) {
+            $message = is_array($message) ? $message : ['RFC822.HEADER' => $message];
+            $message['ENVELOPE'] = Envelope::fromHeader($message['RFC822.HEADER'], $this->host);
+            unset($message['RFC822.HEADER']);
+            $messages[$id] = $message;
+        }
+
+        return $messages;
     }
 
     public function search(SearchProgram $program, UidMode $uidMode, ?string $charset = null): array

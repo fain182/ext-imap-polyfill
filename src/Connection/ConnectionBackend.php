@@ -3,6 +3,7 @@
 namespace ImapPolyfill\Connection;
 
 use ImapPolyfill\Message\BodyPart;
+use ImapPolyfill\Message\Envelope;
 
 use ImapPolyfill\Message\SearchProgram;
 
@@ -70,6 +71,18 @@ interface ConnectionBackend
     public function appendMessage(string $folder, string $message, ?array $flags, ?string $internalDate): void;
 
     public function fetchBodyStructure(int $messageNum, bool $byUid): BodyPart;
+
+    /**
+     * Each message's Envelope under 'ENVELOPE', beside the plain FETCH
+     * items in $with, in one request; keyed by the ids asked for, and a
+     * message the server did not answer for is left out.
+     *
+     * @param list<int> $ids
+     * @param list<string> $with
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function fetchEnvelopes(array $ids, UidMode $uidMode, array $with = []): array;
 
     /**
      * @param SearchProgram $program the parsed criteria; the IMAP backend writes

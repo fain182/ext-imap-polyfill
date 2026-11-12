@@ -2,51 +2,47 @@
 
 namespace ImapPolyfill\Message;
 
-use ImapPolyfill\Address\AddressList;
-
 final class Overview
 {
     /**
      * @param string[] $flags
      */
     public static function build(
-        string $rawHeader,
+        Envelope $envelope,
         array $flags,
         string $internalDate,
         int $size,
         int $uid,
         int $msgno,
-        string $defaultHost,
     ): \stdClass {
-        $fields = RawHeaderFields::parse($rawHeader)->toArray();
         $result = new \stdClass();
 
-        if (isset($fields['subject'])) {
-            $result->subject = $fields['subject'];
+        if ($envelope->subject !== null) {
+            $result->subject = $envelope->subject;
         }
 
-        if (isset($fields['from']) && ($sender = AddressList::parse($fields['from'], $defaultHost)->writeFirst()) !== null) {
+        if (($sender = $envelope->from()?->writeFirst()) !== null) {
             $result->from = $sender;
         }
 
-        if (isset($fields['to']) && ($recipient = AddressList::parse($fields['to'], $defaultHost)->writeFirst()) !== null) {
+        if (($recipient = $envelope->to()?->writeFirst()) !== null) {
             $result->to = $recipient;
         }
 
-        if (isset($fields['date'])) {
-            $result->date = $fields['date'];
+        if ($envelope->date !== null) {
+            $result->date = $envelope->date;
         }
 
-        if (isset($fields['message-id'])) {
-            $result->message_id = $fields['message-id'];
+        if ($envelope->messageId !== null) {
+            $result->message_id = $envelope->messageId;
         }
 
-        if (isset($fields['references'])) {
-            $result->references = $fields['references'];
+        if ($envelope->references !== null) {
+            $result->references = $envelope->references;
         }
 
-        if (isset($fields['in-reply-to'])) {
-            $result->in_reply_to = $fields['in-reply-to'];
+        if ($envelope->inReplyTo !== null) {
+            $result->in_reply_to = $envelope->inReplyTo;
         }
 
         $result->size = $size;

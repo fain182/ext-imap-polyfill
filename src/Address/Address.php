@@ -348,6 +348,20 @@ final class Address
         return $route;
     }
 
+    /**
+     * One (personal adl mailbox host) tuple of an IMAP ENVELOPE, taken as
+     * imap_parse_address() takes it: each field as the server sent it, a
+     * NIL host marking the start (named) or end (unnamed) of a group.
+     *
+     * @param list<mixed> $tuple
+     */
+    public static function fromEnvelope(array $tuple): self
+    {
+        $field = static fn (int $index): ?string => isset($tuple[$index]) ? (string) $tuple[$index] : null;
+
+        return new self($field(2), $field(3), $field(0), $field(1));
+    }
+
     /** The entry c-client emits where a group begins: its name, and nothing else. */
     public static function groupStart(string $name): self
     {

@@ -2,53 +2,21 @@
 
 namespace ImapPolyfill\Message;
 
-use ImapPolyfill\Address\AddressList;
-
 final class HeaderInfo
 {
-    /**
-     * In the order php_imap.c writes them into the envelope object.
-     *
-     * Return-Path is deliberately not one of them: _php_make_header_object()
-     * would write the property, but rfc822_parse_msg_full()'s header dispatch
-     * has no case for that header — its 'R' arm knows Reply-To and References
-     * and nothing else — so env->return_path is left NIL for anything parsed
-     * out of header text. The only place c-client ever fills it is an envelope
-     * built by imap_mail_compose(), which is not this one.
-     */
-    private const ADDRESS_HEADERS = [
-        'to' => 'to',
-        'from' => 'from',
-        'cc' => 'cc',
-        'bcc' => 'bcc',
-        'reply-to' => 'reply_to',
-        'sender' => 'sender',
-    ];
-
-    /**
-     * The FETCH items build() needs, in one place because two callers ask
-     * for them — imap_headerinfo() for one message, imap_sort()'s local
-     * fallback for the whole folder — and a field added here has to be
-     * added to the request or it will not be there to read.
-     *
-     * @var list<string>
-     */
-    public const FETCH_ITEMS = ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'];
-
     /**
      * @param string[] $flags
      */
     public static function build(
-        string $rawHeader,
+        Envelope $envelope,
         array $flags,
         string $internalDate,
         string $size,
         int $msgno,
-        string $defaultHost,
         int $fromLength = 0,
         int $subjectLength = 0,
     ): \stdClass {
-        [$result, $from] = self::envelope($rawHeader, $defaultHost);
+        $result = $envelope->toObject();
 
         $result->Recent = in_array('\\Recent', $flags, true)
             ? (in_array('\\Seen', $flags, true) ? 'R' : 'N')
@@ -66,106 +34,13 @@ final class HeaderInfo
 
         // Like ext-imap: only present when a length was requested and the
         // envelope has the source field.
-        if ($fromLength !== 0 && $from !== null) {
+        if ($fromLength !== 0 && ($from = $envelope->from()) !== null) {
             $result->fetchfrom = $from->fetchFrom($fromLength);
         }
-        if ($subjectLength !== 0 && isset($result->subject)) {
-            $result->fetchsubject = substr($result->subject, 0, $subjectLength);
+        if ($subjectLength !== 0 && $envelope->subject !== null) {
+            $result->fetchsubject = substr($envelope->subject, 0, $subjectLength);
         }
 
         return $result;
-    }
-
-    /**
-     * The subset shared with imap_rfc822_parse_headers(): header-derived
-     * fields only, none of the connection/message-state properties
-     * (Recent/Unseen/.../Msgno/MailDate/Size/udate) a standalone header
-     * string has no data for.
-     */
-    public static function buildFromHeaderOnly(string $rawHeader, string $defaultHost): \stdClass
-    {
-        return self::envelope($rawHeader, $defaultHost)[0];
-    }
-
-    /**
-     * The envelope object, and the From list it was written from: what
-     * mail_fetchfrom() reads is the parsed list, not the legacy objects.
-     *
-     * @return array{\stdClass, ?AddressList}
-     */
-    private static function envelope(string $rawHeader, string $defaultHost): array
-    {
-        $fields = RawHeaderFields::parse($rawHeader);
-        $result = new \stdClass();
-
-        // php_imap.c fills the envelope in this order, and the order is
-        // observable: foreach, get_object_vars() and var_dump() all show it.
-        // Note that each address list is preceded by its raw "*address"
-        // string, not followed by it.
-        // Each of these is written once and kept: a second Date header is
-        // read and dropped, since c-client only fills a field it has not
-        // filled yet.
-        if (($date = $fields->first('date')) !== null) {
-            $result->date = $date;
-            $result->Date = $date;
-        }
-
-        if (($subject = $fields->first('subject')) !== null) {
-            $result->subject = $subject;
-            $result->Subject = $subject;
-        }
-
-        foreach (['in-reply-to' => 'in_reply_to', 'message-id' => 'message_id', 'references' => 'references'] as $header => $property) {
-            if (($value = $fields->first($header)) !== null) {
-                $result->$property = $value;
-            }
-        }
-
-        // Parsed where each header stands, which is not the order the
-        // properties are written in below: c-client's dispatch reaches the
-        // headers in the order the message wrote them, and two malformed
-        // ones put their complaints on the error stack in that order.
-        $parsed = [];
-
-        foreach ($fields->lines() as [$header, $value]) {
-            $property = self::ADDRESS_HEADERS[$header] ?? null;
-
-            if ($property === null) {
-                continue;
-            }
-
-            $addresses = AddressList::parse($value, $defaultHost);
-            $parsed[$property] = isset($parsed[$property])
-                ? $parsed[$property]->append($addresses)
-                : $addresses;
-        }
-
-        foreach (self::ADDRESS_HEADERS as $property) {
-            $addresses = $parsed[$property] ?? null;
-
-            // rfc822_parse_msg() copies From into a Reply-To or Sender it
-            // left NIL, inside the envelope, so php_imap.c writes the copy in
-            // the envelope's own order: reply_to, then sender, whichever of
-            // the two the message had.
-            if (($property === 'reply_to' || $property === 'sender') && ($addresses === null || $addresses->isEmpty())) {
-                $addresses = $parsed['from'] ?? null;
-            }
-
-            // Both properties are guarded on the parsed list, not on the
-            // header being there: php_imap.c's UPDATE_PROPERTY_PARSED_ADDRESS
-            // tests en->to and friends, which a header holding nothing an
-            // address parser can use leaves NIL.
-            if ($addresses === null || $addresses->isEmpty()) {
-                continue;
-            }
-
-            // Not the header text: the "*address" string is written back out
-            // of what was parsed, so it carries the default host, the markers
-            // and the quoting c-client put there rather than what was read.
-            $result->{$property.'address'} = $addresses->write();
-            $result->$property = $addresses->toLegacyArray();
-        }
-
-        return [$result, isset($result->from) ? $parsed['from'] : null];
     }
 }

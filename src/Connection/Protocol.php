@@ -14,6 +14,7 @@ use ImapPolyfill\Connection\Imap\ImapEngineConnection;
 use ImapPolyfill\Connection\Imap\TimedStream;
 use ImapPolyfill\Mailbox\MailboxSpec;
 use ImapPolyfill\Message\BodyPart;
+use ImapPolyfill\Message\Envelope;
 use ImapPolyfill\Message\SearchKey;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Support\CommandArgument;
@@ -496,6 +497,33 @@ final class Protocol implements ConnectionBackend
         }
 
         return BodyPart::fromBodyStructure($structure);
+    }
+
+    /**
+     * imap_fetchenvelope()'s request: ENVELOPE, and beside it the header
+     * text of what ENVELOPE has no slot for. c-client's list names
+     * Newsgroups, Followup-To and the Content-* fields too; References is
+     * the one an envelope here carries.
+     */
+    public function fetchEnvelopes(array $ids, UidMode $uidMode, array $with = []): array
+    {
+        $data = $this->fetch([...$with, 'ENVELOPE', 'BODY.PEEK[HEADER.FIELDS (REFERENCES)]'], $ids, null, $uidMode);
+
+        $messages = [];
+
+        foreach ($data as $id => $message) {
+            $envelope = $message['ENVELOPE'];
+
+            if ($envelope !== null && !is_array($envelope)) {
+                throw new \RuntimeException('ENVELOPE in FETCH response is not a list');
+            }
+
+            $message['ENVELOPE'] = Envelope::fromImap($envelope, (string) $message['BODY[HEADER.FIELDS (REFERENCES)]']);
+            unset($message['BODY[HEADER.FIELDS (REFERENCES)]']);
+            $messages[$id] = $message;
+        }
+
+        return $messages;
     }
 
     /**

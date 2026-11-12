@@ -42,6 +42,22 @@ final class AddressList
         return new self([...$this->addresses, ...$other->addresses]);
     }
 
+    /**
+     * The address list of an IMAP ENVELOPE: the server has already parsed
+     * it, so nothing is read and nothing goes on the error stack.
+     *
+     * @param list<mixed> $tuples
+     */
+    public static function fromEnvelope(array $tuples): self
+    {
+        return new self(array_map(
+            static fn (mixed $tuple): Address => is_array($tuple)
+                ? Address::fromEnvelope($tuple)
+                : throw new \RuntimeException('ENVELOPE address is not a list'),
+            $tuples,
+        ));
+    }
+
     public static function parse(string $addresses, string $defaultHostname): self
     {
         $cursor = new Rfc822Cursor($addresses);

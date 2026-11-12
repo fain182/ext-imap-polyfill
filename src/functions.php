@@ -457,7 +457,7 @@ if (!function_exists('imap_mime_header_decode')) {
 if (!function_exists('imap_rfc822_parse_headers')) {
     function imap_rfc822_parse_headers(string $headers, string $default_hostname = 'UNKNOWN'): \stdClass
     {
-        return \ImapPolyfill\Message\HeaderInfo::buildFromHeaderOnly($headers, $default_hostname);
+        return \ImapPolyfill\Message\Envelope::fromHeader($headers, $default_hostname)->toObject();
     }
 }
 

@@ -250,11 +250,10 @@ final class Mailbox
         }
 
         try {
-            $data = $this->connection->backend()->fetch(
-                HeaderInfo::FETCH_ITEMS,
+            $data = $this->connection->backend()->fetchEnvelopes(
                 [$messageNum],
-                null,
                 UidMode::Msgno,
+                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE'],
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -269,12 +268,11 @@ final class Mailbox
         $message = $data[$messageNum];
 
         return HeaderInfo::build(
-            $message['RFC822.HEADER'],
+            $message['ENVELOPE'],
             $message['FLAGS'],
             $message['INTERNALDATE'],
             $message['RFC822.SIZE'],
             $messageNum,
-            $this->connection->backend()->host(),
             $fromLength,
             $subjectLength,
         );
@@ -313,7 +311,7 @@ final class Mailbox
                 return [];
             }
 
-            $data = $protocol->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode);
+            $data = $protocol->fetchEnvelopes($ids, $uidMode, ['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE']);
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -334,13 +332,12 @@ final class Mailbox
             $msgno = $uidMode === UidMode::Uid ? $folder->msgnoOf($id) : $id;
 
             $result[] = Overview::build(
-                $message['RFC822.HEADER'],
+                $message['ENVELOPE'],
                 $message['FLAGS'],
                 $message['INTERNALDATE'],
                 (int) $message['RFC822.SIZE'],
                 $uid,
                 $msgno,
-                $this->connection->backend()->host(),
             );
         }
 
@@ -809,7 +806,7 @@ final class Mailbox
 
             $ids = range(1, $exists);
             $data = $this->connection->backend()->fetch(
-                HeaderInfo::FETCH_ITEMS,
+                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
                 $ids,
                 null,
                 UidMode::Msgno,

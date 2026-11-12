@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
+use ImapPolyfill\Message\Envelope;
 use ImapPolyfill\Message\Overview;
 use PHPUnit\Framework\TestCase;
 
@@ -15,7 +16,7 @@ class OverviewTest extends TestCase
             ."References: <first@example.com> <original@example.com>\r\n"
             ."\r\n";
 
-        $result = Overview::build($raw, [], '06-Jul-2026 12:00:00 +0000', 100, 1, 1, 'example.com');
+        $result = Overview::build(Envelope::fromHeader($raw, 'example.com'), [], '06-Jul-2026 12:00:00 +0000', 100, 1, 1);
 
         $this->assertSame('<abc123@example.com>', $result->message_id);
         $this->assertSame('<original@example.com>', $result->in_reply_to);
@@ -26,7 +27,7 @@ class OverviewTest extends TestCase
     {
         $raw = "Subject: Hello\r\n\r\n";
 
-        $result = Overview::build($raw, [], '06-Jul-2026 12:00:00 +0000', 100, 1, 1, 'example.com');
+        $result = Overview::build(Envelope::fromHeader($raw, 'example.com'), [], '06-Jul-2026 12:00:00 +0000', 100, 1, 1);
 
         $this->assertObjectNotHasProperty('message_id', $result);
         $this->assertObjectNotHasProperty('in_reply_to', $result);
