@@ -31,6 +31,22 @@ today produces it.
   they look like bugs: callers may depend on them. Crashes, leaks and
   undefined behaviour are not replicated.
 
+A defect is not worth porting when matching it would take more code only
+to answer worse. Imitate what a caller reads: the order, the shape, the
+markers, however odd. Do not build machinery to lose what the caller asked
+for. `imap_fetch_overview()` cuts the From and To lists short in c-client's
+envelope cache, so a later `imap_headerinfo()` on the same message reports
+one recipient; matching it would mean state carried from one call to the
+next, kept for no other purpose. Code written against ext-imap does not rely
+on that and works the same with every recipient there, so it is not
+replicated, and not listed as a divergence either.
+
+The cost that counts is the cost of the defect, not of the feature around
+it. Porting c-client's address parser was expensive, but `from` needs it
+anyway; writing `fromaddress` back out of the parsed list instead of
+copying the header text is one call on top, so it is matched, markers and
+all.
+
 ## Same behaviour, form free
 
 - The same text in a different byte form (NFC or NFD, case canonicalization
