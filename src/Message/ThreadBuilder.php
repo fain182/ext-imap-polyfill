@@ -425,9 +425,9 @@ final class ThreadBuilder
      * The output keys inherit that swapped meaning.
      *
      * The helper recurses on both pointers. Here siblings are a loop and only
-     * children recurse: a folder's top-level threads are one sibling list, as
-     * long as the folder has threads, and a PHP recursion that deep exhausts
-     * the C stack where the extension's small C frames do not. The
+     * children recurse: every top-level thread of a folder is a sibling of
+     * the others, and a PHP recursion that deep exhausts the C stack where
+     * the extension's small C frames do not. The
      * branch is the helper's tail call, so the loop writes the keys and
      * numbers the nodes in the same order.
      *
