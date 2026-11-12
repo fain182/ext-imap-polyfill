@@ -73,7 +73,7 @@ CONFIG_LABEL := ext-imap-polyfill.config
 FILTER ?=
 PHPUNIT_FILTER := $(if $(FILTER),--filter '$(FILTER)')
 
-.PHONY: arch fuzz install install-lowest check lint test test-unit test-integration cross-check phpstan phpt greenmail-up greenmail-down dovecot-up dovecot-down fixtures-down parity parity-build
+.PHONY: arch fuzz install install-lowest check lint test test-unit test-integration cross-check phpstan phpt greenmail-up greenmail-down dovecot-up dovecot-down fixtures-down parity parity-build realmail
 
 install:
 	composer install
@@ -278,3 +278,19 @@ fuzz: parity-build
 		sh -c 'php -m | grep -q imap && php tests/fuzz/evaluate.php tests/fuzz/run/corpus' \
 		> $(FUZZ_DIR)/answers.real
 	php tests/fuzz/compare.php $(FUZZ_DIR)/corpus $(FUZZ_DIR)/answers.polyfill $(FUZZ_DIR)/answers.real
+
+## The same diff over a real account instead of a generated corpus, read
+## only (see tests/realmail/README.md). REALMAIL_ACCOUNT names the INI file
+## with the credentials; each account gets its own run directory.
+REALMAIL_ACCOUNT ?= .env.realmail
+REALMAIL_DIR := tests/realmail/run/$(notdir $(REALMAIL_ACCOUNT))
+
+realmail: parity-build
+	@test -f $(REALMAIL_ACCOUNT) || { echo "No $(REALMAIL_ACCOUNT): see tests/realmail/README.md"; exit 2; }
+	@mkdir -p $(REALMAIL_DIR)
+	php tests/realmail/snapshot.php $(REALMAIL_ACCOUNT) > $(REALMAIL_DIR)/corpus
+	php tests/realmail/crawl.php $(REALMAIL_ACCOUNT) $(REALMAIL_DIR)/corpus > $(REALMAIL_DIR)/answers.polyfill
+	$(CONTAINER_RUNTIME) run --rm -v $(CURDIR):/app:Z $(PARITY_IMAGE) \
+		sh -c 'php -m | grep -q imap && php tests/realmail/crawl.php $(REALMAIL_ACCOUNT) $(REALMAIL_DIR)/corpus' \
+		> $(REALMAIL_DIR)/answers.real
+	php tests/fuzz/compare.php $(REALMAIL_DIR)/corpus $(REALMAIL_DIR)/answers.polyfill $(REALMAIL_DIR)/answers.real

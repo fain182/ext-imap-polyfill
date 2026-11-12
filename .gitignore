@@ -19,3 +19,7 @@ tests/phpt/tests/*.sh
 tests/phpt/run.log
 
 tests/fuzz/run/
+
+# Real mail: credentials and answers stay on this machine
+.env.realmail*
+tests/realmail/run/
