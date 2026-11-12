@@ -29,69 +29,9 @@ if (!extension_loaded('imap')) {
 }
 
 require __DIR__.'/account.php';
+require __DIR__.'/../fuzz/answer.php';
 
 $account = realmailAccount($accountPath);
-
-/**
- * tests/fuzz/evaluate.php's encoding, with one change: an answer longer
- * than an attachment worth reading is replaced by its length and hash, or a
- * mailbox of PDFs makes answer files nobody can diff.
- */
-function encode(mixed $value): string
-{
-    if (is_string($value)) {
-        return strlen($value) > 65536
-            ? 'big:'.strlen($value).':'.sha1($value)
-            : 'hex:'.bin2hex($value);
-    }
-
-    if (is_object($value)) {
-        return '{'.encode(get_object_vars($value)).'}';
-    }
-
-    if (is_array($value)) {
-        $parts = [];
-
-        foreach ($value as $key => $item) {
-            $parts[] = (is_int($key) ? (string) $key : 'hex:'.bin2hex($key)).'=>'.encode($item);
-        }
-
-        return '['.implode(',', $parts).']';
-    }
-
-    return get_debug_type($value).':'.var_export($value, true);
-}
-
-function answer(int $index, string $label, callable $call): void
-{
-    imap_errors();
-    $warnings = [];
-
-    // Severity is not compared, as in the fuzzer: E_USER_WARNING against
-    // E_WARNING is a documented userland limit.
-    set_error_handler(static function (int $severity, string $message) use (&$warnings): bool {
-        $warnings[] = $message;
-
-        return true;
-    });
-
-    try {
-        $answer = encode($call());
-    } catch (\Throwable $thrown) {
-        $answer = 'threw:'.$thrown::class.':'.encode($thrown->getMessage());
-    } finally {
-        restore_error_handler();
-    }
-
-    printf(
-        "%d\t%s\t%s\terrors=%s\twarnings=%s\n",
-        $index,
-        $label,
-        $answer,
-        encode(imap_errors() ?: []),
-        encode($warnings),
-    );
-}
 
 /**
  * Uids the snapshot did not see are dropped from a folder-wide answer: mail
@@ -177,17 +117,26 @@ while (($line = fgets($handle)) !== false) {
 
         case 'message':
             $uid = $item['uid'];
-            answer($index, 'msgno', static fn () => imap_msgno($connection, $uid));
+            $msgno = 0;
+            $header = '';
+            answer($index, 'msgno', static function () use ($connection, $uid, &$msgno): int {
+                return $msgno = imap_msgno($connection, $uid);
+            });
             answer($index, 'fetch_overview', static fn () => imap_fetch_overview($connection, (string) $uid, FT_UID));
-            answer($index, 'headerinfo', static fn () => imap_headerinfo($connection, imap_msgno($connection, $uid)));
+            answer($index, 'headerinfo', static fn () => imap_headerinfo($connection, $msgno));
             answer($index, 'fetchstructure', static fn () => imap_fetchstructure($connection, $uid, FT_UID));
-            answer($index, 'fetchheader', static fn () => imap_fetchheader($connection, $uid, FT_UID));
-            answer($index, 'parse_headers', static fn () => imap_rfc822_parse_headers((string) imap_fetchheader($connection, $uid, FT_UID)));
+            answer($index, 'fetchheader', static function () use ($connection, $uid, &$header): string|false {
+                $fetched = imap_fetchheader($connection, $uid, FT_UID);
+                $header = (string) $fetched;
+
+                return $fetched;
+            });
+            answer($index, 'parse_headers', static fn () => imap_rfc822_parse_headers($header));
 
             foreach ($item['sections'] as $section) {
                 answer($index, 'fetchbody', static fn () => imap_fetchbody($connection, $uid, $section, FT_UID | FT_PEEK));
                 answer($index, 'fetchmime', static fn () => imap_fetchmime($connection, $uid, $section, FT_UID | FT_PEEK));
-                answer($index, 'bodystruct', static fn () => imap_bodystruct($connection, imap_msgno($connection, $uid), $section));
+                answer($index, 'bodystruct', static fn () => imap_bodystruct($connection, $msgno, $section));
             }
             break;
 
@@ -196,7 +145,7 @@ while (($line = fgets($handle)) !== false) {
             answer($index, 'mime_header_decode', static fn () => imap_mime_header_decode($value));
             answer($index, 'utf8', static fn () => imap_utf8($value));
 
-            if ($item['name'] !== 'Subject') {
+            if ($item['name'] !== 'subject') {
                 answer($index, 'parse_adrlist', static fn () => imap_rfc822_parse_adrlist($value, 'default.host'));
             }
             break;

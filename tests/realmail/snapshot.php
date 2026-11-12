@@ -57,17 +57,19 @@ function sections(object $part, string $prefix = ''): array
 }
 
 /**
- * The header fields worth decoding on their own, unfolded, as raw as the
- * server sent them.
+ * The header fields worth decoding on their own, unfolded, as
+ * RawHeaderFields reads them out of the header block.
  *
- * @return list<array{string, string}>
+ * @return list<array{0: string, 1: string}>
  */
 function headerFields(string $header): array
 {
-    $unfolded = preg_replace('/\r?\n[ \t]+/', ' ', $header);
-    preg_match_all('/^(Subject|From|To|Cc|Reply-To|Sender|Return-Path):[ \t]*(.*?)\r?$/mi', $unfolded, $matches, PREG_SET_ORDER);
+    $wanted = ['subject', 'from', 'to', 'cc', 'reply-to', 'sender', 'return-path'];
 
-    return array_map(static fn (array $match): array => [ucfirst(strtolower($match[1])), $match[2]], $matches);
+    return array_values(array_filter(
+        \ImapPolyfill\Message\RawHeaderFields::parse($header)->lines(),
+        static fn (array $line): bool => in_array($line[0], $wanted, true),
+    ));
 }
 
 $connection = realmailOpen($account, $account['folders'][0]);
