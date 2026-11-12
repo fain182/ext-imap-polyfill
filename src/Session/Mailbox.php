@@ -517,7 +517,7 @@ final class Mailbox
             return false;
         }
 
-        return BodyStructure::build($node);
+        return BodyStructure::populate($node);
     }
 
     /**

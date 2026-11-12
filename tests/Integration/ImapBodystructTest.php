@@ -62,6 +62,47 @@ class ImapBodystructTest extends GreenmailTestCase
         $this->assertSame('test.bin', $part2->dparameters[0]->value);
     }
 
+    /**
+     * imap_fetchstructure() hangs a multipart's children under `parts`;
+     * imap_bodystruct() describes the one section it was asked for and
+     * nothing below it.
+     */
+    public function test_a_multipart_section_comes_back_without_its_parts(): void
+    {
+        $folderName = 'BodystructBox'.uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $message = "Subject: Nested\r\n"
+            ."MIME-Version: 1.0\r\n"
+            ."Content-Type: multipart/mixed; boundary=\"B1\"\r\n"
+            ."\r\n"
+            ."--B1\r\n"
+            ."Content-Type: multipart/alternative; boundary=\"B2\"\r\n"
+            ."\r\n"
+            ."--B2\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."Plain alt\r\n"
+            ."--B2\r\n"
+            ."Content-Type: text/html\r\n"
+            ."\r\n"
+            ."<b>Html alt</b>\r\n"
+            ."--B2--\r\n"
+            ."--B1\r\n"
+            ."Content-Type: application/octet-stream\r\n"
+            ."\r\n"
+            ."AAAA\r\n"
+            ."--B1--\r\n";
+        $seedClient->getFolder($folderName)->appendMessage($message);
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+
+        $alternative = imap_bodystruct($connection, 1, '1');
+
+        $this->assertSame(1, $alternative->type); // TYPEMULTIPART
+        $this->assertSame('ALTERNATIVE', $alternative->subtype);
+        $this->assertObjectNotHasProperty('parts', $alternative);
+    }
+
     public function test_returns_structure_of_a_nested_subpart(): void
     {
         $folderName = 'BodystructBox'.uniqid();

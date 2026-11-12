@@ -5,13 +5,31 @@ namespace ImapPolyfill\Message;
 final class BodyStructure
 {
     /**
-     * The object imap_fetchstructure() and imap_bodystruct() return, with
-     * the properties in the order php_imap_populate_body_struct_object()
-     * sets them and `parts` last, as _php_imap_add_body() adds it: the
-     * order is what var_dump(), json_encode() and a foreach over the object
-     * show.
+     * The object imap_fetchstructure() returns: populate()'s properties and
+     * `parts` last, as _php_imap_add_body() adds it.
      */
     public static function build(BodyPart $body): \stdClass
+    {
+        $result = self::populate($body);
+
+        // An empty part of a digest is a message/rfc822 with no body in it,
+        // which _php_imap_add_body() goes on to read through a NULL pointer.
+        // No parts is the nearest answer that does not crash.
+        if ($body->type === BodyPart::TYPE_MULTIPART || $body->parts !== []) {
+            $result->parts = array_map(self::build(...), $body->parts);
+        }
+
+        return $result;
+    }
+
+    /**
+     * The object imap_bodystruct() returns: php_imap.c fills it with
+     * php_imap_populate_body_struct_object() alone and never calls
+     * _php_imap_add_body(), so a multipart section comes back without
+     * `parts`. The properties are in that function's order, which is what
+     * var_dump(), json_encode() and a foreach over the object show.
+     */
+    public static function populate(BodyPart $body): \stdClass
     {
         $result = new \stdClass();
         $result->type = $body->type;
@@ -53,13 +71,6 @@ final class BodyStructure
 
         $result->ifparameters = $body->parameters !== [] ? 1 : 0;
         $result->parameters = $body->parameters === [] ? new \stdClass() : self::pairsToObjects($body->parameters);
-
-        // An empty part of a digest is a message/rfc822 with no body in it,
-        // which _php_imap_add_body() goes on to read through a NULL pointer.
-        // No parts is the nearest answer that does not crash.
-        if ($body->type === BodyPart::TYPE_MULTIPART || $body->parts !== []) {
-            $result->parts = array_map(self::build(...), $body->parts);
-        }
 
         return $result;
     }
