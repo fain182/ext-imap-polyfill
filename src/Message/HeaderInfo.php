@@ -143,6 +143,14 @@ final class HeaderInfo
         foreach (self::ADDRESS_HEADERS as $property) {
             $addresses = $parsed[$property] ?? null;
 
+            // rfc822_parse_msg() copies From into a Reply-To or Sender it
+            // left NIL, inside the envelope, so php_imap.c writes the copy in
+            // the envelope's own order: reply_to, then sender, whichever of
+            // the two the message had.
+            if (($property === 'reply_to' || $property === 'sender') && ($addresses === null || $addresses->isEmpty())) {
+                $addresses = $parsed['from'] ?? null;
+            }
+
             // Both properties are guarded on the parsed list, not on the
             // header being there: php_imap.c's UPDATE_PROPERTY_PARSED_ADDRESS
             // tests en->to and friends, which a header holding nothing an
@@ -156,14 +164,6 @@ final class HeaderInfo
             // and the quoting c-client put there rather than what was read.
             $result->{$property.'address'} = $addresses->write();
             $result->$property = $addresses->toLegacyArray();
-        }
-
-        // RFC 5322: Reply-To and Sender default to From when not explicitly set.
-        foreach (['reply_to', 'sender'] as $property) {
-            if (!isset($result->$property) && isset($result->from)) {
-                $result->{$property.'address'} = $result->fromaddress;
-                $result->$property = $result->from;
-            }
         }
 
         return [$result, isset($result->from) ? $parsed['from'] : null];

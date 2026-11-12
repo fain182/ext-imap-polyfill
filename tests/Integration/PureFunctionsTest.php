@@ -437,6 +437,21 @@ final class PureFunctionsTest extends TestCase
     }
 
     /**
+     * The copy of From that stands in for a missing Reply-To is made inside
+     * the envelope, so it is written where reply_to always goes: before a
+     * Sender the message did have.
+     */
+    public function test_a_reply_to_copied_from_from_still_precedes_sender(): void
+    {
+        $headers = "From: a@b.com\r\nSender: s@b.com\r\nSubject: Ciao\r\n\r\n";
+
+        $this->assertSame(
+            ['subject', 'Subject', 'fromaddress', 'from', 'reply_toaddress', 'reply_to', 'senderaddress', 'sender'],
+            array_keys(get_object_vars(imap_rfc822_parse_headers($headers))),
+        );
+    }
+
+    /**
      * @return array<string, array{string, string|null}>
      */
     public static function writtenAddressFields(): array
