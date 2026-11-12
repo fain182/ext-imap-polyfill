@@ -18,6 +18,10 @@ class ImapStatusTest extends GreenmailTestCase
         $status = imap_status($connection, self::mailboxSpec($folderName), SA_ALL);
 
         $this->assertIsObject($status);
+        $this->assertSame(
+            ['flags', 'messages', 'recent', 'unseen', 'uidnext', 'uidvalidity'],
+            array_keys(get_object_vars($status)),
+        );
         $this->assertSame(2, $status->messages);
         $this->assertSame(1, $status->unseen);
         $this->assertIsInt($status->recent);

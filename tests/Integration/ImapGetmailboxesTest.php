@@ -24,6 +24,7 @@ class ImapGetmailboxesTest extends GreenmailTestCase
         $this->assertContains(self::mailboxSpec($folderName), $names);
 
         $match = array_values(array_filter($result, static fn (\stdClass $m) => $m->name === self::mailboxSpec($folderName)))[0];
+        $this->assertSame(['name', 'attributes', 'delimiter'], array_keys(get_object_vars($match)));
         $this->assertSame('.', $match->delimiter);
         $this->assertIsInt($match->attributes);
     }

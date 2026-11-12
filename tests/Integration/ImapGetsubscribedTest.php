@@ -30,6 +30,7 @@ class ImapGetsubscribedTest extends GreenmailTestCase
         $this->assertNotContains(self::mailboxSpec($unsubscribedName), $names);
 
         $match = array_values(array_filter($result, static fn (\stdClass $m) => $m->name === self::mailboxSpec($subscribedName)))[0];
+        $this->assertSame(['name', 'attributes', 'delimiter'], array_keys(get_object_vars($match)));
         $this->assertSame('.', $match->delimiter);
         $this->assertIsInt($match->attributes);
     }

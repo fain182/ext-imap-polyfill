@@ -21,6 +21,10 @@ class ImapBodystructTest extends GreenmailTestCase
         $result = imap_bodystruct($connection, 1, '1');
 
         $this->assertInstanceOf(\stdClass::class, $result);
+        $this->assertSame(
+            ['type', 'encoding', 'ifsubtype', 'subtype', 'ifdescription', 'ifid', 'lines', 'bytes', 'ifdisposition', 'ifdparameters', 'ifparameters', 'parameters'],
+            array_keys(get_object_vars($result)),
+        );
         $this->assertSame(0, $result->type); // TYPETEXT
         $this->assertSame('PLAIN', $result->subtype);
         $this->assertSame('us-ascii', $result->parameters[0]->value);
