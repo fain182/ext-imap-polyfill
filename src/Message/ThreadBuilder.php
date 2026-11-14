@@ -26,7 +26,7 @@ final class ThreadBuilder
      * reads the envelope, falling back to the first In-Reply-To id when
      * References yields none.
      *
-     * @param array<int, array<string, mixed>> $data msgno => wire fetch data
+     * @param array<int, array<string, mixed>> $data msgno => UID, INTERNALDATE and the ENVELOPE as an Envelope
      * @param int[] $ids msgnos to include, in order
      * @param bool $fromOverview whether the driver has an overview
      *
@@ -42,21 +42,22 @@ final class ThreadBuilder
             }
 
             $message = $data[$msgno];
-            $fields = RawHeaderFields::parse($message['RFC822.HEADER'])->toArray();
-            $refs = MessageId::all($fields['references'] ?? '');
+            /** @var Envelope $envelope */
+            $envelope = $message['ENVELOPE'];
+            $refs = MessageId::all($envelope->references ?? '');
 
             if ($refs === [] && !$fromOverview) {
-                $first = MessageId::first($fields['in-reply-to'] ?? '');
+                $first = MessageId::first($envelope->inReplyTo ?? '');
                 $refs = $first === null ? [] : [$first];
             }
 
             $messages[] = [
                 'msgno' => $msgno,
                 'uid' => (int) $message['UID'],
-                'messageId' => MessageId::first($fields['message-id'] ?? ''),
+                'messageId' => MessageId::first($envelope->messageId ?? ''),
                 'refs' => $refs,
-                'subject' => $fields['subject'] ?? '',
-                'date' => strtotime($fields['date'] ?? '') ?: (strtotime($message['INTERNALDATE']) ?: 0),
+                'subject' => $envelope->subject ?? '',
+                'date' => strtotime($envelope->date ?? '') ?: (strtotime($message['INTERNALDATE']) ?: 0),
             ];
         }
 

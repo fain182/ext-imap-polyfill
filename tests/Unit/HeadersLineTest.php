@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
+use ImapPolyfill\Message\Envelope;
 use ImapPolyfill\Message\HeadersLine;
 use PHPUnit\Framework\TestCase;
 
@@ -15,12 +16,11 @@ class HeadersLineTest extends TestCase
     public function test_renders_registered_keywords_between_from_and_subject_in_registration_order(): void
     {
         $line = HeadersLine::build(
-            "From: Alice <alice@example.com>\r\nSubject: Hello\r\n\r\n",
+            Envelope::fromHeader("From: Alice <alice@example.com>\r\nSubject: Hello\r\n\r\n", 'example.com'),
             ['KeyB', '\\Seen', 'KeyA', 'NeverRegistered'],
             '12-Jul-2026 10:00:00 +0000',
             42,
             1,
-            'example.com',
             ['KeyA', 'KeyB'],
         );
 
@@ -30,12 +30,11 @@ class HeadersLineTest extends TestCase
     public function test_renders_no_flag_segment_when_no_keyword_is_registered(): void
     {
         $line = HeadersLine::build(
-            "From: Alice <alice@example.com>\r\nSubject: Hello\r\n\r\n",
+            Envelope::fromHeader("From: Alice <alice@example.com>\r\nSubject: Hello\r\n\r\n", 'example.com'),
             ['SomeKeyword', '\\Seen'],
             '12-Jul-2026 10:00:00 +0000',
             42,
             1,
-            'example.com',
         );
 
         $this->assertStringContainsString('Alice                Hello (42 chars)', $line);

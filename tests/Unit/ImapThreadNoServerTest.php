@@ -20,7 +20,7 @@ class ImapThreadNoServerTest extends TestCase
             '* 1 EXISTS',
             '* 0 RECENT',
             'TAG1 OK [READ-WRITE] SELECT completed',
-            '* 1 FETCH (UID 1 INTERNALDATE "01-Jan-2024 10:00:00 +0000" RFC822.HEADER "")',
+            '* 1 FETCH (UID 1 INTERNALDATE "01-Jan-2024 10:00:00 +0000" ENVELOPE (NIL NIL NIL NIL NIL NIL NIL NIL NIL NIL) BODY[HEADER.FIELDS (REFERENCES)] "")',
             'TAG2 OK FETCH completed',
             '* CAPABILITY IMAP4rev1 THREAD=REFERENCES',
             'TAG3 OK CAPABILITY completed',

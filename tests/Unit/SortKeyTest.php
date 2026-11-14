@@ -2,6 +2,7 @@
 
 namespace ImapPolyfill\Tests\Unit;
 
+use ImapPolyfill\Message\Envelope;
 use ImapPolyfill\Message\SortCriterion;
 use ImapPolyfill\Message\SortKey;
 use PHPUnit\Framework\TestCase;
@@ -22,11 +23,7 @@ class SortKeyTest extends TestCase
         $internalDate = '17-Jul-2026 09:30:00 +0000';
 
         foreach (["Subject: x\r\n\r\n", "Date: not a date\r\nSubject: x\r\n\r\n"] as $header) {
-            $key = SortKey::resolve(
-                SortCriterion::Date,
-                ['RFC822.HEADER' => $header, 'INTERNALDATE' => $internalDate, 'RFC822.SIZE' => 1],
-                'localhost',
-            );
+            $key = SortKey::resolve(SortCriterion::Date, Envelope::fromHeader($header, 'localhost'), $internalDate, 1);
 
             $this->assertSame(strtotime($internalDate), $key);
         }

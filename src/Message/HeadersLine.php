@@ -2,8 +2,6 @@
 
 namespace ImapPolyfill\Message;
 
-use ImapPolyfill\Address\AddressList;
-
 /**
  * Builds one imap_headers() summary line, matching php_imap.c's
  * PHP_FUNCTION(imap_headers): a fixed-column "elm/pine style" overview —
@@ -20,22 +18,21 @@ final class HeadersLine
      * @param string[] $registeredUserFlags
      */
     public static function build(
-        string $rawHeader,
+        Envelope $envelope,
         array $flags,
         string $internalDate,
         int $size,
         int $msgno,
-        string $defaultHost,
         array $registeredUserFlags = [],
     ): string {
-        $fields = RawHeaderFields::parse($rawHeader)->toArray();
         // mail_fetchsubject() writes a blank where there is no subject.
-        $subject = $fields['subject'] ?? ' ';
+        $subject = $envelope->subject ?? ' ';
+        $from = $envelope->from()?->fetchFrom(self::FROM_WIDTH) ?? str_repeat(' ', self::FROM_WIDTH);
 
         return self::flagChars($flags)
             .sprintf('%4d)', $msgno)
             .self::dateField($internalDate)
-            .' '.AddressList::parse($fields['from'] ?? '', $defaultHost)->fetchFrom(self::FROM_WIDTH)
+            .' '.$from
             .' '.self::userFlagsField($flags, $registeredUserFlags)
             .substr($subject, 0, self::SUBJECT_WIDTH)
             .sprintf(' (%d chars)', $size);

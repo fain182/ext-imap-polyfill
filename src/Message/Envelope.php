@@ -155,6 +155,11 @@ final class Envelope
         return $this->addresses['to'] ?? null;
     }
 
+    public function cc(): ?AddressList
+    {
+        return $this->addresses['cc'] ?? null;
+    }
+
     /**
      * _php_make_header_object(): every field in php_imap.c's order, each
      * address list preceded by its "*address" string rather than followed

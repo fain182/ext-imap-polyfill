@@ -6,31 +6,30 @@ use ImapPolyfill\Address\AddressList;
 
 /**
  * Derives an imap_sort() comparison key for a single fetched message, one
- * SORT* criterion at a time. Field interpretation (parsing raw headers into
- * comparable values) belongs here rather than in Session\Mailbox, the same
- * way HeaderInfo/Overview/HeadersLine own it for their respective functions.
+ * SORT* criterion at a time. Turning envelope fields into comparable values
+ * belongs here rather than in Session\Mailbox, the same way HeaderInfo,
+ * Overview and HeadersLine own it for their respective functions.
  */
 final class SortKey
 {
     /**
-     * @param array<string, mixed> $message RFC822.HEADER/INTERNALDATE/RFC822.SIZE keyed wire fetch data
+     * mail_sort_loadcache() reads the keys out of mail_fetchenvelope(), so
+     * they come from the same Envelope imap_headerinfo() reports.
      */
-    public static function resolve(SortCriterion $criteria, array $message, string $defaultHost): int|string
+    public static function resolve(SortCriterion $criteria, Envelope $envelope, string $internalDate, int $size): int|string
     {
-        $fields = RawHeaderFields::parse($message['RFC822.HEADER'])->toArray();
-
-        $arrival = strtotime($message['INTERNALDATE']) ?: 0;
+        $arrival = strtotime($internalDate) ?: 0;
 
         return match ($criteria) {
             // mail_sort_loadcache() sorts a message whose Date: is missing or
             // unparseable by its internal date, not ahead of every other.
-            SortCriterion::Date => strtotime($fields['date'] ?? '') ?: $arrival,
+            SortCriterion::Date => strtotime($envelope->date ?? '') ?: $arrival,
             SortCriterion::Arrival => $arrival,
-            SortCriterion::Size => (int) $message['RFC822.SIZE'],
-            SortCriterion::From => self::mailboxKey($fields['from'] ?? null, $defaultHost),
-            SortCriterion::To => self::mailboxKey($fields['to'] ?? null, $defaultHost),
-            SortCriterion::Cc => self::mailboxKey($fields['cc'] ?? null, $defaultHost),
-            SortCriterion::Subject => BaseSubject::of($fields['subject'] ?? ''),
+            SortCriterion::Size => $size,
+            SortCriterion::From => self::mailboxKey($envelope->from()),
+            SortCriterion::To => self::mailboxKey($envelope->to()),
+            SortCriterion::Cc => self::mailboxKey($envelope->cc()),
+            SortCriterion::Subject => BaseSubject::of($envelope->subject ?? ''),
         };
     }
 
@@ -51,14 +50,10 @@ final class SortKey
         };
     }
 
-    private static function mailboxKey(?string $addressHeader, string $defaultHost): string
+    private static function mailboxKey(?AddressList $addresses): string
     {
-        if ($addressHeader === null) {
-            return '';
-        }
+        $address = $addresses?->first();
 
-        $address = AddressList::parse($addressHeader, $defaultHost)->first();
-
-        return $address === null ? '' : strtolower($address->mailbox);
+        return $address === null ? '' : strtolower((string) $address->mailbox);
     }
 }

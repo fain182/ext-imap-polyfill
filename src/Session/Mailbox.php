@@ -805,11 +805,10 @@ final class Mailbox
             }
 
             $ids = range(1, $exists);
-            $data = $this->connection->backend()->fetch(
-                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
+            $data = $this->connection->backend()->fetchEnvelopes(
                 $ids,
-                null,
                 UidMode::Msgno,
+                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE'],
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -825,12 +824,11 @@ final class Mailbox
 
             $message = $data[$msgno];
             $result[] = HeadersLine::build(
-                $message['RFC822.HEADER'],
+                $message['ENVELOPE'],
                 $message['FLAGS'],
                 $message['INTERNALDATE'],
                 (int) $message['RFC822.SIZE'],
                 $msgno,
-                $this->connection->backend()->host(),
                 $this->connection->userFlags(),
             );
         }
@@ -905,11 +903,10 @@ final class Mailbox
                 $ids = range(1, $exists);
             }
 
-            $data = $this->connection->backend()->fetch(
-                ['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'],
+            $data = $this->connection->backend()->fetchEnvelopes(
                 $ids,
-                null,
                 UidMode::Msgno,
+                ['UID', 'INTERNALDATE', 'RFC822.SIZE'],
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -919,7 +916,6 @@ final class Mailbox
             return [];
         }
 
-        $host = $this->connection->backend()->host();
         $entries = [];
         foreach ($ids as $msgno) {
             if (!isset($data[$msgno])) {
@@ -930,7 +926,7 @@ final class Mailbox
             $entries[] = [
                 'msgno' => $msgno,
                 'uid' => (int) $message['UID'],
-                'key' => SortKey::resolve($criterion, $message, $host),
+                'key' => SortKey::resolve($criterion, $message['ENVELOPE'], $message['INTERNALDATE'], (int) $message['RFC822.SIZE']),
             ];
         }
 
@@ -988,11 +984,10 @@ final class Mailbox
             }
 
             $ids = range(1, $exists);
-            $data = $this->connection->backend()->fetch(
-                ['UID', 'INTERNALDATE', 'RFC822.HEADER'],
+            $data = $this->connection->backend()->fetchEnvelopes(
                 $ids,
-                null,
                 UidMode::Msgno,
+                ['UID', 'INTERNALDATE'],
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
