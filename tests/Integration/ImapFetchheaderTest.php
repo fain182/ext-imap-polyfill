@@ -3,10 +3,12 @@
 namespace ImapPolyfill\Tests\Integration;
 
 use ImapPolyfill\Tests\CapturesWarnings;
+use ImapPolyfill\Tests\ResetsErrorStack;
 
 class ImapFetchheaderTest extends GreenmailTestCase
 {
     use CapturesWarnings;
+    use ResetsErrorStack;
 
     public function test_returns_the_raw_header_of_a_message(): void
     {
@@ -21,6 +23,29 @@ class ImapFetchheaderTest extends GreenmailTestCase
         $this->assertIsString($header);
         $this->assertStringContainsString('Subject: Hello World', $header);
         $this->assertStringNotContainsString('Body text', $header);
+    }
+
+    /**
+     * c-client parses the header text it fetches, to merge it into the
+     * envelope, so a malformed address in it lands on the error stack here
+     * even though the header comes back untouched.
+     */
+    public function test_a_malformed_address_in_the_fetched_header_lands_on_the_error_stack(): void
+    {
+        $folderName = 'FetchHeaderBox' . uniqid();
+        $seedClient = $this->makeFolder($folderName);
+        $seedClient->getFolder($folderName)->appendMessage("From: broken <x@\r\nSubject: Hello\r\n\r\nBody");
+
+        $connection = imap_open(self::mailboxSpec($folderName), self::user(), self::password());
+        imap_errors();
+
+        $header = imap_fetchheader($connection, 1);
+
+        $this->assertStringContainsString('From: broken <x@', $header);
+        $this->assertSame(
+            ['Missing or invalid host name after @', 'Unterminated mailbox: x@.SYNTAX-ERROR.'],
+            imap_errors(),
+        );
     }
 
     public function test_ft_uid_fetches_by_uid_when_it_diverges_from_msgno(): void

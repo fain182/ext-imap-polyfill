@@ -700,6 +700,18 @@ final class Protocol implements ConnectionBackend
 
         $result = [];
         foreach ($byId as $id => $pairs) {
+            // imap_parse_header() runs rfc822_parse_msg() over a message's
+            // header text whenever it arrives, to merge it into the cached
+            // envelope, and the address complaints land on the error stack
+            // even though the ENVELOPE answer wins. c-client parses it only
+            // the first time a connection sees it; this parses it every
+            // time, which is what the extension does on a fresh connection.
+            foreach (['RFC822.HEADER', 'BODY[HEADER]'] as $header) {
+                if (is_string($pairs[$header] ?? null)) {
+                    Envelope::fromHeader($pairs[$header], $this->host());
+                }
+            }
+
             foreach ($wanted as $item) {
                 if (!array_key_exists($item, $pairs)) {
                     throw new \RuntimeException("FETCH response for {$id} lacks {$item}");
