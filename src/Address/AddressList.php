@@ -43,19 +43,46 @@ final class AddressList
     }
 
     /**
-     * The address list of an IMAP ENVELOPE: the server has already parsed
-     * it, so nothing is read and nothing goes on the error stack.
+     * The address list of an IMAP ENVELOPE, kept the way imap_parse_address()
+     * keeps it: the server has already parsed it, and the only judgement left
+     * is on the group markers. A group start carrying a personal name or a
+     * route, and a group end with any field set or outside a group, are
+     * dropped; c-client warns through mm_notify(), which php_imap.c ignores,
+     * so nothing goes on the error stack either. Gmail sends such a start for
+     * a Sender it misread, and the extension reports no sender at all.
      *
      * @param list<mixed> $tuples
      */
     public static function fromEnvelope(array $tuples): self
     {
-        return new self(array_map(
-            static fn (mixed $tuple): Address => is_array($tuple)
-                ? Address::fromEnvelope($tuple)
-                : throw new \RuntimeException('ENVELOPE address is not a list'),
-            $tuples,
-        ));
+        $addresses = [];
+        $depth = 0;
+
+        foreach ($tuples as $tuple) {
+            if (!is_array($tuple)) {
+                throw new \RuntimeException('ENVELOPE address is not a list');
+            }
+
+            $address = Address::fromEnvelope($tuple);
+
+            if ($address->mailbox === null) {
+                if ($depth === 0 || $address->personal !== null || $address->adl !== null || $address->host !== null) {
+                    continue;
+                }
+
+                $depth--;
+            } elseif ($address->host === null) {
+                if ($address->personal !== null || $address->adl !== null) {
+                    continue;
+                }
+
+                $depth++;
+            }
+
+            $addresses[] = $address;
+        }
+
+        return new self($addresses);
     }
 
     public static function parse(string $addresses, string $defaultHostname): self

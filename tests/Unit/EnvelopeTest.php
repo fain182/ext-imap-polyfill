@@ -57,6 +57,33 @@ class EnvelopeTest extends TestCase
         $this->assertSame(['fromaddress', 'from'], array_keys(get_object_vars($result)));
     }
 
+    /**
+     * imap_parse_address() drops a group start that carries a personal name.
+     * Gmail sends one for `Sender: "Booking.com" <noreply-iam@booking.com>`,
+     * which leaves the list empty, so there is no sender at all.
+     */
+    public function test_drops_a_group_start_with_a_personal_name(): void
+    {
+        $result = Envelope::fromImap(
+            [null, null, [[null, null, 'a', 'b.com']], [['<noreply-iam@booking.com>', null, '"Booking.com"', null]], null, null, null, null, null, null],
+            "\r\n",
+        )->toObject();
+
+        $this->assertObjectNotHasProperty('sender', $result);
+        $this->assertObjectNotHasProperty('senderaddress', $result);
+    }
+
+    public function test_drops_a_group_end_outside_a_group(): void
+    {
+        $result = Envelope::fromImap(
+            [null, null, null, null, null, [[null, null, 'a', 'b.com'], [null, null, null, null]], null, null, null, null],
+            "\r\n",
+        )->toObject();
+
+        $this->assertSame('a@b.com', $result->toaddress);
+        $this->assertCount(1, $result->to);
+    }
+
     public function test_writes_a_group_from_its_start_and_end_markers(): void
     {
         $result = Envelope::fromImap(
