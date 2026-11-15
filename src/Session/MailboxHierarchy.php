@@ -68,6 +68,16 @@ final class MailboxHierarchy
         [$ref, $pattern] = $listing;
         $folders = $this->foldersMatching($ref, $pattern, $subscribedOnly);
 
+        // php_imap.c's mm_list() leaves a \Noselect folder out of the plain
+        // name list imap_list() returns, and only there: the objects of
+        // imap_getmailboxes() and both of mm_lsub()'s lists keep it.
+        if ($folders !== false && !$subscribedOnly) {
+            $folders = array_values(array_filter(
+                $folders,
+                static fn (ListedFolder $folder): bool => !in_array('\\noselect', array_map('strtolower', $folder->attributes), true),
+            ));
+        }
+
         if ($folders === false || $folders === []) {
             return false;
         }
