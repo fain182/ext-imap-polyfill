@@ -298,6 +298,52 @@ final class Pop3MailboxTest extends GreenmailTestCase
     }
 
     /**
+     * mail_sort_compare() reverses the key and nothing else: messages that
+     * tie on it still come back lowest message number first.
+     */
+    public function test_a_reversed_local_sort_keeps_ties_in_message_order(): void
+    {
+        $marker = 'Pop3ReverseTie'.uniqid();
+        $folder = self::seedClient()->getFolder('INBOX');
+
+        foreach ([1, 2, 3] as $ignored) {
+            $folder->appendMessage("Subject: {$marker}\r\n\r\nSame size");
+        }
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame(
+            [$count - 2, $count - 1, $count],
+            imap_sort($connection, SORTSIZE, true, 0, "SUBJECT \"{$marker}\""),
+        );
+
+        imap_close($connection);
+    }
+
+    /**
+     * The local sort compares a text key as text: a numeric mailbox is not
+     * ordered as a number, so "713224" comes before "98487".
+     */
+    public function test_a_local_sort_compares_numeric_text_as_text(): void
+    {
+        $marker = strtolower('numkey'.uniqid());
+        $folder = self::seedClient()->getFolder('INBOX');
+        $folder->appendMessage("From: 98487@{$marker}.example\r\nSubject: x\r\n\r\nBody");
+        $folder->appendMessage("From: 713224@{$marker}.example\r\nSubject: x\r\n\r\nBody");
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+
+        $this->assertSame(
+            [$count, $count - 1],
+            imap_sort($connection, SORTFROM, false, 0, "FROM \"{$marker}\""),
+        );
+
+        imap_close($connection);
+    }
+
+    /**
      * POP3 sorts locally, and the local sort searches first, criteria or
      * not: the charset is checked either way, and a sort that cannot search
      * comes back empty.

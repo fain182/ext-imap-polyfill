@@ -930,13 +930,16 @@ final class Mailbox
             ];
         }
 
+        // mail_sort_compare() flips the key comparison only: a tie still
+        // goes to the lower message number when the sort is reversed. A
+        // text key is compared as text (compare_cstring()), never as the
+        // number "98487" or "0884502441557" would be to <=>.
         usort($entries, static function (array $a, array $b) use ($reverse): int {
-            $cmp = $a['key'] <=> $b['key'];
-            if ($cmp === 0) {
-                $cmp = $a['msgno'] <=> $b['msgno'];
-            }
+            $cmp = is_string($a['key']) && is_string($b['key'])
+                ? strcmp($a['key'], $b['key']) <=> 0
+                : $a['key'] <=> $b['key'];
 
-            return $reverse ? -$cmp : $cmp;
+            return ($reverse ? -$cmp : $cmp) ?: $a['msgno'] <=> $b['msgno'];
         });
 
         $byUid = (bool) ($flags & SE_UID);
