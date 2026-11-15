@@ -122,6 +122,9 @@ final class ThreadBuilder
 
         $root = array_values(array_filter($all, static fn (ThreadContainer $c): bool => $c->parent === null));
         $root = self::prune($root, isRoot: true);
+        // Step 4: the roots are put in date order before the subject pass,
+        // because that pass keeps the first root it meets for each subject.
+        usort($root, self::compareByDate(...));
         $root = self::groupBySubject($root);
         self::sortRecursive($root);
 
@@ -338,11 +341,30 @@ final class ThreadBuilder
      */
     private static function sortRecursive(array &$nodes): void
     {
-        usort($nodes, static fn (ThreadContainer $a, ThreadContainer $b): int => $a->date <=> $b->date);
-
+        // mail_thread_sort() sorts each node's children before the node's own
+        // siblings, so a dummy is dated by the oldest of its children.
         foreach ($nodes as $node) {
             self::sortRecursive($node->children);
         }
+
+        usort($nodes, self::compareByDate(...));
+    }
+
+    /**
+     * mail_thread_compare_date(): by date, then by message number. A dummy
+     * has neither and stands in for its first child.
+     */
+    private static function compareByDate(ThreadContainer $a, ThreadContainer $b): int
+    {
+        while ($a->isDummy() && $a->children !== []) {
+            $a = $a->children[0];
+        }
+
+        while ($b->isDummy() && $b->children !== []) {
+            $b = $b->children[0];
+        }
+
+        return [$a->date, $a->msgno] <=> [$b->date, $b->msgno];
     }
 
     /**
