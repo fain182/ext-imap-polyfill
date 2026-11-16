@@ -12,6 +12,8 @@ use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\Envelope;
 use ImapPolyfill\Message\MessageSequence;
 use ImapPolyfill\Message\SearchProgram;
+use ImapPolyfill\Message\SortCriterion;
+use ImapPolyfill\Message\SortKeys;
 use ImapPolyfill\Connection\MessageNotFoundException;
 use ImapPolyfill\Mailbox\MalformedSpec;
 
@@ -203,6 +205,36 @@ final class Pop3Backend implements ConnectionBackend
         }
 
         return $messages;
+    }
+
+    public function sortKeys(array $msgnos, SortCriterion $criterion): array
+    {
+        $missing = $this->messages->withoutSortKeys($msgnos, $criterion);
+
+        if ($missing !== []) {
+            $fast = ['INTERNALDATE', 'RFC822.SIZE'];
+            $data = $criterion->needsEnvelope()
+                ? $this->fetchEnvelopes($missing, UidMode::Msgno, $fast)
+                : $this->fetch($fast, $missing, null, UidMode::Msgno);
+
+            foreach ($data as $msgno => $message) {
+                $internalDate = (string) $message['INTERNALDATE'];
+                $size = (int) $message['RFC822.SIZE'];
+
+                $this->messages->learnSortKeys($msgno, isset($message['ENVELOPE'])
+                    ? SortKeys::withEnvelope($message['ENVELOPE'], $internalDate, $size)
+                    : SortKeys::fast($internalDate, $size));
+            }
+        }
+
+        $keys = [];
+        foreach ($msgnos as $msgno) {
+            if (($known = $this->messages->sortKeys($msgno)) !== null) {
+                $keys[$msgno] = $known;
+            }
+        }
+
+        return $keys;
     }
 
     public function search(SearchProgram $program, UidMode $uidMode, ?string $charset = null): array

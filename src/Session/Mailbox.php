@@ -903,10 +903,8 @@ final class Mailbox
                 $ids = range(1, $exists);
             }
 
-            $fast = ['UID', 'INTERNALDATE', 'RFC822.SIZE'];
-            $data = $criterion->needsEnvelope()
-                ? $this->connection->backend()->fetchEnvelopes($ids, UidMode::Msgno, $fast)
-                : $this->connection->backend()->fetch($fast, $ids, null, UidMode::Msgno);
+            $keys = $this->connection->backend()->sortKeys($ids, $criterion);
+            $uids = $flags & SE_UID ? $this->connection->backend()->uidTable() : null;
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -916,17 +914,8 @@ final class Mailbox
         }
 
         $entries = [];
-        foreach ($ids as $msgno) {
-            if (!isset($data[$msgno])) {
-                continue;
-            }
-
-            $message = $data[$msgno];
-            $entries[] = [
-                'msgno' => $msgno,
-                'uid' => (int) $message['UID'],
-                'key' => SortKey::resolve($criterion, $message['ENVELOPE'] ?? null, $message['INTERNALDATE'], (int) $message['RFC822.SIZE']),
-            ];
+        foreach ($keys as $msgno => $messageKeys) {
+            $entries[] = ['msgno' => $msgno, 'key' => $messageKeys->key($criterion)];
         }
 
         // mail_sort_compare() flips the key comparison only: a tie still
@@ -941,9 +930,7 @@ final class Mailbox
             return ($reverse ? -$cmp : $cmp) ?: $a['msgno'] <=> $b['msgno'];
         });
 
-        $byUid = (bool) ($flags & SE_UID);
-
-        return array_map(static fn (array $e): int => $byUid ? $e['uid'] : $e['msgno'], $entries);
+        return array_map(static fn (array $e): int => $uids?->uidOf($e['msgno']) ?? $e['msgno'], $entries);
     }
 
     /**

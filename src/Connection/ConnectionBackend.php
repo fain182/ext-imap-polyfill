@@ -4,8 +4,9 @@ namespace ImapPolyfill\Connection;
 
 use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\Envelope;
-
 use ImapPolyfill\Message\SearchProgram;
+use ImapPolyfill\Message\SortCriterion;
+use ImapPolyfill\Message\SortKeys;
 
 /**
  * The wire operations an \IMAP\Connection needs from whatever protocol it
@@ -83,6 +84,18 @@ interface ConnectionBackend
      * @return array<int, array<string, mixed>>
      */
     public function fetchEnvelopes(array $ids, UidMode $uidMode, array $with = []): array;
+
+    /**
+     * The keys imap_sort() orders these messages by, read off the message
+     * cache and fetched only for the messages it cannot yet answer for —
+     * c-client's sort cache, kept for as long as the message is. Learns the
+     * uids of the messages it fetches on the way.
+     *
+     * @param list<int> $msgnos
+     *
+     * @return array<int, SortKeys> by message number
+     */
+    public function sortKeys(array $msgnos, SortCriterion $criterion): array;
 
     /**
      * @param SearchProgram $program the parsed criteria; the IMAP backend writes

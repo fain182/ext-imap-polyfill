@@ -2,9 +2,13 @@
 
 namespace ImapPolyfill\Connection;
 
+use ImapPolyfill\Message\SortCriterion;
+use ImapPolyfill\Message\SortKeys;
+
 /**
  * The selected folder's messages as c-client's stream cache holds them: one
- * entry per message number, each carrying its uid once that is known.
+ * entry per message number, each carrying its uid and its sort keys once
+ * those are known.
  *
  * Nothing here is ever invalidated, only edited, by the same events that
  * edit c-client's cache (mail_exists(), mail_expunged()): a selection starts
@@ -18,6 +22,9 @@ final class MessageCache
     /** @var list<?int>|null uid per message, in message-number order, null where not yet known; null until a count arrives */
     private ?array $uids = null;
 
+    /** @var list<?SortKeys> per message, in message-number order, beside $uids */
+    private array $sortKeys = [];
+
     private int $recent = 0;
 
     /** What uidTable() last built, until an edit makes it stale. */
@@ -26,6 +33,7 @@ final class MessageCache
     public function reset(): void
     {
         $this->uids = null;
+        $this->sortKeys = [];
         $this->recent = 0;
         $this->table = null;
     }
@@ -42,6 +50,9 @@ final class MessageCache
         $this->uids = $count >= count($held)
             ? array_pad($held, $count, null)
             : array_slice($held, 0, $count);
+        $this->sortKeys = $count >= count($held)
+            ? array_pad($this->sortKeys, $count, null)
+            : array_slice($this->sortKeys, 0, $count);
     }
 
     public function recent(int $count): void
@@ -59,6 +70,7 @@ final class MessageCache
 
         $this->table = null;
         array_splice($this->uids, $msgno - 1, 1);
+        array_splice($this->sortKeys, $msgno - 1, 1);
     }
 
     /**
@@ -103,6 +115,40 @@ final class MessageCache
             $this->table = null;
             $this->uids[$msgno - 1] = $uid;
         }
+    }
+
+    /**
+     * Of these messages, the ones whose sort keys cannot yet answer for the
+     * criterion — the sequence imap_sort() builds before it fetches.
+     *
+     * @param list<int> $msgnos
+     *
+     * @return list<int>
+     */
+    public function withoutSortKeys(array $msgnos, SortCriterion $criterion): array
+    {
+        $this->counted();
+
+        return array_values(array_filter(
+            $msgnos,
+            fn (int $msgno): bool => !($this->sortKeys[$msgno - 1] ?? null)?->serves($criterion),
+        ));
+    }
+
+    public function learnSortKeys(int $msgno, SortKeys $keys): void
+    {
+        if (array_key_exists($msgno - 1, $this->sortKeys)) {
+            $this->sortKeys[$msgno - 1] = $keys;
+        }
+    }
+
+    /**
+     * Null for a message no fetch has answered for: one the server left out
+     * is left out of the sort, as it was never in the cache to sort.
+     */
+    public function sortKeys(int $msgno): ?SortKeys
+    {
+        return $this->sortKeys[$msgno - 1] ?? null;
     }
 
     /**

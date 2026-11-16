@@ -58,21 +58,36 @@ final class ImapEngineConnection extends ImapConnection
      * outgrows the default memory_limit that way. Each untagged response
      * goes to $each as it is read, and none is kept.
      *
+     * What $each throws waits for the command to complete: thrown at once, it
+     * would leave the rest of the answer on the wire, to be read as the
+     * answer to whatever command comes next.
+     *
      * @param list<string|array{0: string, 1: string}> $tokens
      * @param \Closure(UntaggedResponse): void $each
      */
     public function sendAndEach(string $command, array $tokens, \Closure $each): void
     {
         $this->send($command, $tokens, $tag);
+        $thrown = null;
 
         while (true) {
             $reply = $this->nextReply();
 
             if ($reply instanceof UntaggedResponse) {
-                $each($reply);
+                if ($thrown === null) {
+                    try {
+                        $each($reply);
+                    } catch (\Throwable $e) {
+                        $thrown = $e;
+                    }
+                }
             } elseif ($reply instanceof TaggedResponse && $reply->tag()->is($tag)) {
                 if (!$reply->successful()) {
                     throw self::failure($reply);
+                }
+
+                if ($thrown !== null) {
+                    throw $thrown;
                 }
 
                 return;
