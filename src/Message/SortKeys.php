@@ -11,13 +11,10 @@ namespace ImapPolyfill\Message;
  */
 final class SortKeys
 {
-    /**
-     * @param array<string, int|string>|null $envelopeKeys by criterion name
-     */
     private function __construct(
         private readonly int $arrival,
         private readonly int $size,
-        private readonly ?array $envelopeKeys,
+        private readonly ?EnvelopeSortKeys $envelope,
     ) {
     }
 
@@ -32,23 +29,16 @@ final class SortKeys
 
     public static function withEnvelope(Envelope $envelope, string $internalDate, int $size): self
     {
-        $keys = [];
-        foreach (SortCriterion::cases() as $criterion) {
-            if ($criterion->needsEnvelope()) {
-                $keys[$criterion->name] = SortKey::resolve($criterion, $envelope, $internalDate, $size);
-            }
-        }
-
         return new self(
             (int) SortKey::resolve(SortCriterion::Arrival, null, $internalDate, $size),
             $size,
-            $keys,
+            EnvelopeSortKeys::of($envelope, $internalDate, $size),
         );
     }
 
     public function serves(SortCriterion $criterion): bool
     {
-        return !$criterion->needsEnvelope() || $this->envelopeKeys !== null;
+        return !$criterion->needsEnvelope() || $this->envelope !== null;
     }
 
     public function key(SortCriterion $criterion): int|string
@@ -56,8 +46,17 @@ final class SortKeys
         return match ($criterion) {
             SortCriterion::Arrival => $this->arrival,
             SortCriterion::Size => $this->size,
-            SortCriterion::Date, SortCriterion::From, SortCriterion::Subject, SortCriterion::To, SortCriterion::Cc => $this->envelopeKeys[$criterion->name]
-                ?? throw new \LogicException("Sort by {$criterion->name} asked of keys loaded without the envelope"),
+            SortCriterion::Date => $this->envelope($criterion)->date,
+            SortCriterion::From => $this->envelope($criterion)->from,
+            SortCriterion::To => $this->envelope($criterion)->to,
+            SortCriterion::Cc => $this->envelope($criterion)->cc,
+            SortCriterion::Subject => $this->envelope($criterion)->subject,
         };
+    }
+
+    private function envelope(SortCriterion $criterion): EnvelopeSortKeys
+    {
+        return $this->envelope
+            ?? throw new \LogicException("Sort by {$criterion->name} asked of keys loaded without the envelope");
     }
 }
