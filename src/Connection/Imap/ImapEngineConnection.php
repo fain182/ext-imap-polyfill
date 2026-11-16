@@ -52,6 +52,35 @@ final class ImapEngineConnection extends ImapConnection
     }
 
     /**
+     * sendAndCollect() for an answer too big to hold twice: ImapEngine keeps
+     * every response of a command, as a token tree, until the command is
+     * done, and a FETCH ENVELOPE over a few tens of thousands of messages
+     * outgrows the default memory_limit that way. Each untagged response
+     * goes to $each as it is read, and none is kept.
+     *
+     * @param list<string|array{0: string, 1: string}> $tokens
+     * @param \Closure(UntaggedResponse): void $each
+     */
+    public function sendAndEach(string $command, array $tokens, \Closure $each): void
+    {
+        $this->send($command, $tokens, $tag);
+
+        while (true) {
+            $reply = $this->nextReply();
+
+            if ($reply instanceof UntaggedResponse) {
+                $each($reply);
+            } elseif ($reply instanceof TaggedResponse && $reply->tag()->is($tag)) {
+                if (!$reply->successful()) {
+                    throw self::failure($reply);
+                }
+
+                return;
+            }
+        }
+    }
+
+    /**
      * Every command goes out through here, ImapEngine's own included, which
      * is the only place the check catches all of them. A literal arrives as
      * an array and is left alone: an APPEND message is nothing but CRLFs.
@@ -235,10 +264,15 @@ final class ImapEngineConnection extends ImapConnection
      */
     protected function assertTaggedResponse(string $tag, ?callable $exception = null): TaggedResponse
     {
-        return parent::assertTaggedResponse($tag, static fn (TaggedResponse $response) => new CommandFailedException(
+        return parent::assertTaggedResponse($tag, self::failure(...));
+    }
+
+    private static function failure(TaggedResponse $response): CommandFailedException
+    {
+        return new CommandFailedException(
             (string) ($response->tokenAt(1) ?? ''),
             implode(' ', array_map('strval', $response->tokensAfter(2))),
-        ));
+        );
     }
 
     /**

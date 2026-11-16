@@ -5,6 +5,7 @@ namespace ImapPolyfill\Connection;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\Data;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\ListData;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\ResponseCodeData;
+use DirectoryTree\ImapEngine\Connection\Responses\UntaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Tokens\Nil;
 use DirectoryTree\ImapEngine\Connection\Tokens\Number;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
@@ -663,36 +664,35 @@ final class Protocol implements ConnectionBackend
      */
     private function fetchSet(string $set, array $items, UidMode $uidMode, \Closure $asked): array
     {
-        $responses = $this->connection->sendAndCollect(
+        $byId = [];
+        $this->connection->sendAndEach(
             $uidMode === UidMode::Uid ? 'UID FETCH' : 'FETCH',
             [$set, Str::list($items)],
+            static function (UntaggedResponse $response) use ($uidMode, $asked, &$byId): void {
+                if (strtoupper((string) ($response->tokenAt(2) ?? '')) !== 'FETCH') {
+                    return;
+                }
+
+                $data = $response->tokenAt(3);
+                if (!$data instanceof ListData) {
+                    return;
+                }
+
+                $pairs = self::pairs($data);
+
+                // An unsolicited FETCH carries no UID even during a UID FETCH,
+                // which leaves it naming no message this command is about.
+                $id = $uidMode === UidMode::Uid
+                    ? (isset($pairs['UID']) ? (int) $pairs['UID'] : null)
+                    : (int) (string) $response->type();
+
+                if ($id === null || !$asked($id)) {
+                    return;
+                }
+
+                $byId[$id] = array_merge($byId[$id] ?? [], $pairs);
+            },
         );
-
-        $byId = [];
-        foreach ($responses as $response) {
-            if (strtoupper((string) ($response->tokenAt(2) ?? '')) !== 'FETCH') {
-                continue;
-            }
-
-            $data = $response->tokenAt(3);
-            if (!$data instanceof ListData) {
-                continue;
-            }
-
-            $pairs = self::pairs($data);
-
-            // An unsolicited FETCH carries no UID even during a UID FETCH,
-            // which leaves it naming no message this command is about.
-            $id = $uidMode === UidMode::Uid
-                ? (isset($pairs['UID']) ? (int) $pairs['UID'] : null)
-                : (int) (string) $response->type();
-
-            if ($id === null || !$asked($id)) {
-                continue;
-            }
-
-            $byId[$id] = array_merge($byId[$id] ?? [], $pairs);
-        }
 
         // BODY.PEEK[...] is a request-only spelling; the server answers with
         // the plain BODY[...] name.
