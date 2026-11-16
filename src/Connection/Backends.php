@@ -37,6 +37,6 @@ final class Backends
         $credentials->assertPlaintextLoginAllowed();
         LoginTrials::attempt(static fn () => $protocol->login($credentials->user, $credentials->password));
 
-        return new Pop3Backend($protocol, $spec->host, $mailbox);
+        return new Pop3Backend($protocol, $spec->host, $mailbox, $spec->switches->loser);
     }
 }

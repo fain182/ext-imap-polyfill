@@ -20,6 +20,10 @@ use ImapPolyfill\Mime\MimeText;
 final class Pop3SearchEvaluator
 {
     /**
+     * @param \Closure(): RawMessage $header the message's header, asked for
+     *                                     only by the criteria that read it,
+     *                                     as mail_search_msg() reads nothing
+     *                                     for a flag; its body may be empty
      * @param string[]           $flags   the IMAP flag names set on this message
      * @param \Closure(): MimeBody $structure the message's parsed body, asked
      *                                      for only by BODY and TEXT, as
@@ -27,10 +31,10 @@ final class Pop3SearchEvaluator
      * @param SearchCharset|null $charset what the terms are written in; none
      *                                    named leaves them as they are
      */
-    public static function matches(SearchProgram $program, RawMessage $message, \Closure $structure, array $flags, ?SearchCharset $charset = null): bool
+    public static function matches(SearchProgram $program, \Closure $header, \Closure $structure, array $flags, ?SearchCharset $charset = null): bool
     {
         foreach ($program->criteria as $criterion) {
-            if (!self::matchesCriterion($criterion, $message, $structure, $flags, $charset)) {
+            if (!self::matchesCriterion($criterion, $header, $structure, $flags, $charset)) {
                 return false;
             }
         }
@@ -39,12 +43,12 @@ final class Pop3SearchEvaluator
     }
 
     /**
+     * @param \Closure(): RawMessage $header
      * @param \Closure(): MimeBody $structure
      * @param string[] $flags
      */
-    private static function matchesCriterion(SearchCriterion $criterion, RawMessage $message, \Closure $structure, array $flags, ?SearchCharset $charset): bool
+    private static function matchesCriterion(SearchCriterion $criterion, \Closure $header, \Closure $structure, array $flags, ?SearchCharset $charset): bool
     {
-        $fields = $message->getHeaders();
         $argument = $criterion->argument ?? '';
         // utf8_searchpgm() converts the address, subject, body and text
         // terms. A keyword is a flag name and a date is a date, so those
@@ -74,15 +78,15 @@ final class Pop3SearchEvaluator
             SearchKey::Old => false,
 
             SearchKey::Bcc, SearchKey::Cc, SearchKey::From,
-            SearchKey::Subject, SearchKey::To => self::substringMatch($fields, strtolower($criterion->key->value), $term),
+            SearchKey::Subject, SearchKey::To => self::substringMatch($header()->getHeaders(), strtolower($criterion->key->value), $term),
             SearchKey::Body => self::containedInAny($structure()->searchableTexts(false), $term),
             // mail_search_text() reads the header through utf8_mime2text()
             // before it goes on to the body.
-            SearchKey::Text => self::contains(MimeText::decode($message->getRawHeader()), $term)
+            SearchKey::Text => self::contains(MimeText::decode($header()->getRawHeader()), $term)
                 || self::containedInAny($structure()->searchableTexts(true), $term),
 
             SearchKey::Before, SearchKey::On,
-            SearchKey::Since => self::dateMatch($criterion->key, $fields['date'] ?? null, $argument),
+            SearchKey::Since => self::dateMatch($criterion->key, $header()->getHeaders()['date'] ?? null, $argument),
         };
     }
 
