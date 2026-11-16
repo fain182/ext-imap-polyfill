@@ -150,6 +150,31 @@ class Pop3BackendWireTest extends TestCase
         $this->assertSame("STAT\r\nCAPA\r\nRETR 1\r\n", $this->serverSaw());
     }
 
+    /** pop3_cache() keeps one message's text; its header and size outlive it. */
+    public function test_only_the_last_message_read_whole_is_kept(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'UIDL', '.',
+            '+OK', 'Subject: a', '', 'Body', '.',
+            '+OK', 'Subject: b', '', 'Longer body', '.',
+            '+OK', 'Subject: a', '', 'Body', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->assertSame(
+            [1 => "Subject: a\r\n", 2 => "Subject: b\r\n"],
+            $this->backend->fetch(['RFC822.HEADER'], [1, 2], null, UidMode::Msgno),
+        );
+        $this->assertSame([2 => "Longer body\r\n"], $this->backend->fetch(['BODY.PEEK[TEXT]'], [2], null, UidMode::Msgno));
+        $this->assertSame([1 => "Body\r\n"], $this->backend->fetch(['BODY.PEEK[TEXT]'], [1], null, UidMode::Msgno));
+        $this->assertSame(
+            [1 => ['RFC822.SIZE' => '20', 'RFC822.HEADER' => "Subject: a\r\n"], 2 => ['RFC822.SIZE' => '27', 'RFC822.HEADER' => "Subject: b\r\n"]],
+            $this->backend->fetch(['RFC822.SIZE', 'RFC822.HEADER'], [1, 2], null, UidMode::Msgno),
+        );
+        $this->assertSame("STAT\r\nCAPA\r\nRETR 1\r\nRETR 2\r\nRETR 1\r\n", $this->serverSaw());
+    }
+
     /** /loser: pop3.c trusts neither LIST nor TOP, and asks for neither. */
     public function test_a_loser_server_is_read_with_retr_alone(): void
     {
