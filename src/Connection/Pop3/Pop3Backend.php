@@ -254,16 +254,11 @@ final class Pop3Backend implements ConnectionBackend
         // checks it before its loop.
         $charset = $charset === null ? null : SearchCharset::named($charset);
 
-        $whole = [];
-        $headers = [];
+        $reads = [MessagePart::Header->name => [], MessagePart::Whole->name => []];
         foreach ($this->messages->uidTable()->uids() as $uid) {
-            match (Pop3SearchEvaluator::reads($program, $this->flags[$uid] ?? [])) {
-                MessagePart::None => null,
-                MessagePart::Header => $headers[] = $uid,
-                MessagePart::Whole => $whole[] = $uid,
-            };
+            $reads[Pop3SearchEvaluator::reads($program, $this->flags[$uid] ?? [])->name][] = $uid;
         }
-        $this->readAhead($whole, $headers);
+        $this->readAhead($reads[MessagePart::Whole->name], $reads[MessagePart::Header->name]);
 
         $ids = [];
         foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
@@ -307,7 +302,10 @@ final class Pop3Backend implements ConnectionBackend
             $uids[$id] = $uidMode === self::UID_MODE ? $this->knownUid($id) : $this->messages->uidTable()->uidOf($id);
         }
 
-        if (array_intersect($items, ['RFC822.HEADER', 'RFC822.SIZE']) !== []) {
+        $reads = array_map(self::partReadBy(...), $items);
+        if (in_array(MessagePart::Whole, $reads, true)) {
+            $this->readAhead(array_values($uids), []);
+        } elseif (in_array(MessagePart::Header, $reads, true)) {
             $this->readAhead([], array_values($uids));
         }
 
@@ -326,6 +324,21 @@ final class Pop3Backend implements ConnectionBackend
         }
 
         return $result;
+    }
+
+    /**
+     * What fetchItem() reads of the message to answer an item. RFC822.SIZE
+     * reads the header because size() does, as pop3_fetchfast() does.
+     */
+    private static function partReadBy(string $item): MessagePart
+    {
+        return match (true) {
+            in_array($item, ['FLAGS', 'INTERNALDATE', 'UID'], true) => MessagePart::None,
+            in_array($item, ['RFC822.SIZE', 'RFC822.HEADER', 'BODY[HEADER]', 'BODY.PEEK[HEADER]'], true) => MessagePart::Header,
+            str_starts_with($item, 'BODY.PEEK[') || str_starts_with($item, 'BODY[') => MessagePart::Whole,
+            // fetchItem() refuses it, with the reason.
+            default => MessagePart::None,
+        };
     }
 
     private function fetchItem(string $item, int $uid): mixed

@@ -199,4 +199,36 @@ class Pop3BackendWireTest extends TestCase
         $this->assertSame([2], $this->backend->search(SearchProgram::parse('UNSEEN BODY needle'), UidMode::Msgno));
         $this->assertSame("STAT\r\nCAPA\r\nRETR 2\r\nRETR 3\r\n", $this->serverSaw());
     }
+
+    /** /loser: no CAPA is read, so nothing is known to pipeline. */
+    public function test_a_loser_server_is_never_pipelined(): void
+    {
+        $backend = $this->openedOver(true);
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'Subject: a', '', 'Body', '.',
+            '+OK', 'Subject: b', '', 'Body', '.',
+        ]);
+        $backend->selectOrExamineFolder('INBOX', false);
+
+        $backend->fetch(['RFC822.HEADER'], [1, 2], null, UidMode::Msgno);
+
+        $this->assertSame("STAT\r\nRETR 1\r\nRETR 2\r\n", $this->serverSaw());
+    }
+
+    /** matches() reads a body only where FROM matched, so only the headers are read ahead. */
+    public function test_a_body_after_a_header_criterion_reads_ahead_only_headers(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'TOP', 'PIPELINING', '.',
+            '+OK', 'From: alice@example.com', '', '.',
+            '+OK', 'From: bob@example.com', '', '.',
+            '+OK', 'From: alice@example.com', '', 'needle', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->assertSame([1], $this->backend->search(SearchProgram::parse('FROM alice BODY needle'), UidMode::Msgno));
+        $this->assertSame("STAT\r\nCAPA\r\nTOP 1 0\r\nTOP 2 0\r\nRETR 1\r\n", $this->serverSaw());
+    }
 }

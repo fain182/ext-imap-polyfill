@@ -43,33 +43,36 @@ final class Pop3SearchEvaluator
     }
 
     /**
-     * What matches() will read of a message with these flags, so the backend
-     * can fetch it ahead for many messages at once. A flag criterion that
-     * already fails decides the message without reading anything.
+     * What matches() is sure to read of a message with these flags, so the
+     * backend can fetch it ahead for many messages at once. The criteria are
+     * walked in matches()' own order: a flag criterion failing first decides
+     * the message without reading anything, and the first criterion that
+     * reads the message is the only read that is certain, as a later one is
+     * reached only where it matched.
      *
      * @param string[] $flags
      */
     public static function reads(SearchProgram $program, array $flags): MessagePart
     {
         $unread = static fn () => throw new \LogicException('A flag criterion read the message');
-        $reads = MessagePart::None;
 
         foreach ($program->criteria as $criterion) {
-            $part = self::partReadBy($criterion->key);
+            $part = self::partReadFirstBy($criterion->key);
 
-            if ($part === MessagePart::None) {
-                if (!self::matchesCriterion($criterion, $unread, $unread, $flags, null)) {
-                    return MessagePart::None;
-                }
-            } elseif ($part === MessagePart::Whole || $reads === MessagePart::None) {
-                $reads = $part;
+            if ($part !== MessagePart::None) {
+                return $part;
+            }
+
+            if (!self::matchesCriterion($criterion, $unread, $unread, $flags, null)) {
+                return MessagePart::None;
             }
         }
 
-        return $reads;
+        return MessagePart::None;
     }
 
-    private static function partReadBy(SearchKey $key): MessagePart
+    /** TEXT reads the header first, and the body only where the header did not match. */
+    private static function partReadFirstBy(SearchKey $key): MessagePart
     {
         return match ($key) {
             SearchKey::All, SearchKey::Answered, SearchKey::Unanswered,
@@ -80,9 +83,9 @@ final class Pop3SearchEvaluator
 
             SearchKey::Bcc, SearchKey::Cc, SearchKey::From, SearchKey::Subject,
             SearchKey::To, SearchKey::Before, SearchKey::On,
-            SearchKey::Since => MessagePart::Header,
+            SearchKey::Since, SearchKey::Text => MessagePart::Header,
 
-            SearchKey::Body, SearchKey::Text => MessagePart::Whole,
+            SearchKey::Body => MessagePart::Whole,
         };
     }
 
