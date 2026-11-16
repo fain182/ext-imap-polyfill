@@ -598,14 +598,7 @@ final class Protocol implements ConnectionBackend
             );
         }
 
-        $keys = [];
-        foreach ($msgnos as $msgno) {
-            if (($known = $messages->sortKeys($msgno)) !== null) {
-                $keys[$msgno] = $known;
-            }
-        }
-
-        return $keys;
+        return $messages->sortKeys($msgnos);
     }
 
     private static function envelope(mixed $envelope, string $referencesHeader): Envelope

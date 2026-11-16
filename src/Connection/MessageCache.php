@@ -152,12 +152,24 @@ final class MessageCache
     }
 
     /**
-     * Null for a message no fetch has answered for: one the server left out
-     * is left out of the sort, as it was never in the cache to sort.
+     * Of these messages, the keys of the ones a fetch has answered for: one
+     * the server left out is left out of the sort, as it was never in the
+     * cache to sort.
+     *
+     * @param list<int> $msgnos
+     *
+     * @return array<int, SortKeys> by message number
      */
-    public function sortKeys(int $msgno): ?SortKeys
+    public function sortKeys(array $msgnos): array
     {
-        return $this->sortKeys[$msgno - 1] ?? null;
+        $keys = [];
+        foreach ($msgnos as $msgno) {
+            if (($known = $this->sortKeys[$msgno - 1] ?? null) !== null) {
+                $keys[$msgno] = $known;
+            }
+        }
+
+        return $keys;
     }
 
     /**

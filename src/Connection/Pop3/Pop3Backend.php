@@ -229,14 +229,7 @@ final class Pop3Backend implements ConnectionBackend
             }
         }
 
-        $keys = [];
-        foreach ($msgnos as $msgno) {
-            if (($known = $this->messages->sortKeys($msgno)) !== null) {
-                $keys[$msgno] = $known;
-            }
-        }
-
-        return $keys;
+        return $this->messages->sortKeys($msgnos);
     }
 
     public function search(SearchProgram $program, UidMode $uidMode, ?string $charset = null): array
