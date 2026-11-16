@@ -26,42 +26,30 @@ final class ThreadBuilder
      * reads the envelope, falling back to the first In-Reply-To id when
      * References yields none.
      *
-     * @param array<int, array<string, mixed>> $data msgno => UID, INTERNALDATE and the ENVELOPE as an Envelope
-     * @param int[] $ids msgnos to include, in order
+     * @param array<string, mixed> $message UID, INTERNALDATE and the ENVELOPE as an Envelope
      * @param bool $fromOverview whether the driver has an overview
      *
-     * @return array<int, array{msgno: int, uid: int, messageId: ?string, refs: string[], subject: string, date: int}>
+     * @return array{msgno: int, uid: int, messageId: ?string, refs: string[], subject: string, date: int}
      */
-    public static function messagesFromFetch(array $data, array $ids, bool $fromOverview): array
+    public static function message(int $msgno, array $message, bool $fromOverview): array
     {
-        $messages = [];
+        /** @var Envelope $envelope */
+        $envelope = $message['ENVELOPE'];
+        $refs = MessageId::all($envelope->references ?? '');
 
-        foreach ($ids as $msgno) {
-            if (!isset($data[$msgno])) {
-                continue;
-            }
-
-            $message = $data[$msgno];
-            /** @var Envelope $envelope */
-            $envelope = $message['ENVELOPE'];
-            $refs = MessageId::all($envelope->references ?? '');
-
-            if ($refs === [] && !$fromOverview) {
-                $first = MessageId::first($envelope->inReplyTo ?? '');
-                $refs = $first === null ? [] : [$first];
-            }
-
-            $messages[] = [
-                'msgno' => $msgno,
-                'uid' => (int) $message['UID'],
-                'messageId' => MessageId::first($envelope->messageId ?? ''),
-                'refs' => $refs,
-                'subject' => $envelope->subject ?? '',
-                'date' => strtotime($envelope->date ?? '') ?: (strtotime($message['INTERNALDATE']) ?: 0),
-            ];
+        if ($refs === [] && !$fromOverview) {
+            $first = MessageId::first($envelope->inReplyTo ?? '');
+            $refs = $first === null ? [] : [$first];
         }
 
-        return $messages;
+        return [
+            'msgno' => $msgno,
+            'uid' => (int) $message['UID'],
+            'messageId' => MessageId::first($envelope->messageId ?? ''),
+            'refs' => $refs,
+            'subject' => $envelope->subject ?? '',
+            'date' => strtotime($envelope->date ?? '') ?: (strtotime($message['INTERNALDATE']) ?: 0),
+        ];
     }
 
     /**

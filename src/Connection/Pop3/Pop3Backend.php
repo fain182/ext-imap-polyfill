@@ -193,18 +193,14 @@ final class Pop3Backend implements ConnectionBackend
         return $this->structure($uid)->toBodyPart();
     }
 
-    public function fetchEnvelopes(array $ids, UidMode $uidMode, array $with = []): array
+    public function eachEnvelope(array $ids, UidMode $uidMode, array $with, \Closure $each): void
     {
-        $messages = [];
-
         foreach ($this->fetch([...$with, 'RFC822.HEADER'], $ids, null, $uidMode) as $id => $message) {
             $message = is_array($message) ? $message : ['RFC822.HEADER' => $message];
             $message['ENVELOPE'] = Envelope::fromHeader($message['RFC822.HEADER'], $this->host);
             unset($message['RFC822.HEADER']);
-            $messages[$id] = $message;
+            $each($id, $message);
         }
-
-        return $messages;
     }
 
     public function sortKeys(array $msgnos, SortCriterion $criterion): array
@@ -213,17 +209,21 @@ final class Pop3Backend implements ConnectionBackend
 
         if ($missing !== []) {
             $fast = ['INTERNALDATE', 'RFC822.SIZE'];
-            $data = $criterion->needsEnvelope()
-                ? $this->fetchEnvelopes($missing, UidMode::Msgno, $fast)
-                : $this->fetch($fast, $missing, null, UidMode::Msgno);
-
-            foreach ($data as $msgno => $message) {
+            $learn = function (int $msgno, array $message): void {
                 $internalDate = (string) $message['INTERNALDATE'];
                 $size = (int) $message['RFC822.SIZE'];
 
                 $this->messages->learnSortKeys($msgno, isset($message['ENVELOPE'])
                     ? SortKeys::withEnvelope($message['ENVELOPE'], $internalDate, $size)
                     : SortKeys::fast($internalDate, $size));
+            };
+
+            if ($criterion->needsEnvelope()) {
+                $this->eachEnvelope($missing, UidMode::Msgno, $fast, $learn);
+            } else {
+                foreach ($this->fetch($fast, $missing, null, UidMode::Msgno) as $msgno => $message) {
+                    $learn($msgno, $message);
+                }
             }
         }
 

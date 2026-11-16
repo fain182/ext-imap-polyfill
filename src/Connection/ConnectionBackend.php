@@ -75,15 +75,16 @@ interface ConnectionBackend
 
     /**
      * Each message's Envelope under 'ENVELOPE', beside the plain FETCH
-     * items in $with, in one request; keyed by the ids asked for, and a
-     * message the server did not answer for is left out.
+     * items in $with, in one request, handed to $each with its id as it is
+     * read; a message the server did not answer for is never handed. Not
+     * collected, so what a folder's envelopes weigh is only ever held by a
+     * caller that keeps them.
      *
      * @param list<int> $ids
      * @param list<string> $with
-     *
-     * @return array<int, array<string, mixed>>
+     * @param \Closure(int, array<string, mixed>): void $each
      */
-    public function fetchEnvelopes(array $ids, UidMode $uidMode, array $with = []): array;
+    public function eachEnvelope(array $ids, UidMode $uidMode, array $with, \Closure $each): void;
 
     /**
      * The keys imap_sort() orders these messages by, read off the message

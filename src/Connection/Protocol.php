@@ -510,19 +510,21 @@ final class Protocol implements ConnectionBackend
      * Newsgroups, Followup-To and the Content-* fields too; References is
      * the one an envelope here carries.
      */
-    public function fetchEnvelopes(array $ids, UidMode $uidMode, array $with = []): array
+    public function eachEnvelope(array $ids, UidMode $uidMode, array $with, \Closure $each): void
     {
-        $data = $this->fetch([...$with, 'ENVELOPE', 'BODY.PEEK[HEADER.FIELDS (REFERENCES)]'], $ids, null, $uidMode);
+        $named = array_flip($ids);
 
-        $messages = [];
-
-        foreach ($data as $id => $message) {
-            $message['ENVELOPE'] = self::envelope($message['ENVELOPE'], (string) $message['BODY[HEADER.FIELDS (REFERENCES)]']);
-            unset($message['BODY[HEADER.FIELDS (REFERENCES)]']);
-            $messages[$id] = $message;
-        }
-
-        return $messages;
+        $this->fetchSet(
+            implode(',', $ids),
+            [...$with, 'ENVELOPE', 'BODY.PEEK[HEADER.FIELDS (REFERENCES)]'],
+            $uidMode,
+            static fn (int $id): bool => isset($named[$id]),
+            static function (int $id, mixed $message) use ($each): void {
+                $message['ENVELOPE'] = self::envelope($message['ENVELOPE'], (string) $message['BODY[HEADER.FIELDS (REFERENCES)]']);
+                unset($message['BODY[HEADER.FIELDS (REFERENCES)]']);
+                $each($id, $message);
+            },
+        );
     }
 
     /**
