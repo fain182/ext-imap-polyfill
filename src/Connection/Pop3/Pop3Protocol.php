@@ -8,8 +8,8 @@ use ImapPolyfill\Support\Diagnostics;
 
 /**
  * Minimal RFC1939 POP3 client over a raw socket: just the commands this
- * polyfill's ConnectionBackend needs (USER/PASS, STAT, RETR, TOP, DELE,
- * RSET, NOOP, QUIT). No APOP/AUTH — Greenmail and the real ext-imap
+ * polyfill's ConnectionBackend needs (USER/PASS, CAPA, STAT, LIST, RETR, TOP,
+ * DELE, RSET, NOOP, QUIT). No APOP/AUTH — Greenmail and the real ext-imap
  * parity target both accept plaintext USER/PASS.
  */
 final class Pop3Protocol
@@ -87,7 +87,7 @@ final class Pop3Protocol
             return;
         }
 
-        if (in_array('STLS', $this->capa(), true)) {
+        if (in_array('STLS', $this->capa() ?? [], true)) {
             $this->startTls();
 
             return;
@@ -130,20 +130,20 @@ final class Pop3Protocol
     }
 
     /**
-     * RFC 2449 CAPA, read for STLS alone.
+     * RFC 2449 CAPA.
      *
      * A -ERR is a complete answer, not a failure: the command postdates POP3
-     * by fifteen years, and a server without it advertises nothing — which
-     * is how c-client's pop3_capa() reads the same reply.
+     * by fifteen years. null tells it apart from an empty list, because
+     * pop3_open() trusts LIST only from a server that answered CAPA at all.
      *
-     * @return list<string>
+     * @return list<string>|null
      */
-    private function capa(): array
+    public function capa(): ?array
     {
         $this->writeLine('CAPA');
 
         if (!str_starts_with($this->readStatusLine(), '+OK')) {
-            return [];
+            return null;
         }
 
         $capabilities = [];
@@ -173,6 +173,22 @@ final class Pop3Protocol
         $parts = explode(' ', $response);
 
         return (int) $parts[0];
+    }
+
+    /**
+     * RFC 1939 LIST with no argument: the size the server gives each message.
+     *
+     * @return array<int, int> message number => size in octets
+     */
+    public function list(): array
+    {
+        $sizes = [];
+        foreach ($this->multilineCommand('LIST') as $line) {
+            $fields = explode(' ', $line);
+            $sizes[(int) $fields[0]] = (int) ($fields[1] ?? 0);
+        }
+
+        return $sizes;
     }
 
     public function retr(int $msgno): string

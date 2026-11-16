@@ -843,4 +843,58 @@ final class Pop3MailboxTest extends GreenmailTestCase
 
         imap_close($connection);
     }
+
+    /**
+     * pop3_open() takes each message's size from LIST, and pop3_cache()
+     * replaces it with the octets RETR sent once the message has been read
+     * whole — which pop3_fetchfast() does for the header first wherever the
+     * server does not advertise TOP. The message ends without a line break,
+     * which the server adds before the terminating dot and LIST need not
+     * count.
+     */
+    public function test_the_size_is_the_one_list_gives_until_the_message_is_read(): void
+    {
+        $raw = 'Subject: Pop3Size'.uniqid()."\r\n\r\nNo final line break";
+        self::seedClient()->getFolder('INBOX')->appendMessage($raw);
+
+        $connection = imap_open(self::pop3MailboxSpec(), self::user(), self::password());
+        $count = imap_num_msg($connection);
+        [$listed, $top] = self::listedSize($count);
+        $retrieved = strlen($raw."\r\n");
+
+        $this->assertSame((string) ($top && $listed > 0 ? $listed : $retrieved), imap_headerinfo($connection, $count)->Size);
+
+        imap_body($connection, $count);
+
+        $this->assertSame((string) $retrieved, imap_headerinfo($connection, $count)->Size);
+
+        imap_close($connection);
+    }
+
+    /**
+     * What the server's own LIST says for the message, and whether its CAPA
+     * advertises TOP, over a session of its own.
+     *
+     * @return array{int, bool}
+     */
+    private static function listedSize(int $msgno): array
+    {
+        $socket = fsockopen(self::pop3Host(), self::pop3Port(), $errno, $errstr, 10);
+        self::assertIsResource($socket, $errstr);
+
+        foreach (['USER '.self::user(), 'PASS '.self::password(), 'CAPA', "LIST {$msgno}", 'QUIT'] as $command) {
+            fwrite($socket, $command."\r\n");
+        }
+
+        $lines = [];
+        while (($line = fgets($socket)) !== false) {
+            $lines[] = rtrim($line, "\r\n");
+        }
+        fclose($socket);
+
+        $listing = preg_grep("/^\\+OK {$msgno} \\d+/", $lines);
+        self::assertCount(1, $listing);
+
+        return [(int) explode(' ', (string) reset($listing))[2], in_array('TOP', $lines, true)];
+    }
 }

@@ -59,13 +59,29 @@ final class Pop3Backend implements ConnectionBackend
     /** @var array<int, RawMessage> uid => RETR answer, for the lifetime of the connection */
     private array $rawMessageCache = [];
 
+    /** @var array<int, RawMessage> uid => TOP n 0 answer, a header with no body */
+    private array $headerCache = [];
+
     /** @var array<int, MimeBody> uid => the RETR answer parsed */
     private array $structureCache = [];
 
+    /** @var list<string>|null what CAPA answered after login; null for a server without it */
+    private ?array $capabilities = null;
+
+    private bool $capabilitiesRead = false;
+
+    /** @var array<int, int>|null uid => the size LIST gave it, read on first need */
+    private ?array $listedSizes = null;
+
+    /**
+     * @param bool $loser the spec's /loser: pop3.c then trusts neither LIST
+     *                    nor TOP, and reads sizes and headers off RETR
+     */
     public function __construct(
         private readonly Pop3Protocol $protocol,
         private readonly string $host,
         private readonly string $mailboxSpec,
+        private readonly bool $loser,
     ) {
         $this->messages = new MessageCache();
     }
@@ -247,7 +263,7 @@ final class Pop3Backend implements ConnectionBackend
 
         $ids = [];
         foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
-            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->rawMessage($uid), fn (): MimeBody => $this->structure($uid), $this->flags[$uid] ?? [], $charset)) {
+            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (): MimeBody => $this->structure($uid), $this->flags[$uid] ?? [], $charset)) {
                 $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
         }
@@ -285,11 +301,10 @@ final class Pop3Backend implements ConnectionBackend
         $result = [];
         foreach ($ids as $id) {
             $uid = $uidMode === self::UID_MODE ? $this->knownUid($id) : $this->messages->uidTable()->uidOf($id);
-            $message = $this->rawMessage($uid);
 
             $entry = [];
             foreach ($items as $item) {
-                $entry[$item] = $this->fetchItem($item, $uid, $message);
+                $entry[$item] = $this->fetchItem($item, $uid);
             }
 
             // Mirrors the IMAP backend's fetch() response shape: a single
@@ -302,16 +317,16 @@ final class Pop3Backend implements ConnectionBackend
         return $result;
     }
 
-    private function fetchItem(string $item, int $uid, RawMessage $message): mixed
+    private function fetchItem(string $item, int $uid): mixed
     {
         return match (true) {
             // pop3_open() marks every message of the session recent.
             $item === 'FLAGS' => ['\\Recent', ...($this->flags[$uid] ?? [])],
             $item === 'INTERNALDATE' => self::FAKE_INTERNAL_DATE,
-            $item === 'RFC822.SIZE' => (string) strlen($message->getRaw()),
-            $item === 'RFC822.HEADER' => $message->getRawHeader()."\r\n",
+            $item === 'RFC822.SIZE' => (string) $this->size($uid),
+            $item === 'RFC822.HEADER' => $this->header($uid)->getRawHeader()."\r\n",
             $item === 'UID' => (string) $uid,
-            str_starts_with($item, 'BODY.PEEK[') || str_starts_with($item, 'BODY[') => $this->fetchSection($item, $uid, $message),
+            str_starts_with($item, 'BODY.PEEK[') || str_starts_with($item, 'BODY[') => $this->fetchSection($item, $uid),
             // Not a condition a caller can be in: every item the polyfill
             // asks for has an arm above. Answering '' for the rest would
             // make a new one look answered — which is how a raw
@@ -329,20 +344,20 @@ final class Pop3Backend implements ConnectionBackend
      * section that names no body is an empty string, as c-client answers
      * it from the structure.
      */
-    private function fetchSection(string $item, int $uid, RawMessage $message): string
+    private function fetchSection(string $item, int $uid): string
     {
         $section = substr($item, strpos($item, '[') + 1, -1);
 
         if ($section === '') {
-            return $message->getRaw();
+            return $this->rawMessage($uid)->getRaw();
         }
 
         if ($section === 'TEXT') {
-            return $message->getBody();
+            return $this->rawMessage($uid)->getBody();
         }
 
         if ($section === 'HEADER') {
-            return $message->getRawHeader()."\r\n";
+            return $this->header($uid)->getRawHeader()."\r\n";
         }
 
         if (str_ends_with($section, '.MIME')) {
@@ -516,6 +531,75 @@ final class Pop3Backend implements ConnectionBackend
     private function rawMessage(int $uid): RawMessage
     {
         return $this->rawMessageCache[$uid] ??= new RawMessage($this->protocol->retr($uid));
+    }
+
+    /**
+     * pop3_header(): TOP n 0 where the server advertised TOP, RETR where it
+     * did not. A message already read whole needs neither.
+     */
+    private function header(int $uid): RawMessage
+    {
+        if (isset($this->rawMessageCache[$uid])) {
+            return $this->rawMessageCache[$uid];
+        }
+
+        if (!$this->loser && in_array('TOP', $this->capabilities() ?? [], true)) {
+            return $this->headerCache[$uid] ??= new RawMessage($this->protocol->top($uid, 0));
+        }
+
+        return $this->rawMessage($uid);
+    }
+
+    /**
+     * The size LIST gave the message, where pop3_open() would have read one;
+     * the length of the RETR answer otherwise. That length also replaces
+     * LIST's figure once the message has been read whole, as pop3_cache()
+     * writes it over rfc822_size: a server's LIST is free to disagree with
+     * the octets it sends (Dovecot's leaves out the CRLF it adds to a
+     * message that lacks a final one).
+     *
+     * pop3_fetchfast() reads the header before it looks at the size, so on
+     * a server without TOP the header's RETR has already replaced LIST's
+     * figure by then: LIST only ever shows through where TOP is advertised.
+     */
+    private function size(int $uid): int
+    {
+        $this->header($uid);
+
+        if (!isset($this->rawMessageCache[$uid]) && ($listed = $this->listedSizes()[$uid] ?? 0) > 0) {
+            return $listed;
+        }
+
+        return strlen($this->rawMessage($uid)->getRaw());
+    }
+
+    /**
+     * pop3_open() sends LIST once, at open, and only to a server that
+     * answered CAPA: an older one's LIST was not to be trusted. It is read
+     * here on first need instead, which no answer can tell apart, as a POP3
+     * server keeps the session's sizes fixed.
+     *
+     * @return array<int, int>
+     */
+    private function listedSizes(): array
+    {
+        return $this->listedSizes ??= !$this->loser && $this->capabilities() !== null ? $this->protocol->list() : [];
+    }
+
+    /**
+     * pop3_auth() reads CAPA again once logged in, and that answer is the
+     * one pop3_open() and pop3_header() go by.
+     *
+     * @return list<string>|null
+     */
+    private function capabilities(): ?array
+    {
+        if (!$this->capabilitiesRead) {
+            $this->capabilities = $this->protocol->capa();
+            $this->capabilitiesRead = true;
+        }
+
+        return $this->capabilities;
     }
 
     /**
