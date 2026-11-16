@@ -56,11 +56,21 @@ final class Pop3Backend implements ConnectionBackend
     /** @var array<int, string[]> uid => IMAP flag names set on it, session-scoped */
     private array $flags = [];
 
-    /** @var array<int, RawMessage> uid => RETR answer, for the lifetime of the connection */
-    private array $rawMessageCache = [];
+    /**
+     * The one message last read whole, as pop3_cache() keeps LOCAL->txt and
+     * LOCAL->cached: the next RETR replaces it. $structureCache still keeps
+     * the text of every message it parsed, inside its MimeBody.
+     */
+    private ?RawMessage $lastRetr = null;
 
-    /** @var array<int, RawMessage> uid => TOP n 0 answer, a header with no body */
+    /** pop3_cache()'s LOCAL->cached: the uid $lastRetr belongs to, 0 for none */
+    private int $lastRetrUid = 0;
+
+    /** @var array<int, RawMessage> uid => the header alone, from TOP n 0 or cut off a RETR */
     private array $headerCache = [];
+
+    /** @var array<int, int> uid => the length of its RETR answer, for every message ever read whole */
+    private array $retrSizes = [];
 
     /** @var array<int, MimeBody> uid => the RETR answer parsed */
     private array $structureCache = [];
@@ -164,6 +174,11 @@ final class Pop3Backend implements ConnectionBackend
             if (in_array('\\Deleted', $this->flags[$uid] ?? [], true)) {
                 $this->protocol->dele($uid);
                 $this->messages->expunged($msgno);
+
+                if ($uid === $this->lastRetrUid) {
+                    $this->lastRetr = null;
+                    $this->lastRetrUid = 0;
+                }
             }
         }
     }
@@ -523,24 +538,33 @@ final class Pop3Backend implements ConnectionBackend
 
     private function rawMessage(int $uid): RawMessage
     {
-        return $this->rawMessageCache[$uid] ??= new RawMessage($this->protocol->retr($uid));
+        if ($this->lastRetr === null || $this->lastRetrUid !== $uid) {
+            $this->lastRetr = new RawMessage($this->protocol->retr($uid));
+            $this->lastRetrUid = $uid;
+            $this->headerCache[$uid] ??= new RawMessage($this->lastRetr->getRawHeader());
+            $this->retrSizes[$uid] = strlen($this->lastRetr->getRaw());
+        }
+
+        return $this->lastRetr;
     }
 
     /**
      * pop3_header(): TOP n 0 where the server advertised TOP, RETR where it
-     * did not. A message already read whole needs neither.
+     * did not, each read once per message. A message already read whole
+     * takes its header from that RETR, where pop3_header() would still send
+     * TOP: pop3_cache() does not fill the header text.
      */
     private function header(int $uid): RawMessage
     {
-        if (isset($this->rawMessageCache[$uid])) {
-            return $this->rawMessageCache[$uid];
+        if (!isset($this->headerCache[$uid])) {
+            if (!$this->loser && in_array('TOP', $this->capabilities() ?? [], true)) {
+                $this->headerCache[$uid] = new RawMessage($this->protocol->top($uid, 0));
+            } else {
+                $this->rawMessage($uid);
+            }
         }
 
-        if (!$this->loser && in_array('TOP', $this->capabilities() ?? [], true)) {
-            return $this->headerCache[$uid] ??= new RawMessage($this->protocol->top($uid, 0));
-        }
-
-        return $this->rawMessage($uid);
+        return $this->headerCache[$uid];
     }
 
     /**
@@ -559,11 +583,15 @@ final class Pop3Backend implements ConnectionBackend
     {
         $this->header($uid);
 
-        if (!isset($this->rawMessageCache[$uid]) && ($listed = $this->listedSizes()[$uid] ?? 0) > 0) {
-            return $listed;
+        if (!isset($this->retrSizes[$uid])) {
+            if (($listed = $this->listedSizes()[$uid] ?? 0) > 0) {
+                return $listed;
+            }
+
+            $this->rawMessage($uid);
         }
 
-        return strlen($this->rawMessage($uid)->getRaw());
+        return $this->retrSizes[$uid];
     }
 
     /**
