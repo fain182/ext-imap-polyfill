@@ -44,8 +44,9 @@ final class ThreadBuilder
             $container->msgno = $message->msgno;
             $container->uid = $message->uid;
             $container->date = $message->date;
-            $container->baseSubject = BaseSubject::of($message->subject);
-            $container->isReply = BaseSubject::isReplyOrForward($message->subject);
+            $subject = BaseSubject::of($message->subject);
+            $container->baseSubject = $subject->text;
+            $container->isReply = $subject->isReplyOrForward;
 
             $refParent = null;
             foreach ($message->refs as $refId) {

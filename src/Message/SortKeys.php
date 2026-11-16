@@ -20,20 +20,14 @@ final class SortKeys
 
     public static function fast(string $internalDate, int $size): self
     {
-        return new self(
-            (int) SortKey::resolve(SortCriterion::Arrival, null, $internalDate, $size),
-            $size,
-            null,
-        );
+        return new self(SortKey::arrival($internalDate), $size, null);
     }
 
     public static function withEnvelope(Envelope $envelope, string $internalDate, int $size): self
     {
-        return new self(
-            (int) SortKey::resolve(SortCriterion::Arrival, null, $internalDate, $size),
-            $size,
-            EnvelopeSortKeys::of($envelope, $internalDate, $size),
-        );
+        $arrival = SortKey::arrival($internalDate);
+
+        return new self($arrival, $size, EnvelopeSortKeys::of($envelope, $arrival));
     }
 
     public function serves(SortCriterion $criterion): bool

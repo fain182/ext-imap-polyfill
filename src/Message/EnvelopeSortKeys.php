@@ -16,14 +16,14 @@ final class EnvelopeSortKeys
     ) {
     }
 
-    public static function of(Envelope $envelope, string $internalDate, int $size): self
+    public static function of(Envelope $envelope, int $arrival): self
     {
         return new self(
-            (int) SortKey::resolve(SortCriterion::Date, $envelope, $internalDate, $size),
-            (string) SortKey::resolve(SortCriterion::From, $envelope, $internalDate, $size),
-            (string) SortKey::resolve(SortCriterion::To, $envelope, $internalDate, $size),
-            (string) SortKey::resolve(SortCriterion::Cc, $envelope, $internalDate, $size),
-            (string) SortKey::resolve(SortCriterion::Subject, $envelope, $internalDate, $size),
+            SortKey::date($envelope, $arrival),
+            SortKey::mailbox($envelope->from()),
+            SortKey::mailbox($envelope->to()),
+            SortKey::mailbox($envelope->cc()),
+            BaseSubject::of($envelope->subject ?? '')->text,
         );
     }
 }

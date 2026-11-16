@@ -905,24 +905,25 @@ final class Mailbox
             return [];
         }
 
-        $entries = [];
+        $byMsgno = [];
         foreach ($keys as $msgno => $messageKeys) {
-            $entries[] = ['msgno' => $msgno, 'key' => $messageKeys->key($criterion)];
+            $byMsgno[$msgno] = $messageKeys->key($criterion);
         }
+        $msgnos = array_keys($byMsgno);
 
         // mail_sort_compare() flips the key comparison only: a tie still
         // goes to the lower message number when the sort is reversed. A
         // text key is compared as text (compare_cstring()), never as the
         // number "98487" or "0884502441557" would be to <=>.
-        usort($entries, static function (array $a, array $b) use ($reverse): int {
-            $cmp = is_string($a['key']) && is_string($b['key'])
-                ? strcmp($a['key'], $b['key']) <=> 0
-                : $a['key'] <=> $b['key'];
+        usort($msgnos, static function (int $a, int $b) use ($byMsgno, $reverse): int {
+            $cmp = is_string($byMsgno[$a]) && is_string($byMsgno[$b])
+                ? strcmp($byMsgno[$a], $byMsgno[$b]) <=> 0
+                : $byMsgno[$a] <=> $byMsgno[$b];
 
-            return ($reverse ? -$cmp : $cmp) ?: $a['msgno'] <=> $b['msgno'];
+            return ($reverse ? -$cmp : $cmp) ?: $a <=> $b;
         });
 
-        return array_map(static fn (array $e): int => $uids?->uidOf($e['msgno']) ?? $e['msgno'], $entries);
+        return $uids === null ? $msgnos : array_map($uids->uidOf(...), $msgnos);
     }
 
     /**

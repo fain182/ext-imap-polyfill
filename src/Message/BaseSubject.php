@@ -16,22 +16,25 @@ use ImapPolyfill\Mime\MimeText;
 final class BaseSubject
 {
     /**
-     * Mirrors c-client's SORTCACHE->refwd: whether stripping found any
-     * re/fwd marker — a "(fwd)" trailer, a re/fw/fwd leader, or a
-     * "[Fwd: ...]" wrapper — independent of whether the message has
-     * References/In-Reply-To headers.
+     * @param bool $isReplyOrForward c-client's SORTCACHE->refwd: whether
+     *     stripping found any re/fwd marker — a "(fwd)" trailer, a
+     *     re/fw/fwd leader, or a "[Fwd: ...]" wrapper — independent of
+     *     whether the message has References/In-Reply-To headers
      */
-    public static function isReplyOrForward(string $subject): bool
-    {
-        return self::strip($subject)[1];
+    private function __construct(
+        public readonly string $text,
+        public readonly bool $isReplyOrForward,
+    ) {
     }
 
-    public static function of(string $subject): string
+    public static function of(string $subject): self
     {
+        [$text, $isReplyOrForward] = self::strip($subject);
+
         // Lowercasing isn't part of mail_strip_subject() — c-client
         // compares base subjects case-insensitively afterwards, which
         // grouping and ordering on the lowercased form reproduces.
-        return strtolower(self::strip($subject)[0]);
+        return new self(strtolower($text), $isReplyOrForward);
     }
 
     /**

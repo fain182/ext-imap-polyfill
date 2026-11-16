@@ -52,17 +52,17 @@ class BaseSubjectTest extends TestCase
      */
     public function test_extracts_the_rfc5256_base_subject(string $subject, string $expected): void
     {
-        $this->assertSame($expected, BaseSubject::of($subject));
+        $this->assertSame($expected, BaseSubject::of($subject)->text);
     }
 
     public function test_detects_re_fwd_markers(): void
     {
-        $this->assertTrue(BaseSubject::isReplyOrForward('Re: x'));
-        $this->assertTrue(BaseSubject::isReplyOrForward('x (FWD)'));
-        $this->assertTrue(BaseSubject::isReplyOrForward('[Fwd: x]'));
-        $this->assertTrue(BaseSubject::isReplyOrForward('re [2]: x'));
-        $this->assertFalse(BaseSubject::isReplyOrForward('plain'));
-        $this->assertFalse(BaseSubject::isReplyOrForward('Reply: no'));
-        $this->assertFalse(BaseSubject::isReplyOrForward('[tag] plain'));
+        $this->assertTrue(BaseSubject::of('Re: x')->isReplyOrForward);
+        $this->assertTrue(BaseSubject::of('x (FWD)')->isReplyOrForward);
+        $this->assertTrue(BaseSubject::of('[Fwd: x]')->isReplyOrForward);
+        $this->assertTrue(BaseSubject::of('re [2]: x')->isReplyOrForward);
+        $this->assertFalse(BaseSubject::of('plain')->isReplyOrForward);
+        $this->assertFalse(BaseSubject::of('Reply: no')->isReplyOrForward);
+        $this->assertFalse(BaseSubject::of('[tag] plain')->isReplyOrForward);
     }
 }
