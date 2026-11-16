@@ -153,6 +153,17 @@ interface ConnectionBackend
     public function uidTable(): UidTable;
 
     /**
+     * c-client's mail_uid() over these messages: the uids the cache already
+     * holds are read off it, and only the rest are fetched — unlike
+     * uidTable(), which needs every message of the folder.
+     *
+     * @param list<int> $msgnos
+     *
+     * @return array<int, int> uid by message number
+     */
+    public function uids(array $msgnos): array;
+
+    /**
      * @param string[] $args
      */
     public function store(string $command, array $args): void;

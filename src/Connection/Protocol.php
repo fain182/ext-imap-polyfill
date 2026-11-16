@@ -383,6 +383,28 @@ final class Protocol implements ConnectionBackend
         return $messages->uidTable();
     }
 
+    public function uids(array $msgnos): array
+    {
+        $messages = $this->connection->messages();
+        $unknown = array_values(array_filter($msgnos, static fn (int $msgno): bool => $messages->uid($msgno) === null));
+
+        if ($unknown !== []) {
+            $named = array_flip($unknown);
+
+            foreach ($this->fetchSet(implode(',', $unknown), ['UID'], UidMode::Msgno, static fn (int $msgno): bool => isset($named[$msgno])) as $msgno => $uid) {
+                $messages->learnUid($msgno, (int) $uid);
+            }
+        }
+
+        $uids = [];
+        foreach ($msgnos as $msgno) {
+            $uids[$msgno] = $messages->uid($msgno)
+                ?? throw new \RuntimeException("FETCH UID left message {$msgno} without a uid");
+        }
+
+        return $uids;
+    }
+
     /**
      * @param string[] $args pre-formatted wire arguments (sequence set, item, flag list)
      */

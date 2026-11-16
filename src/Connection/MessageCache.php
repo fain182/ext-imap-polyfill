@@ -109,6 +109,15 @@ final class MessageCache
         return $unknown;
     }
 
+    /**
+     * Null where the uid is not yet known, as for a message the folder does
+     * not hold.
+     */
+    public function uid(int $msgno): ?int
+    {
+        return $this->counted()[$msgno - 1] ?? null;
+    }
+
     public function learnUid(int $msgno, int $uid): void
     {
         if ($this->uids !== null && array_key_exists($msgno - 1, $this->uids)) {

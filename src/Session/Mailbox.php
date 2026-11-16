@@ -896,7 +896,7 @@ final class Mailbox
             }
 
             $keys = $this->connection->backend()->sortKeys($ids, $criterion);
-            $uids = $flags & SE_UID ? $this->connection->backend()->uidTable() : null;
+            $uids = $flags & SE_UID ? $this->connection->backend()->uids(array_keys($keys)) : null;
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -923,7 +923,7 @@ final class Mailbox
             return ($reverse ? -$cmp : $cmp) ?: $a <=> $b;
         });
 
-        return $uids === null ? $msgnos : array_map($uids->uidOf(...), $msgnos);
+        return $uids === null ? $msgnos : array_map(static fn (int $msgno): int => $uids[$msgno], $msgnos);
     }
 
     /**

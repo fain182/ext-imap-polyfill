@@ -62,6 +62,27 @@ class ImapSortLocalFetchTest extends TestCase
     }
 
     /**
+     * mail_sort_msgs() answers SE_UID with mail_uid() per sorted message,
+     * which the sort's own fetch has already filled: the messages the
+     * search left out are never asked for.
+     */
+    public function test_a_uid_sort_of_a_search_asks_no_uids_beyond_the_matches(): void
+    {
+        $connection = $this->connectionTo([
+            '* 3 EXISTS',
+            ...array_slice(self::SELECTED, 1),
+            '* SEARCH 2',
+            'TAG3 OK SEARCH completed',
+            '* 2 FETCH (UID 9 INTERNALDATE "01-Jan-2024 11:00:00 +0000" RFC822.SIZE 100)',
+            'TAG4 OK FETCH completed',
+        ]);
+
+        $this->assertSame([9], imap_sort($connection, SORTSIZE, false, SE_UID, 'FROM x'));
+        $this->stream->assertWritten('TAG4 FETCH 2 (UID INTERNALDATE RFC822.SIZE)');
+        $this->stream->assertNotWritten('FETCH');
+    }
+
+    /**
      * mail_expunged() takes the message's cache entry out, its sort keys
      * with it, and the messages after it move down a number.
      */

@@ -357,6 +357,17 @@ final class Pop3Backend implements ConnectionBackend
         return $this->messages->uidTable();
     }
 
+    public function uids(array $msgnos): array
+    {
+        $table = $this->messages->uidTable();
+        $uids = [];
+        foreach ($msgnos as $msgno) {
+            $uids[$msgno] = $table->uidOf($msgno);
+        }
+
+        return $uids;
+    }
+
     public function store(string $command, array $args): void
     {
         [$sequence, $action, $flagsAtom] = $args;
