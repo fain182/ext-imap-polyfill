@@ -45,7 +45,7 @@ final class ThreadMessage
             MessageId::first($envelope->messageId ?? ''),
             $refs,
             $envelope->subject ?? '',
-            strtotime($envelope->date ?? '') ?: (strtotime($summary->internalDate) ?: 0),
+            SortKey::date($envelope, SortKey::arrival($summary->internalDate)),
         );
     }
 }
