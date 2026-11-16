@@ -16,20 +16,20 @@ final class SortKey
      * mail_sort_loadcache() reads the keys out of mail_fetchenvelope(), so
      * they come from the same Envelope imap_headerinfo() reports.
      */
-    public static function resolve(SortCriterion $criteria, Envelope $envelope, string $internalDate, int $size): int|string
+    public static function resolve(SortCriterion $criteria, ?Envelope $envelope, string $internalDate, int $size): int|string
     {
         $arrival = strtotime($internalDate) ?: 0;
 
         return match ($criteria) {
             // mail_sort_loadcache() sorts a message whose Date: is missing or
             // unparseable by its internal date, not ahead of every other.
-            SortCriterion::Date => strtotime($envelope->date ?? '') ?: $arrival,
+            SortCriterion::Date => strtotime(self::envelope($envelope)->date ?? '') ?: $arrival,
             SortCriterion::Arrival => $arrival,
             SortCriterion::Size => $size,
-            SortCriterion::From => self::mailboxKey($envelope->from()),
-            SortCriterion::To => self::mailboxKey($envelope->to()),
-            SortCriterion::Cc => self::mailboxKey($envelope->cc()),
-            SortCriterion::Subject => BaseSubject::of($envelope->subject ?? ''),
+            SortCriterion::From => self::mailboxKey(self::envelope($envelope)->from()),
+            SortCriterion::To => self::mailboxKey(self::envelope($envelope)->to()),
+            SortCriterion::Cc => self::mailboxKey(self::envelope($envelope)->cc()),
+            SortCriterion::Subject => BaseSubject::of(self::envelope($envelope)->subject ?? ''),
         };
     }
 
@@ -48,6 +48,11 @@ final class SortKey
             SortCriterion::Cc => 'CC',
             SortCriterion::Subject => 'SUBJECT',
         };
+    }
+
+    private static function envelope(?Envelope $envelope): Envelope
+    {
+        return $envelope ?? throw new \LogicException('A sort by an envelope field was resolved without the envelope');
     }
 
     private static function mailboxKey(?AddressList $addresses): string
