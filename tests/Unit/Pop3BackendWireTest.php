@@ -175,6 +175,28 @@ class Pop3BackendWireTest extends TestCase
         $this->assertSame("STAT\r\nCAPA\r\nRETR 1\r\nRETR 2\r\nRETR 1\r\n", $this->serverSaw());
     }
 
+    /**
+     * The parsed body outlives the text too: a part of a message another one
+     * has replaced is cut out of a second RETR, and a section naming no part
+     * is answered from the body alone.
+     */
+    public function test_a_part_is_read_again_once_another_message_replaces_its_text(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->assertSame([1 => "Body a\r\n"], $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno));
+        $this->assertSame([2 => "Body b\r\n"], $this->backend->fetch(['BODY.PEEK[1]'], [2], null, UidMode::Msgno));
+        $this->assertSame([1 => "Body a\r\n"], $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno));
+        $this->assertSame([2 => ''], $this->backend->fetch(['BODY.PEEK[2]'], [2], null, UidMode::Msgno));
+        $this->assertSame("STAT\r\nRETR 1\r\nRETR 2\r\nRETR 1\r\n", $this->serverSaw());
+    }
+
     /** What RETR measured outlives the text, so LIST never shows through again. */
     public function test_a_message_read_whole_keeps_its_length_once_another_replaces_it(): void
     {

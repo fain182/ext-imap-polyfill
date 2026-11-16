@@ -58,8 +58,7 @@ final class Pop3Backend implements ConnectionBackend
 
     /**
      * The one message last read whole, as pop3_cache() keeps LOCAL->txt and
-     * LOCAL->cached: the next RETR replaces it. $structureCache still keeps
-     * the text of every message it parsed, inside its MimeBody.
+     * LOCAL->cached: the next RETR replaces it.
      */
     private ?RawMessage $lastRetr = null;
 
@@ -72,7 +71,7 @@ final class Pop3Backend implements ConnectionBackend
     /** @var array<int, int> uid => the length of its RETR answer, for every message ever read whole */
     private array $retrSizes = [];
 
-    /** @var array<int, MimeBody> uid => the RETR answer parsed */
+    /** @var array<int, MimeBody> uid => the RETR answer parsed, without its text */
     private array $structureCache = [];
 
     /** @var list<string>|null what CAPA answered after login; null for a server without it */
@@ -277,7 +276,7 @@ final class Pop3Backend implements ConnectionBackend
 
         $ids = [];
         foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
-            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (): MimeBody => $this->structure($uid), $this->flags[$uid] ?? [], $charset)) {
+            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (bool $headers): array => $this->structure($uid)->searchableTexts($this->rawMessage($uid)->getRaw(), $headers), $this->flags[$uid] ?? [], $charset)) {
                 $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
         }
@@ -400,10 +399,10 @@ final class Pop3Backend implements ConnectionBackend
         }
 
         if (str_ends_with($section, '.MIME')) {
-            return $this->structure($uid)->section(substr($section, 0, -5))?->mimeText() ?? '';
+            return $this->structure($uid)->section(substr($section, 0, -5))?->mimeText($this->rawMessage($uid)->getRaw()) ?? '';
         }
 
-        return $this->structure($uid)->section($section)?->text() ?? '';
+        return $this->structure($uid)->section($section)?->text($this->rawMessage($uid)->getRaw()) ?? '';
     }
 
     public function uidTable(): UidTable
@@ -700,7 +699,11 @@ final class Pop3Backend implements ConnectionBackend
 
     /**
      * Parsed once per message, as c-client keeps the BODY in the message
-     * cache: what the parse logs is logged the first time only.
+     * cache: what the parse logs is logged the first time only. The BODY
+     * keeps offsets, not text: a part is cut out of rawMessage(), which
+     * re-reads the message with RETR once another one has replaced it, as
+     * pop3_cache() does. That relies on the server sending the same octets
+     * for the same message twice, which RFC 1939's fixed session view gives.
      */
     private function structure(int $uid): MimeBody
     {
