@@ -4,12 +4,14 @@ namespace ImapPolyfill\Connection\Imap;
 
 use DirectoryTree\ImapEngine\Collections\ResponseCollection;
 use DirectoryTree\ImapEngine\Connection\ImapConnection;
+use DirectoryTree\ImapEngine\Connection\ImapTokenizer;
 use DirectoryTree\ImapEngine\Connection\Responses\ContinuationResponse;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\Data;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\ResponseCodeData;
 use DirectoryTree\ImapEngine\Connection\Responses\Response;
 use DirectoryTree\ImapEngine\Connection\Responses\TaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Responses\UntaggedResponse;
+use DirectoryTree\ImapEngine\Connection\Streams\StreamInterface;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
 use DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException;
 use DirectoryTree\ImapEngine\Support\Str;
@@ -93,6 +95,11 @@ final class ImapEngineConnection extends ImapConnection
                 return;
             }
         }
+    }
+
+    protected function newTokenizer(StreamInterface $stream): ImapTokenizer
+    {
+        return new ImapEngineTokenizer($stream);
     }
 
     /**
