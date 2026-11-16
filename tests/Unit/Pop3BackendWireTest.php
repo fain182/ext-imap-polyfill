@@ -175,6 +175,24 @@ class Pop3BackendWireTest extends TestCase
         $this->assertSame("STAT\r\nCAPA\r\nRETR 1\r\nRETR 2\r\nRETR 1\r\n", $this->serverSaw());
     }
 
+    /** What RETR measured outlives the text, so LIST never shows through again. */
+    public function test_a_message_read_whole_keeps_its_length_once_another_replaces_it(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'Subject: a', '', 'Body', '.',
+            '+OK', 'Subject: b', '', 'Body', '.',
+            '+OK', 'TOP', '.',
+            '+OK', '1 100', '2 100', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->backend->fetch(['BODY.PEEK[]'], [1, 2], null, UidMode::Msgno);
+
+        $this->assertSame([1 => '20'], $this->backend->fetch(['RFC822.SIZE'], [1], null, UidMode::Msgno));
+        $this->assertSame("STAT\r\nRETR 1\r\nRETR 2\r\n", $this->serverSaw());
+    }
+
     /** /loser: pop3.c trusts neither LIST nor TOP, and asks for neither. */
     public function test_a_loser_server_is_read_with_retr_alone(): void
     {
