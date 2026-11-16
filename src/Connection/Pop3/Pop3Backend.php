@@ -610,13 +610,24 @@ final class Pop3Backend implements ConnectionBackend
         }
     }
 
+    /**
+     * A message read whole a second time must come back as long as the
+     * first: its cached MimeBody holds offsets into that first answer, and
+     * a different text would have every part cut at the wrong place.
+     */
     private function rawMessage(int $uid): RawMessage
     {
         if ($this->lastRetr === null || $this->lastRetrUid !== $uid) {
-            $this->lastRetr = new RawMessage($this->protocol->retr($uid));
+            $message = new RawMessage($this->protocol->retr($uid));
+            $length = strlen($message->getRaw());
+            if (isset($this->retrSizes[$uid]) && $this->retrSizes[$uid] !== $length) {
+                throw new \RuntimeException("POP3 server sent message {$uid} as {$length} octets, after {$this->retrSizes[$uid]} earlier in the session");
+            }
+
+            $this->lastRetr = $message;
             $this->lastRetrUid = $uid;
-            $this->headerCache[$uid] ??= new RawMessage($this->lastRetr->getRawHeader());
-            $this->retrSizes[$uid] = strlen($this->lastRetr->getRaw());
+            $this->headerCache[$uid] ??= new RawMessage($message->getRawHeader());
+            $this->retrSizes[$uid] = $length;
         }
 
         return $this->lastRetr;
@@ -702,8 +713,7 @@ final class Pop3Backend implements ConnectionBackend
      * cache: what the parse logs is logged the first time only. The BODY
      * keeps offsets, not text: a part is cut out of rawMessage(), which
      * re-reads the message with RETR once another one has replaced it, as
-     * pop3_cache() does. That relies on the server sending the same octets
-     * for the same message twice, which RFC 1939's fixed session view gives.
+     * pop3_cache() does, and refuses one that came back a different length.
      */
     private function structure(int $uid): MimeBody
     {

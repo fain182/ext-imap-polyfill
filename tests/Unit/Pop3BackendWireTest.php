@@ -215,6 +215,25 @@ class Pop3BackendWireTest extends TestCase
         $this->assertSame("STAT\r\nRETR 1\r\nRETR 2\r\nRETR 1\r\nRETR 2\r\n", $this->serverSaw());
     }
 
+    /** The parsed body's offsets hold only for the octets it was parsed from. */
+    public function test_a_message_read_again_at_another_length_is_refused(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+            '+OK', 'Subject: a', '', 'Body a, longer', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno);
+        $this->backend->fetch(['BODY.PEEK[1]'], [2], null, UidMode::Msgno);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('POP3 server sent message 1 as 30 octets, after 22 earlier in the session');
+        $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno);
+    }
+
     /** What RETR measured outlives the text, so LIST never shows through again. */
     public function test_a_message_read_whole_keeps_its_length_once_another_replaces_it(): void
     {
