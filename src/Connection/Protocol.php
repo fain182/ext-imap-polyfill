@@ -506,13 +506,10 @@ final class Protocol implements ConnectionBackend
     }
 
     /**
-     * imap_fetchenvelope()'s request: ENVELOPE, and beside it the header
-     * text of what ENVELOPE has no slot for. c-client's list names
+     * imap_fetch()'s FT_NEEDENV request, in its order: beside ENVELOPE, the
+     * header text of what ENVELOPE has no slot for. c-client's list names
      * Newsgroups, Followup-To and the Content-* fields too; References is
      * the one an envelope here carries.
-     */
-    /**
-     * imap_fetch()'s FT_NEEDENV request, in its order.
      */
     public function eachSummary(array $ids, UidMode $uidMode, \Closure $each): void
     {
