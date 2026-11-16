@@ -43,6 +43,50 @@ final class Pop3SearchEvaluator
     }
 
     /**
+     * What matches() will read of a message with these flags, so the backend
+     * can fetch it ahead for many messages at once. A flag criterion that
+     * already fails decides the message without reading anything.
+     *
+     * @param string[] $flags
+     */
+    public static function reads(SearchProgram $program, array $flags): MessagePart
+    {
+        $unread = static fn () => throw new \LogicException('A flag criterion read the message');
+        $reads = MessagePart::None;
+
+        foreach ($program->criteria as $criterion) {
+            $part = self::partReadBy($criterion->key);
+
+            if ($part === MessagePart::None) {
+                if (!self::matchesCriterion($criterion, $unread, $unread, $flags, null)) {
+                    return MessagePart::None;
+                }
+            } elseif ($part === MessagePart::Whole || $reads === MessagePart::None) {
+                $reads = $part;
+            }
+        }
+
+        return $reads;
+    }
+
+    private static function partReadBy(SearchKey $key): MessagePart
+    {
+        return match ($key) {
+            SearchKey::All, SearchKey::Answered, SearchKey::Unanswered,
+            SearchKey::Deleted, SearchKey::Undeleted, SearchKey::Flagged,
+            SearchKey::Unflagged, SearchKey::Seen, SearchKey::Unseen,
+            SearchKey::Keyword, SearchKey::Unkeyword, SearchKey::Recent,
+            SearchKey::New, SearchKey::Old => MessagePart::None,
+
+            SearchKey::Bcc, SearchKey::Cc, SearchKey::From, SearchKey::Subject,
+            SearchKey::To, SearchKey::Before, SearchKey::On,
+            SearchKey::Since => MessagePart::Header,
+
+            SearchKey::Body, SearchKey::Text => MessagePart::Whole,
+        };
+    }
+
+    /**
      * @param \Closure(): RawMessage $header
      * @param \Closure(): MimeBody $structure
      * @param string[] $flags

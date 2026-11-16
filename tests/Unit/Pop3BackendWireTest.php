@@ -166,4 +166,37 @@ class Pop3BackendWireTest extends TestCase
         );
         $this->assertSame("STAT\r\nRETR 1\r\n", $this->serverSaw());
     }
+
+    public function test_headers_are_read_in_one_pipeline_where_the_server_advertises_it(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'TOP', 'PIPELINING', '.',
+            '+OK', 'Subject: a', '', '.',
+            '+OK', 'Subject: b', '', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->assertSame(
+            [1 => "Subject: a\r\n", 2 => "Subject: b\r\n"],
+            $this->backend->fetch(['RFC822.HEADER'], [1, 2], null, UidMode::Msgno),
+        );
+        $this->assertSame("STAT\r\nCAPA\r\nTOP 1 0\r\nTOP 2 0\r\n", $this->serverSaw());
+    }
+
+    /** A message a flag criterion already rules out is not read ahead. */
+    public function test_a_body_search_reads_ahead_only_the_messages_the_flags_leave(): void
+    {
+        $this->serverReplies([
+            '+OK 3 300',
+            '+OK', 'PIPELINING', '.',
+            '+OK', 'Subject: b', '', 'needle', '.',
+            '+OK', 'Subject: c', '', 'hay', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+        $this->backend->store('STORE', ['1', '+FLAGS', '(\\Seen)']);
+
+        $this->assertSame([2], $this->backend->search(SearchProgram::parse('UNSEEN BODY needle'), UidMode::Msgno));
+        $this->assertSame("STAT\r\nCAPA\r\nRETR 2\r\nRETR 3\r\n", $this->serverSaw());
+    }
 }

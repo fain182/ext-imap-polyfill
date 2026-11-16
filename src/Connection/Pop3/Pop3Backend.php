@@ -254,6 +254,17 @@ final class Pop3Backend implements ConnectionBackend
         // checks it before its loop.
         $charset = $charset === null ? null : SearchCharset::named($charset);
 
+        $whole = [];
+        $headers = [];
+        foreach ($this->messages->uidTable()->uids() as $uid) {
+            match (Pop3SearchEvaluator::reads($program, $this->flags[$uid] ?? [])) {
+                MessagePart::None => null,
+                MessagePart::Header => $headers[] = $uid,
+                MessagePart::Whole => $whole[] = $uid,
+            };
+        }
+        $this->readAhead($whole, $headers);
+
         $ids = [];
         foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
             if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (): MimeBody => $this->structure($uid), $this->flags[$uid] ?? [], $charset)) {
@@ -291,10 +302,17 @@ final class Pop3Backend implements ConnectionBackend
 
     public function fetch(array $items, array $ids, ?int $to, UidMode $uidMode): array
     {
-        $result = [];
+        $uids = [];
         foreach ($ids as $id) {
-            $uid = $uidMode === self::UID_MODE ? $this->knownUid($id) : $this->messages->uidTable()->uidOf($id);
+            $uids[$id] = $uidMode === self::UID_MODE ? $this->knownUid($id) : $this->messages->uidTable()->uidOf($id);
+        }
 
+        if (array_intersect($items, ['RFC822.HEADER', 'RFC822.SIZE']) !== []) {
+            $this->readAhead([], array_values($uids));
+        }
+
+        $result = [];
+        foreach ($uids as $id => $uid) {
             $entry = [];
             foreach ($items as $item) {
                 $entry[$item] = $this->fetchItem($item, $uid);
@@ -519,6 +537,50 @@ final class Pop3Backend implements ConnectionBackend
     public function setQuota(string $quotaRoot, int $mailboxSize): void
     {
         throw new \RuntimeException('Quota not available on this IMAP server');
+    }
+
+    /**
+     * Reads ahead what rawMessage() and header() are about to ask for one
+     * message at a time, as one pipelined batch, where the server advertises
+     * PIPELINING. pop3.c never pipelines; this changes how many round trips
+     * the answer takes and nothing about the answer, as each message is
+     * cached exactly as the single command would have cached it. A message
+     * the server refused is left for the single command to ask again, and
+     * to fail where it would have failed.
+     *
+     * @param list<int> $whole   uids about to be read whole
+     * @param list<int> $headers uids about to have their header read
+     */
+    private function readAhead(array $whole, array $headers): void
+    {
+        $whole = array_values(array_filter($whole, fn (int $uid): bool => !isset($this->rawMessageCache[$uid])));
+        $headers = array_values(array_filter(
+            $headers,
+            fn (int $uid): bool => !isset($this->rawMessageCache[$uid]) && !isset($this->headerCache[$uid]),
+        ));
+
+        // /loser reads no CAPA at all.
+        if ($this->loser || count($whole) + count($headers) < 2) {
+            return;
+        }
+
+        $capabilities = $this->capabilities() ?? [];
+
+        if (!in_array('PIPELINING', $capabilities, true)) {
+            return;
+        }
+
+        if (in_array('TOP', $capabilities, true)) {
+            foreach ($this->protocol->topEach($headers, 0) as $uid => $header) {
+                $this->headerCache[$uid] = new RawMessage($header);
+            }
+        } else {
+            $whole = [...$whole, ...$headers];
+        }
+
+        foreach ($this->protocol->retrEach($whole) as $uid => $message) {
+            $this->rawMessageCache[$uid] = new RawMessage($message);
+        }
     }
 
     private function rawMessage(int $uid): RawMessage

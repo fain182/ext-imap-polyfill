@@ -17,6 +17,9 @@ final class Pop3Protocol
     /** The ceiling on a line of the server's own talk; see readStatusLine(). */
     private const MAX_STATUS_LINE = 8192;
 
+    /** How many commands pipelined() has outstanding at once. */
+    private const PIPELINE_WINDOW = 64;
+
     private bool $upgraded = false;
 
     /**
@@ -206,6 +209,67 @@ final class Pop3Protocol
     }
 
     /**
+     * RETR for each message, pipelined (RFC 2449 PIPELINING: only for a
+     * server that advertised it).
+     *
+     * @param list<int> $msgnos
+     *
+     * @return array<int, string> msgno => message; one the server refused is
+     *                            left out, for the caller to ask again on its own
+     */
+    public function retrEach(array $msgnos): array
+    {
+        return $this->pipelined($msgnos, static fn (int $msgno): string => 'RETR '.$msgno);
+    }
+
+    /**
+     * TOP n <numLines> for each message, pipelined as retrEach() is.
+     *
+     * @param list<int> $msgnos
+     *
+     * @return array<int, string>
+     */
+    public function topEach(array $msgnos, int $numLines): array
+    {
+        return $this->pipelined($msgnos, static fn (int $msgno): string => 'TOP '.$msgno.' '.$numLines);
+    }
+
+    /**
+     * The commands go out a window at a time, and every answer of a window
+     * is read before the next one is written: written all at once, a few
+     * thousand commands would wait in the server's receive buffer while its
+     * answers filled ours, and past a size neither side would be reading.
+     * A -ERR is read like any other answer, so the stream stays in step.
+     *
+     * @param list<int>                $msgnos
+     * @param \Closure(int): string    $command
+     *
+     * @return array<int, string>
+     */
+    private function pipelined(array $msgnos, \Closure $command): array
+    {
+        $answers = [];
+
+        foreach (array_chunk($msgnos, self::PIPELINE_WINDOW) as $window) {
+            foreach ($window as $msgno) {
+                $this->writeLine($command($msgno));
+            }
+
+            foreach ($window as $msgno) {
+                try {
+                    $this->readSingleLine();
+                } catch (CommandFailedException) {
+                    continue;
+                }
+
+                $answers[$msgno] = $this->joinLines($this->readMultilineData());
+            }
+        }
+
+        return $answers;
+    }
+
+    /**
      * Every wire line (including the last) is CRLF-terminated; joining with
      * a separator instead of a trailing terminator would silently drop the
      * message's real final CRLF, since that CRLF is indistinguishable from
@@ -257,6 +321,16 @@ final class Pop3Protocol
         $this->writeLine($line);
         $this->readSingleLine();
 
+        return $this->readMultilineData();
+    }
+
+    /**
+     * The data of a multiline answer whose +OK has been read, up to its ".".
+     *
+     * @return string[]
+     */
+    private function readMultilineData(): array
+    {
         $lines = [];
         while (($line = $this->readDataLine()) !== null) {
             if ($line === '.') {

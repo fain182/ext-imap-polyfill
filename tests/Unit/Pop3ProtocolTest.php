@@ -98,4 +98,15 @@ class Pop3ProtocolTest extends TestCase
 
         $this->protocol->login('alice', 's3cret');
     }
+
+    public function test_a_refused_message_in_a_pipeline_leaves_the_rest_in_step(): void
+    {
+        fwrite($this->server, "+OK\r\nSubject: a\r\n\r\n.\r\n-ERR no such message\r\n+OK\r\nSubject: c\r\n\r\n.\r\n");
+
+        $this->assertSame(
+            [1 => "Subject: a\r\n\r\n", 3 => "Subject: c\r\n\r\n"],
+            $this->protocol->topEach([1, 2, 3], 0),
+        );
+        $this->assertSame("TOP 1 0\r\nTOP 2 0\r\nTOP 3 0\r\n", $this->serverSaw());
+    }
 }
