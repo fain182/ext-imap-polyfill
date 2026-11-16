@@ -197,6 +197,24 @@ class Pop3BackendWireTest extends TestCase
         $this->assertSame("STAT\r\nRETR 1\r\nRETR 2\r\nRETR 1\r\n", $this->serverSaw());
     }
 
+    /** A search reads each message's own text, whatever was read whole before it. */
+    public function test_a_body_search_reads_again_a_message_another_has_replaced(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->assertSame([1 => "Body a\r\n"], $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno));
+        $this->assertSame([2 => "Body b\r\n"], $this->backend->fetch(['BODY.PEEK[1]'], [2], null, UidMode::Msgno));
+        $this->assertSame([1], $this->backend->search(SearchProgram::parse('BODY "Body a"'), UidMode::Msgno));
+        $this->assertSame("STAT\r\nRETR 1\r\nRETR 2\r\nRETR 1\r\nRETR 2\r\n", $this->serverSaw());
+    }
+
     /** What RETR measured outlives the text, so LIST never shows through again. */
     public function test_a_message_read_whole_keeps_its_length_once_another_replaces_it(): void
     {

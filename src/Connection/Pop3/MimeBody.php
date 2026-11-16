@@ -112,15 +112,25 @@ final class MimeBody
         return $body;
     }
 
-    public function text(string $message): string
+    public function text(RawMessage $message): string
     {
-        return (string) substr($message, $this->offset, $this->size);
+        return $this->contents($message->getRaw());
     }
 
     /** The part's own header, blank line included; empty for the message's top-level body. */
-    public function mimeText(string $message): string
+    public function mimeText(RawMessage $message): string
     {
-        return (string) substr($message, $this->mimeOffset, $this->mimeSize);
+        return $this->mimeHeader($message->getRaw());
+    }
+
+    private function contents(string $raw): string
+    {
+        return (string) substr($raw, $this->offset, $this->size);
+    }
+
+    private function mimeHeader(string $raw): string
+    {
+        return (string) substr($raw, $this->mimeOffset, $this->mimeSize);
     }
 
     /**
@@ -133,10 +143,10 @@ final class MimeBody
      *
      * @return list<string>
      */
-    public function searchableTexts(string $message, bool $headers): array
+    public function searchableTexts(RawMessage $message, bool $headers): array
     {
         $texts = [];
-        $this->collectSearchable($message, $headers, false, $texts);
+        $this->collectSearchable($message->getRaw(), $headers, false, $texts);
 
         return $texts;
     }
@@ -144,15 +154,15 @@ final class MimeBody
     /**
      * @param list<string> $texts
      */
-    private function collectSearchable(string $message, bool $headers, bool $nested, array &$texts): void
+    private function collectSearchable(string $raw, bool $headers, bool $nested, array &$texts): void
     {
         if ($headers && $nested) {
-            $texts[] = MimeText::decode($this->mimeText($message));
+            $texts[] = MimeText::decode($this->mimeHeader($raw));
         }
 
         if ($this->type === 'MULTIPART') {
             foreach ($this->parts as $part) {
-                $part->collectSearchable($message, $headers, true, $texts);
+                $part->collectSearchable($raw, $headers, true, $texts);
             }
 
             return;
@@ -161,10 +171,10 @@ final class MimeBody
         if ($this->type === 'MESSAGE' && $this->subtype === 'RFC822') {
             if ($this->message !== null) {
                 if ($headers) {
-                    $texts[] = MimeText::decode((string) substr($message, $this->offset, $this->message->offset - $this->offset));
+                    $texts[] = MimeText::decode((string) substr($raw, $this->offset, $this->message->offset - $this->offset));
                 }
 
-                $this->message->collectSearchable($message, $headers, true, $texts);
+                $this->message->collectSearchable($raw, $headers, true, $texts);
             }
 
             return;
@@ -175,9 +185,9 @@ final class MimeBody
         }
 
         $text = match ($this->encoding) {
-            'BASE64' => MimeText::fromBase64($this->text($message)),
-            'QUOTED-PRINTABLE' => MimeText::fromQuotedPrintable($this->text($message)),
-            default => $this->text($message),
+            'BASE64' => MimeText::fromBase64($this->contents($raw)),
+            'QUOTED-PRINTABLE' => MimeText::fromQuotedPrintable($this->contents($raw)),
+            default => $this->contents($raw),
         };
 
         // rfc822_base64() answering NIL leaves the part unsearched.
@@ -330,7 +340,7 @@ final class MimeBody
             if ($this->subtype === 'RFC822') {
                 $this->parseEmbeddedMessage($raw, $depth);
             }
-            $this->lines = substr_count($this->text($raw), "\n");
+            $this->lines = substr_count($this->contents($raw), "\n");
         } elseif ($this->type === 'MULTIPART') {
             $this->parseMultipart($raw, $depth);
         }
@@ -339,7 +349,7 @@ final class MimeBody
     private function parseText(string $raw): void
     {
         if ($this->parameters !== []) {
-            $this->lines = substr_count($this->text($raw), "\n");
+            $this->lines = substr_count($this->contents($raw), "\n");
 
             return;
         }

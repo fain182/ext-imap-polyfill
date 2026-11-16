@@ -276,7 +276,7 @@ final class Pop3Backend implements ConnectionBackend
 
         $ids = [];
         foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
-            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (bool $headers): array => $this->structure($uid)->searchableTexts($this->rawMessage($uid)->getRaw(), $headers), $this->flags[$uid] ?? [], $charset)) {
+            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (bool $headers): array => $this->structure($uid)->searchableTexts($this->rawMessage($uid), $headers), $this->flags[$uid] ?? [], $charset)) {
                 $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
         }
@@ -399,10 +399,10 @@ final class Pop3Backend implements ConnectionBackend
         }
 
         if (str_ends_with($section, '.MIME')) {
-            return $this->structure($uid)->section(substr($section, 0, -5))?->mimeText($this->rawMessage($uid)->getRaw()) ?? '';
+            return $this->structure($uid)->section(substr($section, 0, -5))?->mimeText($this->rawMessage($uid)) ?? '';
         }
 
-        return $this->structure($uid)->section($section)?->text($this->rawMessage($uid)->getRaw()) ?? '';
+        return $this->structure($uid)->section($section)?->text($this->rawMessage($uid)) ?? '';
     }
 
     public function uidTable(): UidTable
