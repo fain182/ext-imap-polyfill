@@ -5,32 +5,33 @@ namespace ImapPolyfill\Message;
 use ImapPolyfill\Address\AddressList;
 
 /**
- * Derives an imap_sort() comparison key for a single fetched message, one
- * SORT* criterion at a time. Turning envelope fields into comparable values
+ * Turns a fetched message's fields into imap_sort() comparison keys. That
  * belongs here rather than in Session\Mailbox, the same way HeaderInfo,
- * Overview and HeadersLine own it for their respective functions.
+ * Overview and HeadersLine own it for their respective functions;
+ * mail_sort_loadcache() reads the keys out of mail_fetchenvelope(), so they
+ * come from the same Envelope imap_headerinfo() reports.
  */
 final class SortKey
 {
-    /**
-     * mail_sort_loadcache() reads the keys out of mail_fetchenvelope(), so
-     * they come from the same Envelope imap_headerinfo() reports.
-     */
-    public static function resolve(SortCriterion $criteria, Envelope $envelope, string $internalDate, int $size): int|string
+    public static function arrival(string $internalDate): int
     {
-        $arrival = strtotime($internalDate) ?: 0;
+        return strtotime($internalDate) ?: 0;
+    }
 
-        return match ($criteria) {
-            // mail_sort_loadcache() sorts a message whose Date: is missing or
-            // unparseable by its internal date, not ahead of every other.
-            SortCriterion::Date => strtotime($envelope->date ?? '') ?: $arrival,
-            SortCriterion::Arrival => $arrival,
-            SortCriterion::Size => $size,
-            SortCriterion::From => self::mailboxKey($envelope->from()),
-            SortCriterion::To => self::mailboxKey($envelope->to()),
-            SortCriterion::Cc => self::mailboxKey($envelope->cc()),
-            SortCriterion::Subject => BaseSubject::of($envelope->subject ?? ''),
-        };
+    /**
+     * mail_sort_loadcache() sorts a message whose Date: is missing or
+     * unparseable by its internal date, not ahead of every other.
+     */
+    public static function date(Envelope $envelope, int $arrival): int
+    {
+        return strtotime($envelope->date ?? '') ?: $arrival;
+    }
+
+    public static function mailbox(?AddressList $addresses): string
+    {
+        $address = $addresses?->first();
+
+        return $address === null ? '' : strtolower((string) $address->mailbox);
     }
 
     /**
@@ -48,12 +49,5 @@ final class SortKey
             SortCriterion::Cc => 'CC',
             SortCriterion::Subject => 'SUBJECT',
         };
-    }
-
-    private static function mailboxKey(?AddressList $addresses): string
-    {
-        $address = $addresses?->first();
-
-        return $address === null ? '' : strtolower((string) $address->mailbox);
     }
 }

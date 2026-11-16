@@ -4,8 +4,10 @@ namespace ImapPolyfill\Connection;
 
 use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\Envelope;
-
+use ImapPolyfill\Message\MessageSummary;
 use ImapPolyfill\Message\SearchProgram;
+use ImapPolyfill\Message\SortCriterion;
+use ImapPolyfill\Message\SortKeys;
 
 /**
  * The wire operations an \IMAP\Connection needs from whatever protocol it
@@ -73,16 +75,27 @@ interface ConnectionBackend
     public function fetchBodyStructure(int $messageNum, bool $byUid): BodyPart;
 
     /**
-     * Each message's Envelope under 'ENVELOPE', beside the plain FETCH
-     * items in $with, in one request; keyed by the ids asked for, and a
-     * message the server did not answer for is left out.
+     * Each message's summary, in one request, handed to $each with its id
+     * as it is read; a message the server did not answer for is never
+     * handed. Not collected, so what a folder's envelopes weigh is only
+     * ever held by a caller that keeps them.
      *
      * @param list<int> $ids
-     * @param list<string> $with
-     *
-     * @return array<int, array<string, mixed>>
+     * @param \Closure(int, MessageSummary): void $each
      */
-    public function fetchEnvelopes(array $ids, UidMode $uidMode, array $with = []): array;
+    public function eachSummary(array $ids, UidMode $uidMode, \Closure $each): void;
+
+    /**
+     * The keys imap_sort() orders these messages by, read off the message
+     * cache and fetched only for the messages it cannot yet answer for —
+     * c-client's sort cache, kept for as long as the message is. Learns the
+     * uids of the messages it fetches on the way.
+     *
+     * @param list<int> $msgnos
+     *
+     * @return array<int, SortKeys> by message number
+     */
+    public function sortKeys(array $msgnos, SortCriterion $criterion): array;
 
     /**
      * @param SearchProgram $program the parsed criteria; the IMAP backend writes

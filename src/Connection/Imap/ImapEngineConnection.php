@@ -4,12 +4,14 @@ namespace ImapPolyfill\Connection\Imap;
 
 use DirectoryTree\ImapEngine\Collections\ResponseCollection;
 use DirectoryTree\ImapEngine\Connection\ImapConnection;
+use DirectoryTree\ImapEngine\Connection\ImapTokenizer;
 use DirectoryTree\ImapEngine\Connection\Responses\ContinuationResponse;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\Data;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\ResponseCodeData;
 use DirectoryTree\ImapEngine\Connection\Responses\Response;
 use DirectoryTree\ImapEngine\Connection\Responses\TaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Responses\UntaggedResponse;
+use DirectoryTree\ImapEngine\Connection\Streams\StreamInterface;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
 use DirectoryTree\ImapEngine\Exceptions\ImapConnectionClosedException;
 use DirectoryTree\ImapEngine\Support\Str;
@@ -49,6 +51,55 @@ final class ImapEngineConnection extends ImapConnection
         $this->assertTaggedResponse($tag);
 
         return $this->result->responses()->untagged();
+    }
+
+    /**
+     * sendAndCollect() for an answer too big to hold twice: ImapEngine keeps
+     * every response of a command, as a token tree, until the command is
+     * done, and a FETCH ENVELOPE over a few tens of thousands of messages
+     * outgrows the default memory_limit that way. Each untagged response
+     * goes to $each as it is read, and none is kept.
+     *
+     * What $each throws waits for the command to complete: thrown at once, it
+     * would leave the rest of the answer on the wire, to be read as the
+     * answer to whatever command comes next.
+     *
+     * @param list<string|array{0: string, 1: string}> $tokens
+     * @param \Closure(UntaggedResponse): void $each
+     */
+    public function sendAndEach(string $command, array $tokens, \Closure $each): void
+    {
+        $this->send($command, $tokens, $tag);
+        $thrown = null;
+
+        while (true) {
+            $reply = $this->nextReply();
+
+            if ($reply instanceof UntaggedResponse) {
+                if ($thrown === null) {
+                    try {
+                        $each($reply);
+                    } catch (\Throwable $e) {
+                        $thrown = $e;
+                    }
+                }
+            } elseif ($reply instanceof TaggedResponse && $reply->tag()->is($tag)) {
+                if (!$reply->successful()) {
+                    throw self::failure($reply);
+                }
+
+                if ($thrown !== null) {
+                    throw $thrown;
+                }
+
+                return;
+            }
+        }
+    }
+
+    protected function newTokenizer(StreamInterface $stream): ImapTokenizer
+    {
+        return new ImapEngineTokenizer($stream);
     }
 
     /**
@@ -235,10 +286,15 @@ final class ImapEngineConnection extends ImapConnection
      */
     protected function assertTaggedResponse(string $tag, ?callable $exception = null): TaggedResponse
     {
-        return parent::assertTaggedResponse($tag, static fn (TaggedResponse $response) => new CommandFailedException(
+        return parent::assertTaggedResponse($tag, self::failure(...));
+    }
+
+    private static function failure(TaggedResponse $response): CommandFailedException
+    {
+        return new CommandFailedException(
             (string) ($response->tokenAt(1) ?? ''),
             implode(' ', array_map('strval', $response->tokensAfter(2))),
-        ));
+        );
     }
 
     /**

@@ -13,11 +13,13 @@ use ImapPolyfill\Message\BodyStructure;
 use ImapPolyfill\Message\HeaderInfo;
 use ImapPolyfill\Message\HeadersLine;
 use ImapPolyfill\Message\MessageSequence;
+use ImapPolyfill\Message\MessageSummary;
 use ImapPolyfill\Message\Overview;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Message\SortCriterion;
 use ImapPolyfill\Message\SortKey;
 use ImapPolyfill\Message\ThreadBuilder;
+use ImapPolyfill\Message\ThreadMessage;
 use ImapPolyfill\Support\Diagnostics;
 use ImapPolyfill\Support\ErrorStack;
 
@@ -249,11 +251,15 @@ final class Mailbox
             return false;
         }
 
+        $summary = null;
+
         try {
-            $data = $this->connection->backend()->fetchEnvelopes(
+            $this->connection->backend()->eachSummary(
                 [$messageNum],
                 UidMode::Msgno,
-                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE'],
+                static function (int $msgno, MessageSummary $fetched) use (&$summary): void {
+                    $summary = $fetched;
+                },
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -261,17 +267,15 @@ final class Mailbox
             return false;
         }
 
-        if (!isset($data[$messageNum])) {
+        if ($summary === null) {
             return false;
         }
 
-        $message = $data[$messageNum];
-
         return HeaderInfo::build(
-            $message['ENVELOPE'],
-            $message['FLAGS'],
-            $message['INTERNALDATE'],
-            $message['RFC822.SIZE'],
+            $summary->envelope,
+            $summary->flags,
+            $summary->internalDate,
+            (string) $summary->size,
             $messageNum,
             $fromLength,
             $subjectLength,
@@ -311,7 +315,21 @@ final class Mailbox
                 return [];
             }
 
-            $data = $protocol->fetchEnvelopes($ids, $uidMode, ['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE']);
+            $built = [];
+            $protocol->eachSummary(
+                $ids,
+                $uidMode,
+                static function (int $id, MessageSummary $summary) use (&$built, $uidMode, $folder): void {
+                    $built[$id] = Overview::build(
+                        $summary->envelope,
+                        $summary->flags,
+                        $summary->internalDate,
+                        $summary->size,
+                        $summary->uid,
+                        $uidMode === UidMode::Uid ? $folder->msgnoOf($id) : $id,
+                    );
+                },
+            );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -321,27 +339,7 @@ final class Mailbox
             return [];
         }
 
-        $result = [];
-        foreach ($ids as $id) {
-            if (!isset($data[$id])) {
-                continue;
-            }
-
-            $message = $data[$id];
-            $uid = $uidMode === UidMode::Uid ? $id : (int) $message['UID'];
-            $msgno = $uidMode === UidMode::Uid ? $folder->msgnoOf($id) : $id;
-
-            $result[] = Overview::build(
-                $message['ENVELOPE'],
-                $message['FLAGS'],
-                $message['INTERNALDATE'],
-                (int) $message['RFC822.SIZE'],
-                $uid,
-                $msgno,
-            );
-        }
-
-        return $result;
+        return self::inOrderAsked($ids, $built);
     }
 
     public function fetchStructure(int $messageNum, int $flags): \stdClass|false
@@ -805,10 +803,21 @@ final class Mailbox
             }
 
             $ids = range(1, $exists);
-            $data = $this->connection->backend()->fetchEnvelopes(
+            $userFlags = $this->connection->userFlags();
+            $built = [];
+            $this->connection->backend()->eachSummary(
                 $ids,
                 UidMode::Msgno,
-                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE'],
+                static function (int $msgno, MessageSummary $summary) use (&$built, $userFlags): void {
+                    $built[$msgno] = HeadersLine::build(
+                        $summary->envelope,
+                        $summary->flags,
+                        $summary->internalDate,
+                        $summary->size,
+                        $msgno,
+                        $userFlags,
+                    );
+                },
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -816,24 +825,7 @@ final class Mailbox
             return [];
         }
 
-        $result = [];
-        foreach ($ids as $msgno) {
-            if (!isset($data[$msgno])) {
-                continue;
-            }
-
-            $message = $data[$msgno];
-            $result[] = HeadersLine::build(
-                $message['ENVELOPE'],
-                $message['FLAGS'],
-                $message['INTERNALDATE'],
-                (int) $message['RFC822.SIZE'],
-                $msgno,
-                $this->connection->userFlags(),
-            );
-        }
-
-        return $result;
+        return self::inOrderAsked($ids, $built);
     }
 
     /**
@@ -903,11 +895,8 @@ final class Mailbox
                 $ids = range(1, $exists);
             }
 
-            $data = $this->connection->backend()->fetchEnvelopes(
-                $ids,
-                UidMode::Msgno,
-                ['UID', 'INTERNALDATE', 'RFC822.SIZE'],
-            );
+            $keys = $this->connection->backend()->sortKeys($ids, $criterion);
+            $uids = $flags & SE_UID ? $this->connection->backend()->uidTable() : null;
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
 
@@ -916,35 +905,25 @@ final class Mailbox
             return [];
         }
 
-        $entries = [];
-        foreach ($ids as $msgno) {
-            if (!isset($data[$msgno])) {
-                continue;
-            }
-
-            $message = $data[$msgno];
-            $entries[] = [
-                'msgno' => $msgno,
-                'uid' => (int) $message['UID'],
-                'key' => SortKey::resolve($criterion, $message['ENVELOPE'], $message['INTERNALDATE'], (int) $message['RFC822.SIZE']),
-            ];
+        $byMsgno = [];
+        foreach ($keys as $msgno => $messageKeys) {
+            $byMsgno[$msgno] = $messageKeys->key($criterion);
         }
+        $msgnos = array_keys($byMsgno);
 
         // mail_sort_compare() flips the key comparison only: a tie still
         // goes to the lower message number when the sort is reversed. A
         // text key is compared as text (compare_cstring()), never as the
         // number "98487" or "0884502441557" would be to <=>.
-        usort($entries, static function (array $a, array $b) use ($reverse): int {
-            $cmp = is_string($a['key']) && is_string($b['key'])
-                ? strcmp($a['key'], $b['key']) <=> 0
-                : $a['key'] <=> $b['key'];
+        usort($msgnos, static function (int $a, int $b) use ($byMsgno, $reverse): int {
+            $cmp = is_string($byMsgno[$a]) && is_string($byMsgno[$b])
+                ? strcmp($byMsgno[$a], $byMsgno[$b]) <=> 0
+                : $byMsgno[$a] <=> $byMsgno[$b];
 
-            return ($reverse ? -$cmp : $cmp) ?: $a['msgno'] <=> $b['msgno'];
+            return ($reverse ? -$cmp : $cmp) ?: $a <=> $b;
         });
 
-        $byUid = (bool) ($flags & SE_UID);
-
-        return array_map(static fn (array $e): int => $byUid ? $e['uid'] : $e['msgno'], $entries);
+        return $uids === null ? $msgnos : array_map($uids->uidOf(...), $msgnos);
     }
 
     /**
@@ -987,10 +966,14 @@ final class Mailbox
             }
 
             $ids = range(1, $exists);
-            $data = $this->connection->backend()->fetchEnvelopes(
+            $fromOverview = $this->connection->backend()->hasOverview();
+            $built = [];
+            $this->connection->backend()->eachSummary(
                 $ids,
                 UidMode::Msgno,
-                ['UID', 'INTERNALDATE'],
+                static function (int $msgno, MessageSummary $summary) use (&$built, $fromOverview): void {
+                    $built[$msgno] = ThreadMessage::of($msgno, $summary, $fromOverview);
+                },
             );
         } catch (\Throwable $e) {
             ErrorStack::push($e->getMessage());
@@ -998,7 +981,7 @@ final class Mailbox
             return self::emptyTree();
         }
 
-        $messages = ThreadBuilder::messagesFromFetch($data, $ids, $this->connection->backend()->hasOverview());
+        $messages = self::inOrderAsked($ids, $built);
         $root = ThreadBuilder::build($messages);
         $tree = ThreadBuilder::flatten($root, (bool) ($flags & SE_UID));
 
@@ -1007,6 +990,30 @@ final class Mailbox
         }
 
         return $tree;
+    }
+
+    /**
+     * What was built per message, in the order the ids were asked for
+     * rather than the order the server answered in; a message it did not
+     * answer for is left out.
+     *
+     * @template T
+     *
+     * @param list<int> $ids
+     * @param array<int, T> $built
+     *
+     * @return list<T>
+     */
+    private static function inOrderAsked(array $ids, array $built): array
+    {
+        $ordered = [];
+        foreach ($ids as $id) {
+            if (isset($built[$id])) {
+                $ordered[] = $built[$id];
+            }
+        }
+
+        return $ordered;
     }
 
     /**

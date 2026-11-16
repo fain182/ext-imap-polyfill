@@ -44,4 +44,17 @@ enum SortCriterion
             default => null,
         };
     }
+
+    /**
+     * imap_sort()'s FT_NEEDENV test: arrival and size come with the fast
+     * attributes, and fetching every envelope of the folder to read neither
+     * is most of the time and memory a local sort costs.
+     */
+    public function needsEnvelope(): bool
+    {
+        return match ($this) {
+            self::Date, self::From, self::Subject, self::To, self::Cc => true,
+            self::Arrival, self::Size => false,
+        };
+    }
 }

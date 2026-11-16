@@ -14,58 +14,7 @@ namespace ImapPolyfill\Message;
 final class ThreadBuilder
 {
     /**
-     * Extracts the fields build() needs (Message-ID, references, base
-     * subject inputs, date) out of a raw UID/INTERNALDATE/RFC822.HEADER
-     * wire fetch — the same "Mailbox fetches, Message/* interprets" split
-     * every other imap_* builder in this namespace follows.
-     *
-     * Where the references come from depends on the driver, as it does in
-     * c-client. One with an overview (IMAP) fills the sort cache from it in
-     * mail_thread_loadcache(), which leaves an empty list where there is no
-     * References header — so In-Reply-To is never read. One without (POP3)
-     * reads the envelope, falling back to the first In-Reply-To id when
-     * References yields none.
-     *
-     * @param array<int, array<string, mixed>> $data msgno => UID, INTERNALDATE and the ENVELOPE as an Envelope
-     * @param int[] $ids msgnos to include, in order
-     * @param bool $fromOverview whether the driver has an overview
-     *
-     * @return array<int, array{msgno: int, uid: int, messageId: ?string, refs: string[], subject: string, date: int}>
-     */
-    public static function messagesFromFetch(array $data, array $ids, bool $fromOverview): array
-    {
-        $messages = [];
-
-        foreach ($ids as $msgno) {
-            if (!isset($data[$msgno])) {
-                continue;
-            }
-
-            $message = $data[$msgno];
-            /** @var Envelope $envelope */
-            $envelope = $message['ENVELOPE'];
-            $refs = MessageId::all($envelope->references ?? '');
-
-            if ($refs === [] && !$fromOverview) {
-                $first = MessageId::first($envelope->inReplyTo ?? '');
-                $refs = $first === null ? [] : [$first];
-            }
-
-            $messages[] = [
-                'msgno' => $msgno,
-                'uid' => (int) $message['UID'],
-                'messageId' => MessageId::first($envelope->messageId ?? ''),
-                'refs' => $refs,
-                'subject' => $envelope->subject ?? '',
-                'date' => strtotime($envelope->date ?? '') ?: (strtotime($message['INTERNALDATE']) ?: 0),
-            ];
-        }
-
-        return $messages;
-    }
-
-    /**
-     * @param array<int, array{msgno: int, uid: int, messageId: ?string, refs: string[], subject: string, date: int}> $messages
+     * @param list<ThreadMessage> $messages
      *
      * @return ThreadContainer[] the pruned, sorted, subject-grouped root-level forest
      */
@@ -82,7 +31,7 @@ final class ThreadBuilder
         // can reference).
         $containers = [];
         foreach ($messages as $index => $message) {
-            $id = $message['messageId'];
+            $id = $message->messageId;
             $containers[$index] = self::containerFor(
                 $id !== null && isset($byId[$id]) ? null : $id,
                 $byId,
@@ -92,14 +41,15 @@ final class ThreadBuilder
 
         foreach ($messages as $index => $message) {
             $container = $containers[$index];
-            $container->msgno = $message['msgno'];
-            $container->uid = $message['uid'];
-            $container->date = $message['date'];
-            $container->baseSubject = BaseSubject::of($message['subject']);
-            $container->isReply = BaseSubject::isReplyOrForward($message['subject']);
+            $container->msgno = $message->msgno;
+            $container->uid = $message->uid;
+            $container->date = $message->date;
+            $subject = BaseSubject::of($message->subject);
+            $container->baseSubject = $subject->text;
+            $container->isReply = $subject->isReplyOrForward;
 
             $refParent = null;
-            foreach ($message['refs'] as $refId) {
+            foreach ($message->refs as $refId) {
                 $refContainer = self::containerFor($refId, $byId, $all);
 
                 if ($refParent !== null) {

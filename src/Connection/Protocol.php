@@ -5,6 +5,7 @@ namespace ImapPolyfill\Connection;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\Data;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\ListData;
 use DirectoryTree\ImapEngine\Connection\Responses\Data\ResponseCodeData;
+use DirectoryTree\ImapEngine\Connection\Responses\UntaggedResponse;
 use DirectoryTree\ImapEngine\Connection\Tokens\Nil;
 use DirectoryTree\ImapEngine\Connection\Tokens\Number;
 use DirectoryTree\ImapEngine\Connection\Tokens\Token;
@@ -15,8 +16,11 @@ use ImapPolyfill\Connection\Imap\TimedStream;
 use ImapPolyfill\Mailbox\MailboxSpec;
 use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\Envelope;
+use ImapPolyfill\Message\MessageSummary;
 use ImapPolyfill\Message\SearchKey;
 use ImapPolyfill\Message\SearchProgram;
+use ImapPolyfill\Message\SortCriterion;
+use ImapPolyfill\Message\SortKeys;
 use ImapPolyfill\Support\CommandArgument;
 use ImapPolyfill\Support\Timeouts;
 
@@ -330,7 +334,9 @@ final class Protocol implements ConnectionBackend
     public function fetch(array $items, array $ids, ?int $to, UidMode $uidMode): array
     {
         if ($to === null) {
-            return $this->fetchSet(implode(',', $ids), $items, $uidMode, static fn (int $id): bool => in_array($id, $ids, true));
+            $named = array_flip($ids);
+
+            return $this->fetchSet(implode(',', $ids), $items, $uidMode, static fn (int $id): bool => isset($named[$id]));
         }
 
         $from = (int) reset($ids);
@@ -505,25 +511,91 @@ final class Protocol implements ConnectionBackend
      * Newsgroups, Followup-To and the Content-* fields too; References is
      * the one an envelope here carries.
      */
-    public function fetchEnvelopes(array $ids, UidMode $uidMode, array $with = []): array
+    /**
+     * imap_fetch()'s FT_NEEDENV request, in its order.
+     */
+    public function eachSummary(array $ids, UidMode $uidMode, \Closure $each): void
     {
-        $data = $this->fetch([...$with, 'ENVELOPE', 'BODY.PEEK[HEADER.FIELDS (REFERENCES)]'], $ids, null, $uidMode);
+        $named = array_flip($ids);
 
-        $messages = [];
+        $this->fetchSet(
+            implode(',', $ids),
+            ['UID', 'ENVELOPE', 'BODY.PEEK[HEADER.FIELDS (REFERENCES)]', 'INTERNALDATE', 'RFC822.SIZE', 'FLAGS'],
+            $uidMode,
+            static fn (int $id): bool => isset($named[$id]),
+            static function (int $id, mixed $message) use ($each): void {
+                $each($id, new MessageSummary(
+                    (int) $message['UID'],
+                    self::flagList($message['FLAGS']),
+                    (string) $message['INTERNALDATE'],
+                    (int) $message['RFC822.SIZE'],
+                    self::envelope($message['ENVELOPE'], (string) $message['BODY[HEADER.FIELDS (REFERENCES)]']),
+                ));
+            },
+        );
+    }
 
-        foreach ($data as $id => $message) {
-            $envelope = $message['ENVELOPE'];
-
-            if ($envelope !== null && !is_array($envelope)) {
-                throw new \RuntimeException('ENVELOPE in FETCH response is not a list');
-            }
-
-            $message['ENVELOPE'] = Envelope::fromImap($envelope, (string) $message['BODY[HEADER.FIELDS (REFERENCES)]']);
-            unset($message['BODY[HEADER.FIELDS (REFERENCES)]']);
-            $messages[$id] = $message;
+    /**
+     * @return list<string>
+     */
+    private static function flagList(mixed $flags): array
+    {
+        if (!is_array($flags) || !array_is_list($flags) || array_filter($flags, 'is_string') !== $flags) {
+            throw new \RuntimeException('FLAGS in FETCH response is not a list of flags');
         }
 
-        return $messages;
+        return $flags;
+    }
+
+    /**
+     * imap_sort()'s pass 1: of the messages to sort, only those the cache
+     * cannot yet answer for are fetched, envelopes included only when the
+     * criterion reads one. Each answer becomes its keys as it is read, so
+     * what a whole folder's envelopes would weigh is never held at once.
+     */
+    public function sortKeys(array $msgnos, SortCriterion $criterion): array
+    {
+        $messages = $this->connection->messages();
+        $missing = $messages->withoutSortKeys($msgnos, $criterion);
+
+        if ($missing !== []) {
+            $fast = ['UID', 'INTERNALDATE', 'RFC822.SIZE'];
+            $named = array_flip($missing);
+
+            $this->fetchSet(
+                implode(',', $missing),
+                $criterion->needsEnvelope() ? [...$fast, 'ENVELOPE'] : $fast,
+                UidMode::Msgno,
+                static fn (int $msgno): bool => isset($named[$msgno]),
+                static function (int $msgno, mixed $message) use ($messages): void {
+                    $internalDate = (string) $message['INTERNALDATE'];
+                    $size = (int) $message['RFC822.SIZE'];
+
+                    $messages->learnUid($msgno, (int) $message['UID']);
+                    $messages->learnSortKeys($msgno, array_key_exists('ENVELOPE', $message)
+                        ? SortKeys::withEnvelope(self::envelope($message['ENVELOPE'], ''), $internalDate, $size)
+                        : SortKeys::fast($internalDate, $size));
+                },
+            );
+        }
+
+        $keys = [];
+        foreach ($msgnos as $msgno) {
+            if (($known = $messages->sortKeys($msgno)) !== null) {
+                $keys[$msgno] = $known;
+            }
+        }
+
+        return $keys;
+    }
+
+    private static function envelope(mixed $envelope, string $referencesHeader): Envelope
+    {
+        if ($envelope !== null && !is_array($envelope)) {
+            throw new \RuntimeException('ENVELOPE in FETCH response is not a list');
+        }
+
+        return Envelope::fromImap($envelope, $referencesHeader);
     }
 
     /**
@@ -656,72 +728,92 @@ final class Protocol implements ConnectionBackend
      * breaking its contract, not a value to make up: the wrappers report it
      * as they report any other failed command.
      *
+     * With $each, a message goes to it as soon as everything asked for has
+     * arrived, and is not kept: what comes for it afterwards is passed over
+     * rather than added up. That is for answers too big to hold whole.
+     *
      * @param string[] $items
      * @param \Closure(int): bool $asked whether the set sent names this id
+     * @param (\Closure(int, mixed): void)|null $each
      *
-     * @return array<int, mixed>
+     * @return array<int, mixed> nothing for a message $each was handed
      */
-    private function fetchSet(string $set, array $items, UidMode $uidMode, \Closure $asked): array
+    private function fetchSet(string $set, array $items, UidMode $uidMode, \Closure $asked, ?\Closure $each = null): array
     {
-        $responses = $this->connection->sendAndCollect(
-            $uidMode === UidMode::Uid ? 'UID FETCH' : 'FETCH',
-            [$set, Str::list($items)],
-        );
-
-        $byId = [];
-        foreach ($responses as $response) {
-            if (strtoupper((string) ($response->tokenAt(2) ?? '')) !== 'FETCH') {
-                continue;
-            }
-
-            $data = $response->tokenAt(3);
-            if (!$data instanceof ListData) {
-                continue;
-            }
-
-            $pairs = self::pairs($data);
-
-            // An unsolicited FETCH carries no UID even during a UID FETCH,
-            // which leaves it naming no message this command is about.
-            $id = $uidMode === UidMode::Uid
-                ? (isset($pairs['UID']) ? (int) $pairs['UID'] : null)
-                : (int) (string) $response->type();
-
-            if ($id === null || !$asked($id)) {
-                continue;
-            }
-
-            $byId[$id] = array_merge($byId[$id] ?? [], $pairs);
-        }
-
         // BODY.PEEK[...] is a request-only spelling; the server answers with
         // the plain BODY[...] name.
         $wanted = array_map(static fn (string $item): string => str_replace('.PEEK[', '[', strtoupper($item)), $items);
 
+        $byId = [];
+        $handed = [];
+        $this->connection->sendAndEach(
+            $uidMode === UidMode::Uid ? 'UID FETCH' : 'FETCH',
+            [$set, Str::list($items)],
+            function (UntaggedResponse $response) use ($uidMode, $asked, $each, $wanted, &$byId, &$handed): void {
+                if (strtoupper((string) ($response->tokenAt(2) ?? '')) !== 'FETCH') {
+                    return;
+                }
+
+                $data = $response->tokenAt(3);
+                if (!$data instanceof ListData) {
+                    return;
+                }
+
+                $pairs = self::pairs($data);
+
+                // An unsolicited FETCH carries no UID even during a UID FETCH,
+                // which leaves it naming no message this command is about.
+                $id = $uidMode === UidMode::Uid
+                    ? (isset($pairs['UID']) ? (int) $pairs['UID'] : null)
+                    : (int) (string) $response->type();
+
+                if ($id === null || !$asked($id) || isset($handed[$id])) {
+                    return;
+                }
+
+                $byId[$id] = array_merge($byId[$id] ?? [], $pairs);
+
+                if ($each !== null && array_diff($wanted, array_keys($byId[$id])) === []) {
+                    $each($id, $this->fetched($id, $byId[$id], $wanted));
+                    unset($byId[$id]);
+                    $handed[$id] = true;
+                }
+            },
+        );
+
         $result = [];
         foreach ($byId as $id => $pairs) {
-            // imap_parse_header() runs rfc822_parse_msg() over a message's
-            // header text whenever it arrives, to merge it into the cached
-            // envelope, and the address complaints land on the error stack
-            // even though the ENVELOPE answer wins. c-client parses it only
-            // the first time a connection sees it; this parses it every
-            // time, which is what the extension does on a fresh connection.
-            foreach (['RFC822.HEADER', 'BODY[HEADER]'] as $header) {
-                if (is_string($pairs[$header] ?? null)) {
-                    Envelope::fromHeader($pairs[$header], $this->host());
-                }
-            }
-
-            foreach ($wanted as $item) {
-                if (!array_key_exists($item, $pairs)) {
-                    throw new \RuntimeException("FETCH response for {$id} lacks {$item}");
-                }
-            }
-
-            $result[$id] = count($wanted) === 1 ? $pairs[$wanted[0]] : $pairs;
+            $result[$id] = $this->fetched($id, $pairs, $wanted);
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $pairs
+     * @param list<string> $wanted
+     */
+    private function fetched(int $id, array $pairs, array $wanted): mixed
+    {
+        // imap_parse_header() runs rfc822_parse_msg() over a message's
+        // header text whenever it arrives, to merge it into the cached
+        // envelope, and the address complaints land on the error stack
+        // even though the ENVELOPE answer wins. c-client parses it only
+        // the first time a connection sees it; this parses it every
+        // time, which is what the extension does on a fresh connection.
+        foreach (['RFC822.HEADER', 'BODY[HEADER]'] as $header) {
+            if (is_string($pairs[$header] ?? null)) {
+                Envelope::fromHeader($pairs[$header], $this->host());
+            }
+        }
+
+        foreach ($wanted as $item) {
+            if (!array_key_exists($item, $pairs)) {
+                throw new \RuntimeException("FETCH response for {$id} lacks {$item}");
+            }
+        }
+
+        return count($wanted) === 1 ? $pairs[$wanted[0]] : $pairs;
     }
 
     /**

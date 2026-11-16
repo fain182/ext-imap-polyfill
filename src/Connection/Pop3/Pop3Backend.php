@@ -11,7 +11,10 @@ use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\Envelope;
 use ImapPolyfill\Message\MessageSequence;
+use ImapPolyfill\Message\MessageSummary;
 use ImapPolyfill\Message\SearchProgram;
+use ImapPolyfill\Message\SortCriterion;
+use ImapPolyfill\Message\SortKeys;
 use ImapPolyfill\Connection\MessageNotFoundException;
 use ImapPolyfill\Mailbox\MalformedSpec;
 
@@ -191,18 +194,49 @@ final class Pop3Backend implements ConnectionBackend
         return $this->structure($uid)->toBodyPart();
     }
 
-    public function fetchEnvelopes(array $ids, UidMode $uidMode, array $with = []): array
+    public function eachSummary(array $ids, UidMode $uidMode, \Closure $each): void
     {
-        $messages = [];
+        foreach ($this->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode) as $id => $message) {
+            $each($id, new MessageSummary(
+                (int) $message['UID'],
+                $message['FLAGS'],
+                $message['INTERNALDATE'],
+                (int) $message['RFC822.SIZE'],
+                Envelope::fromHeader($message['RFC822.HEADER'], $this->host),
+            ));
+        }
+    }
 
-        foreach ($this->fetch([...$with, 'RFC822.HEADER'], $ids, null, $uidMode) as $id => $message) {
-            $message = is_array($message) ? $message : ['RFC822.HEADER' => $message];
-            $message['ENVELOPE'] = Envelope::fromHeader($message['RFC822.HEADER'], $this->host);
-            unset($message['RFC822.HEADER']);
-            $messages[$id] = $message;
+    public function sortKeys(array $msgnos, SortCriterion $criterion): array
+    {
+        $missing = $this->messages->withoutSortKeys($msgnos, $criterion);
+
+        if ($missing !== []) {
+            if ($criterion->needsEnvelope()) {
+                $this->eachSummary($missing, UidMode::Msgno, function (int $msgno, MessageSummary $summary): void {
+                    $this->messages->learnSortKeys(
+                        $msgno,
+                        SortKeys::withEnvelope($summary->envelope, $summary->internalDate, $summary->size),
+                    );
+                });
+            } else {
+                foreach ($this->fetch(['INTERNALDATE', 'RFC822.SIZE'], $missing, null, UidMode::Msgno) as $msgno => $message) {
+                    $this->messages->learnSortKeys(
+                        $msgno,
+                        SortKeys::fast((string) $message['INTERNALDATE'], (int) $message['RFC822.SIZE']),
+                    );
+                }
+            }
         }
 
-        return $messages;
+        $keys = [];
+        foreach ($msgnos as $msgno) {
+            if (($known = $this->messages->sortKeys($msgno)) !== null) {
+                $keys[$msgno] = $known;
+            }
+        }
+
+        return $keys;
     }
 
     public function search(SearchProgram $program, UidMode $uidMode, ?string $charset = null): array
