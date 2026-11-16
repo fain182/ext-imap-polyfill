@@ -56,13 +56,8 @@ final class BaseSubject
         }
 
         // Step 1 starts from the decoded subject (utf8_mime2text()), so an
-        // encoded "Re:" is a reply like any other. c-client also folds the
-        // case of the decoded text and decomposes it for compatibility,
-        // which decides what groups with what: Outlook's "RE:\u{A0}Subject"
-        // threads with "Subject" because U+00A0 decomposes to a space. That
-        // one is ported; the rest of the table (mathematical letters, full
-        // width forms) is left out, and only spam was seen to rely on it.
-        $subject = str_replace("\u{A0}", ' ', MimeText::decode($subject));
+        // encoded "Re:" is a reply like any other.
+        $subject = MimeText::decode($subject);
 
         $size = strlen($subject);
         $buffer = $subject."\0";

@@ -238,6 +238,12 @@ final class PureFunctionsTest extends TestCase
         $this->assertSame($expected, imap_utf8($input));
     }
 
+    public function test_a_decoded_no_break_space_is_a_space_and_an_unencoded_one_stays(): void
+    {
+        $this->assertSame("x  a\u{A0}b", imap_utf8("=?utf-8?Q?x=C2=A0?= a\u{A0}b"));
+        $this->assertSame('x y', imap_utf8('=?iso-8859-1?Q?x=A0y?='));
+    }
+
     /**
      * utf8_mime2text() hands back src untouched the moment mime2_decode()
      * refuses a word — so a word that will not decode does not merely stay

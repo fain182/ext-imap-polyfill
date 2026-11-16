@@ -177,11 +177,17 @@ final class MimeText
                     return '';
                 }
 
-                if (strcasecmp($charset, 'UTF-8') === 0 || strcasecmp($charset, 'US-ASCII') === 0) {
-                    return $bytes;
-                }
+                $utf8 = strcasecmp($charset, 'UTF-8') === 0 || strcasecmp($charset, 'US-ASCII') === 0
+                    ? $bytes
+                    : self::toUtf8From($charset, $bytes);
 
-                return self::toUtf8From($charset, $bytes);
+                // utf8_mime2text() decomposes what it decoded for
+                // compatibility, and the text between the words is left as
+                // it came. Of the decomposition only U+00A0 becoming a space
+                // is ported: it is what Outlook writes after "RE:", so it
+                // decides which subjects thread together, and trim() treats
+                // the two differently. The rest of the table is not ported.
+                return str_replace("\u{A0}", ' ', $utf8);
             },
             $text,
             -1,
