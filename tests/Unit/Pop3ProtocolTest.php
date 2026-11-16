@@ -98,4 +98,26 @@ class Pop3ProtocolTest extends TestCase
 
         $this->protocol->login('alice', 's3cret');
     }
+
+    public function test_a_refused_message_in_a_pipeline_leaves_the_rest_in_step(): void
+    {
+        fwrite($this->server, "+OK\r\nSubject: a\r\n\r\n.\r\n-ERR no such message\r\n+OK\r\nSubject: c\r\n\r\n.\r\n");
+
+        $this->assertSame(
+            [1 => "Subject: a\r\n\r\n", 3 => "Subject: c\r\n\r\n"],
+            $this->protocol->topEach([1, 2, 3], 0),
+        );
+        $this->assertSame("TOP 1 0\r\nTOP 2 0\r\nTOP 3 0\r\n", $this->serverSaw());
+    }
+
+    /** A window is answered in full before the next is written, and both windows' answers come back. */
+    public function test_a_pipeline_longer_than_a_window_answers_every_message(): void
+    {
+        fwrite($this->server, str_repeat("+OK\r\nSubject: x\r\n\r\n.\r\n", 65));
+
+        $answers = $this->protocol->topEach(range(1, 65), 0);
+
+        $this->assertSame(range(1, 65), array_keys($answers));
+        $this->assertSame(implode('', array_map(static fn (int $n): string => "TOP {$n} 0\r\n", range(1, 65))), $this->serverSaw());
+    }
 }
