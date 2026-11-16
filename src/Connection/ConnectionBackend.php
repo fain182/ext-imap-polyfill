@@ -4,6 +4,7 @@ namespace ImapPolyfill\Connection;
 
 use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\Envelope;
+use ImapPolyfill\Message\MessageSummary;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Message\SortCriterion;
 use ImapPolyfill\Message\SortKeys;
@@ -74,17 +75,15 @@ interface ConnectionBackend
     public function fetchBodyStructure(int $messageNum, bool $byUid): BodyPart;
 
     /**
-     * Each message's Envelope under 'ENVELOPE', beside the plain FETCH
-     * items in $with, in one request, handed to $each with its id as it is
-     * read; a message the server did not answer for is never handed. Not
-     * collected, so what a folder's envelopes weigh is only ever held by a
-     * caller that keeps them.
+     * Each message's summary, in one request, handed to $each with its id
+     * as it is read; a message the server did not answer for is never
+     * handed. Not collected, so what a folder's envelopes weigh is only
+     * ever held by a caller that keeps them.
      *
      * @param list<int> $ids
-     * @param list<string> $with
-     * @param \Closure(int, array<string, mixed>): void $each
+     * @param \Closure(int, MessageSummary): void $each
      */
-    public function eachEnvelope(array $ids, UidMode $uidMode, array $with, \Closure $each): void;
+    public function eachSummary(array $ids, UidMode $uidMode, \Closure $each): void;
 
     /**
      * The keys imap_sort() orders these messages by, read off the message

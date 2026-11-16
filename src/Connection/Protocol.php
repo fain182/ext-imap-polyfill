@@ -16,6 +16,7 @@ use ImapPolyfill\Connection\Imap\TimedStream;
 use ImapPolyfill\Mailbox\MailboxSpec;
 use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\Envelope;
+use ImapPolyfill\Message\MessageSummary;
 use ImapPolyfill\Message\SearchKey;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Message\SortCriterion;
@@ -510,21 +511,40 @@ final class Protocol implements ConnectionBackend
      * Newsgroups, Followup-To and the Content-* fields too; References is
      * the one an envelope here carries.
      */
-    public function eachEnvelope(array $ids, UidMode $uidMode, array $with, \Closure $each): void
+    /**
+     * imap_fetch()'s FT_NEEDENV request, in its order.
+     */
+    public function eachSummary(array $ids, UidMode $uidMode, \Closure $each): void
     {
         $named = array_flip($ids);
 
         $this->fetchSet(
             implode(',', $ids),
-            [...$with, 'ENVELOPE', 'BODY.PEEK[HEADER.FIELDS (REFERENCES)]'],
+            ['UID', 'ENVELOPE', 'BODY.PEEK[HEADER.FIELDS (REFERENCES)]', 'INTERNALDATE', 'RFC822.SIZE', 'FLAGS'],
             $uidMode,
             static fn (int $id): bool => isset($named[$id]),
             static function (int $id, mixed $message) use ($each): void {
-                $message['ENVELOPE'] = self::envelope($message['ENVELOPE'], (string) $message['BODY[HEADER.FIELDS (REFERENCES)]']);
-                unset($message['BODY[HEADER.FIELDS (REFERENCES)]']);
-                $each($id, $message);
+                $each($id, new MessageSummary(
+                    (int) $message['UID'],
+                    self::flagList($message['FLAGS']),
+                    (string) $message['INTERNALDATE'],
+                    (int) $message['RFC822.SIZE'],
+                    self::envelope($message['ENVELOPE'], (string) $message['BODY[HEADER.FIELDS (REFERENCES)]']),
+                ));
             },
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function flagList(mixed $flags): array
+    {
+        if (!is_array($flags) || !array_is_list($flags) || array_filter($flags, 'is_string') !== $flags) {
+            throw new \RuntimeException('FLAGS in FETCH response is not a list of flags');
+        }
+
+        return $flags;
     }
 
     /**

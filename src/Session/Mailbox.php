@@ -13,11 +13,13 @@ use ImapPolyfill\Message\BodyStructure;
 use ImapPolyfill\Message\HeaderInfo;
 use ImapPolyfill\Message\HeadersLine;
 use ImapPolyfill\Message\MessageSequence;
+use ImapPolyfill\Message\MessageSummary;
 use ImapPolyfill\Message\Overview;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Message\SortCriterion;
 use ImapPolyfill\Message\SortKey;
 use ImapPolyfill\Message\ThreadBuilder;
+use ImapPolyfill\Message\ThreadMessage;
 use ImapPolyfill\Support\Diagnostics;
 use ImapPolyfill\Support\ErrorStack;
 
@@ -249,15 +251,14 @@ final class Mailbox
             return false;
         }
 
-        $message = null;
+        $summary = null;
 
         try {
-            $this->connection->backend()->eachEnvelope(
+            $this->connection->backend()->eachSummary(
                 [$messageNum],
                 UidMode::Msgno,
-                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE'],
-                static function (int $msgno, array $fetched) use (&$message): void {
-                    $message = $fetched;
+                static function (int $msgno, MessageSummary $fetched) use (&$summary): void {
+                    $summary = $fetched;
                 },
             );
         } catch (\Throwable $e) {
@@ -266,15 +267,15 @@ final class Mailbox
             return false;
         }
 
-        if ($message === null) {
+        if ($summary === null) {
             return false;
         }
 
         return HeaderInfo::build(
-            $message['ENVELOPE'],
-            $message['FLAGS'],
-            $message['INTERNALDATE'],
-            $message['RFC822.SIZE'],
+            $summary->envelope,
+            $summary->flags,
+            $summary->internalDate,
+            (string) $summary->size,
             $messageNum,
             $fromLength,
             $subjectLength,
@@ -315,17 +316,16 @@ final class Mailbox
             }
 
             $built = [];
-            $protocol->eachEnvelope(
+            $protocol->eachSummary(
                 $ids,
                 $uidMode,
-                ['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE'],
-                static function (int $id, array $message) use (&$built, $uidMode, $folder): void {
+                static function (int $id, MessageSummary $summary) use (&$built, $uidMode, $folder): void {
                     $built[$id] = Overview::build(
-                        $message['ENVELOPE'],
-                        $message['FLAGS'],
-                        $message['INTERNALDATE'],
-                        (int) $message['RFC822.SIZE'],
-                        $uidMode === UidMode::Uid ? $id : (int) $message['UID'],
+                        $summary->envelope,
+                        $summary->flags,
+                        $summary->internalDate,
+                        $summary->size,
+                        $summary->uid,
                         $uidMode === UidMode::Uid ? $folder->msgnoOf($id) : $id,
                     );
                 },
@@ -805,16 +805,15 @@ final class Mailbox
             $ids = range(1, $exists);
             $userFlags = $this->connection->userFlags();
             $built = [];
-            $this->connection->backend()->eachEnvelope(
+            $this->connection->backend()->eachSummary(
                 $ids,
                 UidMode::Msgno,
-                ['FLAGS', 'INTERNALDATE', 'RFC822.SIZE'],
-                static function (int $msgno, array $message) use (&$built, $userFlags): void {
+                static function (int $msgno, MessageSummary $summary) use (&$built, $userFlags): void {
                     $built[$msgno] = HeadersLine::build(
-                        $message['ENVELOPE'],
-                        $message['FLAGS'],
-                        $message['INTERNALDATE'],
-                        (int) $message['RFC822.SIZE'],
+                        $summary->envelope,
+                        $summary->flags,
+                        $summary->internalDate,
+                        $summary->size,
                         $msgno,
                         $userFlags,
                     );
@@ -968,12 +967,11 @@ final class Mailbox
             $ids = range(1, $exists);
             $fromOverview = $this->connection->backend()->hasOverview();
             $built = [];
-            $this->connection->backend()->eachEnvelope(
+            $this->connection->backend()->eachSummary(
                 $ids,
                 UidMode::Msgno,
-                ['UID', 'INTERNALDATE'],
-                static function (int $msgno, array $message) use (&$built, $fromOverview): void {
-                    $built[$msgno] = ThreadBuilder::message($msgno, $message, $fromOverview);
+                static function (int $msgno, MessageSummary $summary) use (&$built, $fromOverview): void {
+                    $built[$msgno] = ThreadMessage::of($msgno, $summary, $fromOverview);
                 },
             );
         } catch (\Throwable $e) {

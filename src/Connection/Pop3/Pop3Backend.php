@@ -11,6 +11,7 @@ use ImapPolyfill\Connection\UidMode;
 use ImapPolyfill\Message\BodyPart;
 use ImapPolyfill\Message\Envelope;
 use ImapPolyfill\Message\MessageSequence;
+use ImapPolyfill\Message\MessageSummary;
 use ImapPolyfill\Message\SearchProgram;
 use ImapPolyfill\Message\SortCriterion;
 use ImapPolyfill\Message\SortKeys;
@@ -193,13 +194,16 @@ final class Pop3Backend implements ConnectionBackend
         return $this->structure($uid)->toBodyPart();
     }
 
-    public function eachEnvelope(array $ids, UidMode $uidMode, array $with, \Closure $each): void
+    public function eachSummary(array $ids, UidMode $uidMode, \Closure $each): void
     {
-        foreach ($this->fetch([...$with, 'RFC822.HEADER'], $ids, null, $uidMode) as $id => $message) {
-            $message = is_array($message) ? $message : ['RFC822.HEADER' => $message];
-            $message['ENVELOPE'] = Envelope::fromHeader($message['RFC822.HEADER'], $this->host);
-            unset($message['RFC822.HEADER']);
-            $each($id, $message);
+        foreach ($this->fetch(['UID', 'FLAGS', 'INTERNALDATE', 'RFC822.SIZE', 'RFC822.HEADER'], $ids, null, $uidMode) as $id => $message) {
+            $each($id, new MessageSummary(
+                (int) $message['UID'],
+                $message['FLAGS'],
+                $message['INTERNALDATE'],
+                (int) $message['RFC822.SIZE'],
+                Envelope::fromHeader($message['RFC822.HEADER'], $this->host),
+            ));
         }
     }
 
@@ -208,21 +212,19 @@ final class Pop3Backend implements ConnectionBackend
         $missing = $this->messages->withoutSortKeys($msgnos, $criterion);
 
         if ($missing !== []) {
-            $fast = ['INTERNALDATE', 'RFC822.SIZE'];
-            $learn = function (int $msgno, array $message): void {
-                $internalDate = (string) $message['INTERNALDATE'];
-                $size = (int) $message['RFC822.SIZE'];
-
-                $this->messages->learnSortKeys($msgno, isset($message['ENVELOPE'])
-                    ? SortKeys::withEnvelope($message['ENVELOPE'], $internalDate, $size)
-                    : SortKeys::fast($internalDate, $size));
-            };
-
             if ($criterion->needsEnvelope()) {
-                $this->eachEnvelope($missing, UidMode::Msgno, $fast, $learn);
+                $this->eachSummary($missing, UidMode::Msgno, function (int $msgno, MessageSummary $summary): void {
+                    $this->messages->learnSortKeys(
+                        $msgno,
+                        SortKeys::withEnvelope($summary->envelope, $summary->internalDate, $summary->size),
+                    );
+                });
             } else {
-                foreach ($this->fetch($fast, $missing, null, UidMode::Msgno) as $msgno => $message) {
-                    $learn($msgno, $message);
+                foreach ($this->fetch(['INTERNALDATE', 'RFC822.SIZE'], $missing, null, UidMode::Msgno) as $msgno => $message) {
+                    $this->messages->learnSortKeys(
+                        $msgno,
+                        SortKeys::fast((string) $message['INTERNALDATE'], (int) $message['RFC822.SIZE']),
+                    );
                 }
             }
         }
