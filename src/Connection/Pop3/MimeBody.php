@@ -63,10 +63,15 @@ final class MimeBody
     /** The body of a message/rfc822 part's own message; null for an empty one in a digest. */
     private ?self $message = null;
 
+    /** The length of the text the offsets point into. */
+    private function __construct(private readonly int $length)
+    {
+    }
+
     public static function parse(RawMessage $message): self
     {
         $raw = $message->getRaw();
-        $body = new self();
+        $body = new self(strlen($raw));
         $body->parseMessage($raw, 0, strlen($raw) - strlen($message->getBody()), strlen($raw), 0);
 
         return $body;
@@ -114,13 +119,28 @@ final class MimeBody
 
     public function text(RawMessage $message): string
     {
-        return $this->contents($message->getRaw());
+        return $this->contents($this->rawOf($message));
     }
 
     /** The part's own header, blank line included; empty for the message's top-level body. */
     public function mimeText(RawMessage $message): string
     {
-        return $this->mimeHeader($message->getRaw());
+        return $this->mimeHeader($this->rawOf($message));
+    }
+
+    /**
+     * The offsets were taken from one RETR answer and are cut out of a
+     * later one, which a server sending the message differently would
+     * have cut at the wrong place.
+     */
+    private function rawOf(RawMessage $message): string
+    {
+        $raw = $message->getRaw();
+        if (strlen($raw) !== $this->length) {
+            throw new \RuntimeException('The server sent the message as '.strlen($raw).' octets, after '.$this->length.' earlier in the session');
+        }
+
+        return $raw;
     }
 
     private function contents(string $raw): string
@@ -146,7 +166,7 @@ final class MimeBody
     public function searchableTexts(RawMessage $message, bool $headers): array
     {
         $texts = [];
-        $this->collectSearchable($message->getRaw(), $headers, false, $texts);
+        $this->collectSearchable($this->rawOf($message), $headers, false, $texts);
 
         return $texts;
     }
@@ -417,7 +437,7 @@ final class MimeBody
             ++$headerLength;
         }
 
-        $this->message = new self();
+        $this->message = new self(strlen($raw));
         $this->message->parseMessage($raw, $this->offset, $headerLength, $this->offset + $this->size, $depth + 1);
     }
 
@@ -528,7 +548,7 @@ final class MimeBody
             if ($part !== null) {
                 $part->mimeSize = max(0, $before - $part->mimeOffset);
             }
-            $part = new self();
+            $part = new self(strlen($raw));
             if ($digest) {
                 $part->type = 'MESSAGE';
             }
@@ -541,7 +561,7 @@ final class MimeBody
         }
 
         if ($this->parts === []) {
-            $this->parts[] = new self();
+            $this->parts[] = new self(strlen($raw));
         }
 
         foreach ($this->parts as $part) {

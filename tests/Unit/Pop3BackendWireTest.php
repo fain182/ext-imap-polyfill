@@ -230,7 +230,7 @@ class Pop3BackendWireTest extends TestCase
         $this->backend->fetch(['BODY.PEEK[1]'], [2], null, UidMode::Msgno);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('POP3 server sent message 1 as 30 octets, after 22 earlier in the session');
+        $this->expectExceptionMessage('The server sent the message as 30 octets, after 22 earlier in the session');
         $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno);
     }
 

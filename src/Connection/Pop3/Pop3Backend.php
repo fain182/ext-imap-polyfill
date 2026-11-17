@@ -275,7 +275,7 @@ final class Pop3Backend implements ConnectionBackend
 
         $ids = [];
         foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
-            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (bool $headers): array => $this->structure($uid)->searchableTexts($this->rawMessage($uid), $headers), $this->flags[$uid] ?? [], $charset)) {
+            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (bool $headers): array => $this->bodyTexts($uid, $headers), $this->flags[$uid] ?? [], $charset)) {
                 $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
         }
@@ -584,14 +584,7 @@ final class Pop3Backend implements ConnectionBackend
     {
         $uids = array_values(array_filter($uids, fn (int $uid): bool => !isset($this->headerCache[$uid])));
 
-        // /loser reads no CAPA at all.
-        if ($this->loser || count($uids) < 2) {
-            return;
-        }
-
-        $capabilities = $this->capabilities() ?? [];
-
-        if (!in_array('PIPELINING', $capabilities, true) || !in_array('TOP', $capabilities, true)) {
+        if (count($uids) < 2 || !$this->answersTop() || !in_array('PIPELINING', $this->capabilities() ?? [], true)) {
             return;
         }
 
@@ -600,24 +593,13 @@ final class Pop3Backend implements ConnectionBackend
         }
     }
 
-    /**
-     * A message read whole a second time must come back as long as the
-     * first: its cached MimeBody holds offsets into that first answer, and
-     * a different text would have every part cut at the wrong place.
-     */
     private function rawMessage(int $uid): RawMessage
     {
         if ($this->lastRetr === null || $this->lastRetrUid !== $uid) {
-            $message = new RawMessage($this->protocol->retr($uid));
-            $length = strlen($message->getRaw());
-            if (isset($this->retrSizes[$uid]) && $this->retrSizes[$uid] !== $length) {
-                throw new \RuntimeException("POP3 server sent message {$uid} as {$length} octets, after {$this->retrSizes[$uid]} earlier in the session");
-            }
-
-            $this->lastRetr = $message;
+            $this->lastRetr = new RawMessage($this->protocol->retr($uid));
             $this->lastRetrUid = $uid;
-            $this->headerCache[$uid] ??= new RawMessage($message->getRawHeader());
-            $this->retrSizes[$uid] = $length;
+            $this->headerCache[$uid] ??= new RawMessage($this->lastRetr->getRawHeader());
+            $this->retrSizes[$uid] = strlen($this->lastRetr->getRaw());
         }
 
         return $this->lastRetr;
@@ -632,7 +614,7 @@ final class Pop3Backend implements ConnectionBackend
     private function header(int $uid): RawMessage
     {
         if (!isset($this->headerCache[$uid])) {
-            if (!$this->loser && in_array('TOP', $this->capabilities() ?? [], true)) {
+            if ($this->answersTop()) {
                 $this->headerCache[$uid] = new RawMessage($this->protocol->top($uid, 0));
             } else {
                 $this->rawMessage($uid);
@@ -640,6 +622,12 @@ final class Pop3Backend implements ConnectionBackend
         }
 
         return $this->headerCache[$uid];
+    }
+
+    /** /loser trusts no TOP, and reads no CAPA to find one. */
+    private function answersTop(): bool
+    {
+        return !$this->loser && in_array('TOP', $this->capabilities() ?? [], true);
     }
 
     /**
@@ -703,11 +691,19 @@ final class Pop3Backend implements ConnectionBackend
      * cache: what the parse logs is logged the first time only. The BODY
      * keeps offsets, not text: a part is cut out of rawMessage(), which
      * re-reads the message with RETR once another one has replaced it, as
-     * pop3_cache() does, and refuses one that came back a different length.
+     * pop3_cache() does.
      */
     private function structure(int $uid): MimeBody
     {
         return $this->structureCache[$uid] ??= MimeBody::parse($this->rawMessage($uid));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function bodyTexts(int $uid, bool $headers): array
+    {
+        return $this->structure($uid)->searchableTexts($this->rawMessage($uid), $headers);
     }
 
     /**
