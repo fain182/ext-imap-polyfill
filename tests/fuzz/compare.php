@@ -27,7 +27,7 @@ foreach ([$corpusPath, $polyfillPath, $realPath] as $path) {
 $corpus = array_map(hex2bin(...), file($corpusPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES));
 
 /**
- * The one difference this project has decided not to answer: c-client
+ * A difference this project has decided not to answer: c-client
  * canonicalises to decomposed UTF-8 (php_imap.c passes U8T_DECOMPOSE),
  * where this package returns the text as the charset wrote it. Normalizing
  * the polyfill's side is how the fuzzer tells that difference from a real
@@ -74,6 +74,94 @@ function decompose(string $text): string
         },
         $text,
     );
+}
+
+/**
+ * The other difference left unanswered on purpose: imap_fetch_overview()
+ * cuts the From and To lists to their first address in c-client's envelope
+ * cache, so a later imap_headerinfo() on the same message reports one
+ * address there (PHILOSOPHY.md says why it is not ported). The crawl asks
+ * the two in that order. Set aside where the extension's list is the
+ * polyfill's first address, its address string the start of the
+ * polyfill's, and nothing else in the answer differs.
+ */
+function isTheDocumentedEnvelopeCut(string $label, string $polyfill, string $real): bool
+{
+    if ($label !== 'headerinfo') {
+        return false;
+    }
+
+    foreach (['from', 'to'] as $field) {
+        $polyfillList = valueOf($polyfill, $field);
+        $realList = valueOf($real, $field);
+        $polyfillAddress = valueOf($polyfill, $field.'address');
+        $realAddress = valueOf($real, $field.'address');
+
+        if ($polyfillList === null || $realList === null || $polyfillAddress === null || $realAddress === null) {
+            continue;
+        }
+
+        $cutList = str_starts_with($polyfillList, substr($realList, 0, -1).',') && str_ends_with($realList, ']');
+        $cutAddress = str_starts_with(hexText($polyfillAddress), hexText($realAddress).', ');
+
+        if ($cutList && $cutAddress) {
+            $polyfill = str_replace(
+                [keyed($field, $polyfillList), keyed($field.'address', $polyfillAddress)],
+                [keyed($field, $realList), keyed($field.'address', $realAddress)],
+                $polyfill,
+            );
+        }
+    }
+
+    return $polyfill === $real;
+}
+
+function keyed(string $key, string $value): string
+{
+    return 'hex:'.bin2hex($key).'=>'.$value;
+}
+
+function hexText(string $value): string
+{
+    return str_starts_with($value, 'hex:') ? (string) hex2bin(substr($value, 4)) : $value;
+}
+
+/**
+ * The serialized value of a top-level property of an answer, or null where
+ * the answer has none: a hex string, or a bracketed list or object, read up
+ * to its matching bracket (hex carries no brackets of its own).
+ */
+function valueOf(string $answer, string $key): ?string
+{
+    $marker = keyed($key, '');
+    $position = strpos($answer, $marker);
+
+    if ($position === false) {
+        return null;
+    }
+
+    $start = $position + strlen($marker);
+
+    if (!in_array($answer[$start] ?? '', ['[', '{'], true)) {
+        preg_match('/[^,\]}]*/', $answer, $match, 0, $start);
+
+        return $match[0];
+    }
+
+    $depth = 0;
+    for ($end = $start, $length = strlen($answer); $end < $length; $end++) {
+        $depth += match ($answer[$end]) {
+            '[', '{' => 1,
+            ']', '}' => -1,
+            default => 0,
+        };
+
+        if ($depth === 0) {
+            return substr($answer, $start, $end - $start + 1);
+        }
+    }
+
+    return null;
 }
 
 /**
@@ -150,7 +238,7 @@ while (($left = fgets($polyfill)) !== false) {
     [, , $realAnswer] = explode("\t", rtrim($right, "\n"), 3);
     $index = (int) $index;
 
-    if (isTheDocumentedDecomposition($label, $left, $right)) {
+    if (isTheDocumentedDecomposition($label, $left, $right) || isTheDocumentedEnvelopeCut($label, $left, $right)) {
         $known++;
 
         continue;
