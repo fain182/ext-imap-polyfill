@@ -209,25 +209,13 @@ final class Pop3Protocol
     }
 
     /**
-     * RETR for each message, pipelined (RFC 2449 PIPELINING: only for a
-     * server that advertised it).
+     * TOP n <numLines> for each message, pipelined (RFC 2449 PIPELINING:
+     * only for a server that advertised it).
      *
      * @param list<int> $msgnos
      *
-     * @return array<int, string> msgno => message; one the server refused is
+     * @return array<int, string> msgno => answer; one the server refused is
      *                            left out, for the caller to ask again on its own
-     */
-    public function retrEach(array $msgnos): array
-    {
-        return $this->pipelined($msgnos, static fn (int $msgno): string => 'RETR '.$msgno);
-    }
-
-    /**
-     * TOP n <numLines> for each message, pipelined as retrEach() is.
-     *
-     * @param list<int> $msgnos
-     *
-     * @return array<int, string>
      */
     public function topEach(array $msgnos, int $numLines): array
     {

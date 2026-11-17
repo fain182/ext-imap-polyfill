@@ -268,11 +268,10 @@ final class Pop3Backend implements ConnectionBackend
         // checks it before its loop.
         $charset = $charset === null ? null : SearchCharset::named($charset);
 
-        $reads = [MessagePart::Header->name => [], MessagePart::Whole->name => []];
-        foreach ($this->messages->uidTable()->uids() as $uid) {
-            $reads[Pop3SearchEvaluator::reads($program, $this->flags[$uid] ?? [])->name][] = $uid;
-        }
-        $this->readAhead($reads[MessagePart::Whole->name], $reads[MessagePart::Header->name]);
+        $this->readAhead(array_values(array_filter(
+            $this->messages->uidTable()->uids(),
+            fn (int $uid): bool => Pop3SearchEvaluator::reads($program, $this->flags[$uid] ?? []) === MessagePart::Header,
+        )));
 
         $ids = [];
         foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
@@ -317,10 +316,10 @@ final class Pop3Backend implements ConnectionBackend
         }
 
         $reads = array_map(self::partReadBy(...), $items);
-        if (in_array(MessagePart::Whole, $reads, true)) {
-            $this->readAhead(array_values($uids), []);
-        } elseif (in_array(MessagePart::Header, $reads, true)) {
-            $this->readAhead([], array_values($uids));
+        // A message also read whole may take its header from that RETR, so
+        // no TOP is sent ahead for it.
+        if (!in_array(MessagePart::Whole, $reads, true) && in_array(MessagePart::Header, $reads, true)) {
+            $this->readAhead(array_values($uids));
         }
 
         $result = [];
@@ -567,46 +566,37 @@ final class Pop3Backend implements ConnectionBackend
     }
 
     /**
-     * Reads ahead what rawMessage() and header() are about to ask for one
-     * message at a time, as one pipelined batch, where the server advertises
-     * PIPELINING. pop3.c never pipelines; this changes how many round trips
-     * the answer takes and nothing about the answer, as each message is
-     * cached exactly as the single command would have cached it. A message
-     * the server refused is left for the single command to ask again, and
-     * to fail where it would have failed.
+     * Reads ahead the headers header() is about to ask for one message at a
+     * time, as one pipelined batch of TOP n 0, where the server advertises
+     * both TOP and PIPELINING. pop3.c never pipelines; this changes how many
+     * round trips the answer takes and nothing about the answer, as each
+     * header is cached exactly as header() would have cached it. A message
+     * the server refused is left for header() to ask again, and to fail
+     * where it would have failed.
      *
-     * @param list<int> $whole   uids about to be read whole
-     * @param list<int> $headers uids about to have their header read
+     * Without TOP a header is read with RETR, as a whole message is, and a
+     * pipelined batch of RETR would hold every message's text at once where
+     * rawMessage() keeps one: neither is read ahead.
+     *
+     * @param list<int> $uids
      */
-    private function readAhead(array $whole, array $headers): void
+    private function readAhead(array $uids): void
     {
-        $whole = array_values(array_filter($whole, fn (int $uid): bool => !isset($this->rawMessageCache[$uid])));
-        $headers = array_values(array_filter(
-            $headers,
-            fn (int $uid): bool => !isset($this->rawMessageCache[$uid]) && !isset($this->headerCache[$uid]),
-        ));
+        $uids = array_values(array_filter($uids, fn (int $uid): bool => !isset($this->headerCache[$uid])));
 
         // /loser reads no CAPA at all.
-        if ($this->loser || count($whole) + count($headers) < 2) {
+        if ($this->loser || count($uids) < 2) {
             return;
         }
 
         $capabilities = $this->capabilities() ?? [];
 
-        if (!in_array('PIPELINING', $capabilities, true)) {
+        if (!in_array('PIPELINING', $capabilities, true) || !in_array('TOP', $capabilities, true)) {
             return;
         }
 
-        if (in_array('TOP', $capabilities, true)) {
-            foreach ($this->protocol->topEach($headers, 0) as $uid => $header) {
-                $this->headerCache[$uid] = new RawMessage($header);
-            }
-        } else {
-            $whole = [...$whole, ...$headers];
-        }
-
-        foreach ($this->protocol->retrEach($whole) as $uid => $message) {
-            $this->rawMessageCache[$uid] = new RawMessage($message);
+        foreach ($this->protocol->topEach($uids, 0) as $uid => $header) {
+            $this->headerCache[$uid] = new RawMessage($header);
         }
     }
 
