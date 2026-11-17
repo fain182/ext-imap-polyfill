@@ -175,6 +175,100 @@ class Pop3BackendWireTest extends TestCase
         $this->assertSame("STAT\r\nCAPA\r\nRETR 1\r\nRETR 2\r\nRETR 1\r\n", $this->serverSaw());
     }
 
+    /**
+     * The parsed body outlives the text too: a part of a message another one
+     * has replaced is cut out of a second RETR, and a section naming no part
+     * is answered from the body alone.
+     */
+    public function test_a_part_is_read_again_once_another_message_replaces_its_text(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->assertSame([1 => "Body a\r\n"], $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno));
+        $this->assertSame([2 => "Body b\r\n"], $this->backend->fetch(['BODY.PEEK[1]'], [2], null, UidMode::Msgno));
+        $this->assertSame([1 => "Body a\r\n"], $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno));
+        $this->assertSame([2 => ''], $this->backend->fetch(['BODY.PEEK[2]'], [2], null, UidMode::Msgno));
+        $this->assertSame("STAT\r\nRETR 1\r\nRETR 2\r\nRETR 1\r\n", $this->serverSaw());
+    }
+
+    /** A search reads each message's own text, whatever was read whole before it. */
+    public function test_a_body_search_reads_again_a_message_another_has_replaced(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->assertSame([1 => "Body a\r\n"], $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno));
+        $this->assertSame([2 => "Body b\r\n"], $this->backend->fetch(['BODY.PEEK[1]'], [2], null, UidMode::Msgno));
+        $this->assertSame([1], $this->backend->search(SearchProgram::parse('BODY "Body a"'), UidMode::Msgno));
+        $this->assertSame("STAT\r\nRETR 1\r\nRETR 2\r\nRETR 1\r\nRETR 2\r\n", $this->serverSaw());
+    }
+
+    /** The parsed body's offsets hold only for the octets it was parsed from. */
+    public function test_a_message_read_again_at_another_length_is_refused(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+            '+OK', 'Subject: a', '', 'Body a, longer', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno);
+        $this->backend->fetch(['BODY.PEEK[1]'], [2], null, UidMode::Msgno);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('POP3 server sent message 1 as 30 octets, after 22 earlier in the session');
+        $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno);
+    }
+
+    /** Only a parsed structure has offsets to protect: pop3_cache() takes any later answer as it comes. */
+    public function test_a_message_never_parsed_is_taken_at_its_new_length(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+            '+OK', 'Subject: a', '', 'Body a, longer', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->backend->fetch(['BODY.PEEK[]'], [1], null, UidMode::Msgno);
+        $this->backend->fetch(['BODY.PEEK[]'], [2], null, UidMode::Msgno);
+
+        $this->assertSame([1 => "Subject: a\r\n\r\nBody a, longer\r\n"], $this->backend->fetch(['BODY.PEEK[]'], [1], null, UidMode::Msgno));
+    }
+
+    /** Items are answered in order, so a header asked before the body is still read ahead. */
+    public function test_a_header_asked_before_the_body_is_read_ahead(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'TOP', 'PIPELINING', '.',
+            '+OK', 'Subject: a', '', '.',
+            '+OK', 'Subject: b', '', '.',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->backend->fetch(['RFC822.HEADER', 'BODY.PEEK[1]'], [1, 2], null, UidMode::Msgno);
+
+        $this->assertSame("STAT\r\nCAPA\r\nTOP 1 0\r\nTOP 2 0\r\nRETR 1\r\nRETR 2\r\n", $this->serverSaw());
+    }
+
     /** What RETR measured outlives the text, so LIST never shows through again. */
     public function test_a_message_read_whole_keeps_its_length_once_another_replaces_it(): void
     {
@@ -228,19 +322,51 @@ class Pop3BackendWireTest extends TestCase
     }
 
     /** A message a flag criterion already rules out is not read ahead. */
-    public function test_a_body_search_reads_ahead_only_the_messages_the_flags_leave(): void
+    public function test_a_header_search_reads_ahead_only_the_messages_the_flags_leave(): void
     {
         $this->serverReplies([
             '+OK 3 300',
-            '+OK', 'PIPELINING', '.',
-            '+OK', 'Subject: b', '', 'needle', '.',
-            '+OK', 'Subject: c', '', 'hay', '.',
+            '+OK', 'TOP', 'PIPELINING', '.',
+            '+OK', 'Subject: needle', '', '.',
+            '+OK', 'Subject: hay', '', '.',
         ]);
         $this->backend->selectOrExamineFolder('INBOX', false);
         $this->backend->store('STORE', ['1', '+FLAGS', '(\\Seen)']);
 
-        $this->assertSame([2], $this->backend->search(SearchProgram::parse('UNSEEN BODY needle'), UidMode::Msgno));
-        $this->assertSame("STAT\r\nCAPA\r\nRETR 2\r\nRETR 3\r\n", $this->serverSaw());
+        $this->assertSame([2], $this->backend->search(SearchProgram::parse('UNSEEN SUBJECT needle'), UidMode::Msgno));
+        $this->assertSame("STAT\r\nCAPA\r\nTOP 2 0\r\nTOP 3 0\r\n", $this->serverSaw());
+    }
+
+    /** A pipelined batch of RETR would hold every text at once, where one is kept. */
+    public function test_a_message_read_whole_is_never_read_ahead(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'Subject: a', '', 'needle', '.',
+            '+OK', 'Subject: b', '', 'hay', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->assertSame([1], $this->backend->search(SearchProgram::parse('BODY needle'), UidMode::Msgno));
+        $this->assertSame("STAT\r\nRETR 1\r\nRETR 2\r\n", $this->serverSaw());
+    }
+
+    /** Without TOP a header is a RETR, which is not read ahead either. */
+    public function test_headers_are_not_read_ahead_without_top(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'PIPELINING', '.',
+            '+OK', 'Subject: a', '', 'Body', '.',
+            '+OK', 'Subject: b', '', 'Body', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->assertSame(
+            [1 => "Subject: a\r\n", 2 => "Subject: b\r\n"],
+            $this->backend->fetch(['RFC822.HEADER'], [1, 2], null, UidMode::Msgno),
+        );
+        $this->assertSame("STAT\r\nCAPA\r\nRETR 1\r\nRETR 2\r\n", $this->serverSaw());
     }
 
     /** /loser: no CAPA is read, so nothing is known to pipeline. */

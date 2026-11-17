@@ -58,8 +58,7 @@ final class Pop3Backend implements ConnectionBackend
 
     /**
      * The one message last read whole, as pop3_cache() keeps LOCAL->txt and
-     * LOCAL->cached: the next RETR replaces it. $structureCache still keeps
-     * the text of every message it parsed, inside its MimeBody.
+     * LOCAL->cached: the next RETR replaces it.
      */
     private ?RawMessage $lastRetr = null;
 
@@ -72,8 +71,11 @@ final class Pop3Backend implements ConnectionBackend
     /** @var array<int, int> uid => the length of its RETR answer, for every message ever read whole */
     private array $retrSizes = [];
 
-    /** @var array<int, MimeBody> uid => the RETR answer parsed */
+    /** @var array<int, MimeBody> uid => the RETR answer parsed, without its text */
     private array $structureCache = [];
+
+    /** @var array<int, int> uid => the length of the RETR answer its structure was parsed from */
+    private array $parsedLengths = [];
 
     /** @var list<string>|null what CAPA answered after login; null for a server without it */
     private ?array $capabilities = null;
@@ -269,15 +271,14 @@ final class Pop3Backend implements ConnectionBackend
         // checks it before its loop.
         $charset = $charset === null ? null : SearchCharset::named($charset);
 
-        $reads = [MessagePart::Header->name => [], MessagePart::Whole->name => []];
-        foreach ($this->messages->uidTable()->uids() as $uid) {
-            $reads[Pop3SearchEvaluator::reads($program, $this->flags[$uid] ?? [])->name][] = $uid;
-        }
-        $this->readAhead($reads[MessagePart::Whole->name], $reads[MessagePart::Header->name]);
+        $this->readAhead(array_values(array_filter(
+            $this->messages->uidTable()->uids(),
+            fn (int $uid): bool => Pop3SearchEvaluator::reads($program, $this->flags[$uid] ?? []) === MessagePart::Header,
+        )));
 
         $ids = [];
         foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
-            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (): MimeBody => $this->structure($uid), $this->flags[$uid] ?? [], $charset)) {
+            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (bool $headers): array => $this->readBodyTexts($uid, $headers), $this->flags[$uid] ?? [], $charset)) {
                 $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
         }
@@ -317,11 +318,16 @@ final class Pop3Backend implements ConnectionBackend
             $uids[$id] = $uidMode === self::UID_MODE ? $this->knownUid($id) : $this->messages->uidTable()->uidOf($id);
         }
 
-        $reads = array_map(self::partReadBy(...), $items);
-        if (in_array(MessagePart::Whole, $reads, true)) {
-            $this->readAhead(array_values($uids), []);
-        } elseif (in_array(MessagePart::Header, $reads, true)) {
-            $this->readAhead([], array_values($uids));
+        // fetchItem() answers the items in order, so the first one to read
+        // the message decides: a RETR first leaves no header to ask TOP for.
+        $firstRead = MessagePart::None;
+        foreach ($items as $item) {
+            if (($firstRead = self::partReadBy($item)) !== MessagePart::None) {
+                break;
+            }
+        }
+        if ($firstRead === MessagePart::Header) {
+            $this->readAhead(array_values($uids));
         }
 
         $result = [];
@@ -400,10 +406,10 @@ final class Pop3Backend implements ConnectionBackend
         }
 
         if (str_ends_with($section, '.MIME')) {
-            return $this->structure($uid)->section(substr($section, 0, -5))?->mimeText() ?? '';
+            return $this->structure($uid)->section(substr($section, 0, -5))?->mimeText($this->readParsedText($uid)) ?? '';
         }
 
-        return $this->structure($uid)->section($section)?->text() ?? '';
+        return $this->structure($uid)->section($section)?->text($this->readParsedText($uid)) ?? '';
     }
 
     public function uidTable(): UidTable
@@ -568,46 +574,30 @@ final class Pop3Backend implements ConnectionBackend
     }
 
     /**
-     * Reads ahead what rawMessage() and header() are about to ask for one
-     * message at a time, as one pipelined batch, where the server advertises
-     * PIPELINING. pop3.c never pipelines; this changes how many round trips
-     * the answer takes and nothing about the answer, as each message is
-     * cached exactly as the single command would have cached it. A message
-     * the server refused is left for the single command to ask again, and
-     * to fail where it would have failed.
+     * Reads ahead the headers header() is about to ask for one message at a
+     * time, as one pipelined batch of TOP n 0, where the server advertises
+     * both TOP and PIPELINING. pop3.c never pipelines; this changes how many
+     * round trips the answer takes and nothing about the answer, as each
+     * header is cached exactly as header() would have cached it. A message
+     * the server refused is left for header() to ask again, and to fail
+     * where it would have failed.
      *
-     * @param list<int> $whole   uids about to be read whole
-     * @param list<int> $headers uids about to have their header read
+     * Without TOP a header is read with RETR, as a whole message is, and a
+     * pipelined batch of RETR would hold every message's text at once where
+     * rawMessage() keeps one: neither is read ahead.
+     *
+     * @param list<int> $uids
      */
-    private function readAhead(array $whole, array $headers): void
+    private function readAhead(array $uids): void
     {
-        $whole = array_values(array_filter($whole, fn (int $uid): bool => !isset($this->rawMessageCache[$uid])));
-        $headers = array_values(array_filter(
-            $headers,
-            fn (int $uid): bool => !isset($this->rawMessageCache[$uid]) && !isset($this->headerCache[$uid]),
-        ));
+        $uids = array_values(array_filter($uids, fn (int $uid): bool => !isset($this->headerCache[$uid])));
 
-        // /loser reads no CAPA at all.
-        if ($this->loser || count($whole) + count($headers) < 2) {
+        if (count($uids) < 2 || !$this->answersTop() || !in_array('PIPELINING', $this->capabilities() ?? [], true)) {
             return;
         }
 
-        $capabilities = $this->capabilities() ?? [];
-
-        if (!in_array('PIPELINING', $capabilities, true)) {
-            return;
-        }
-
-        if (in_array('TOP', $capabilities, true)) {
-            foreach ($this->protocol->topEach($headers, 0) as $uid => $header) {
-                $this->headerCache[$uid] = new RawMessage($header);
-            }
-        } else {
-            $whole = [...$whole, ...$headers];
-        }
-
-        foreach ($this->protocol->retrEach($whole) as $uid => $message) {
-            $this->rawMessageCache[$uid] = new RawMessage($message);
+        foreach ($this->protocol->topEach($uids, 0) as $uid => $header) {
+            $this->headerCache[$uid] = new RawMessage($header);
         }
     }
 
@@ -632,7 +622,7 @@ final class Pop3Backend implements ConnectionBackend
     private function header(int $uid): RawMessage
     {
         if (!isset($this->headerCache[$uid])) {
-            if (!$this->loser && in_array('TOP', $this->capabilities() ?? [], true)) {
+            if ($this->answersTop()) {
                 $this->headerCache[$uid] = new RawMessage($this->protocol->top($uid, 0));
             } else {
                 $this->rawMessage($uid);
@@ -640,6 +630,12 @@ final class Pop3Backend implements ConnectionBackend
         }
 
         return $this->headerCache[$uid];
+    }
+
+    /** /loser trusts no TOP, and reads no CAPA to find one. */
+    private function answersTop(): bool
+    {
+        return !$this->loser && in_array('TOP', $this->capabilities() ?? [], true);
     }
 
     /**
@@ -700,11 +696,45 @@ final class Pop3Backend implements ConnectionBackend
 
     /**
      * Parsed once per message, as c-client keeps the BODY in the message
-     * cache: what the parse logs is logged the first time only.
+     * cache: what the parse logs is logged the first time only. The BODY
+     * keeps offsets, not text: a part is cut out of rawMessage(), which
+     * re-reads the message with RETR once another one has replaced it, as
+     * pop3_cache() does.
      */
     private function structure(int $uid): MimeBody
     {
-        return $this->structureCache[$uid] ??= MimeBody::parse($this->rawMessage($uid));
+        if (!isset($this->structureCache[$uid])) {
+            $message = $this->rawMessage($uid);
+            $this->structureCache[$uid] = MimeBody::parse($message);
+            $this->parsedLengths[$uid] = strlen($message->getRaw());
+        }
+
+        return $this->structureCache[$uid];
+    }
+
+    /**
+     * The text structure()'s offsets are cut out of. A server sending the
+     * message at another length than the one parsed would have every part
+     * cut at the wrong place, so that answer is refused.
+     */
+    private function readParsedText(int $uid): RawMessage
+    {
+        $this->structure($uid);
+        $message = $this->rawMessage($uid);
+        $length = strlen($message->getRaw());
+        if ($length !== $this->parsedLengths[$uid]) {
+            throw new \RuntimeException("POP3 server sent message {$uid} as {$length} octets, after {$this->parsedLengths[$uid]} earlier in the session");
+        }
+
+        return $message;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function readBodyTexts(int $uid, bool $headers): array
+    {
+        return $this->structure($uid)->searchableTexts($this->readParsedText($uid), $headers);
     }
 
     /**

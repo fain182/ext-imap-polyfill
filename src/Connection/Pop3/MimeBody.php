@@ -63,15 +63,11 @@ final class MimeBody
     /** The body of a message/rfc822 part's own message; null for an empty one in a digest. */
     private ?self $message = null;
 
-    private function __construct(private readonly string $raw)
-    {
-    }
-
     public static function parse(RawMessage $message): self
     {
         $raw = $message->getRaw();
-        $body = new self($raw);
-        $body->parseMessage(0, strlen($raw) - strlen($message->getBody()), strlen($raw), 0);
+        $body = new self();
+        $body->parseMessage($raw, 0, strlen($raw) - strlen($message->getBody()), strlen($raw), 0);
 
         return $body;
     }
@@ -116,15 +112,25 @@ final class MimeBody
         return $body;
     }
 
-    public function text(): string
+    public function text(RawMessage $message): string
     {
-        return (string) substr($this->raw, $this->offset, $this->size);
+        return $this->sliceContents($message->getRaw());
     }
 
     /** The part's own header, blank line included; empty for the message's top-level body. */
-    public function mimeText(): string
+    public function mimeText(RawMessage $message): string
     {
-        return (string) substr($this->raw, $this->mimeOffset, $this->mimeSize);
+        return $this->sliceMimeHeader($message->getRaw());
+    }
+
+    private function sliceContents(string $raw): string
+    {
+        return (string) substr($raw, $this->offset, $this->size);
+    }
+
+    private function sliceMimeHeader(string $raw): string
+    {
+        return (string) substr($raw, $this->mimeOffset, $this->mimeSize);
     }
 
     /**
@@ -137,10 +143,10 @@ final class MimeBody
      *
      * @return list<string>
      */
-    public function searchableTexts(bool $headers): array
+    public function searchableTexts(RawMessage $message, bool $headers): array
     {
         $texts = [];
-        $this->collectSearchable($headers, false, $texts);
+        $this->collectSearchable($message->getRaw(), $headers, false, $texts);
 
         return $texts;
     }
@@ -148,15 +154,15 @@ final class MimeBody
     /**
      * @param list<string> $texts
      */
-    private function collectSearchable(bool $headers, bool $nested, array &$texts): void
+    private function collectSearchable(string $raw, bool $headers, bool $nested, array &$texts): void
     {
         if ($headers && $nested) {
-            $texts[] = MimeText::decode($this->mimeText());
+            $texts[] = MimeText::decode($this->sliceMimeHeader($raw));
         }
 
         if ($this->type === 'MULTIPART') {
             foreach ($this->parts as $part) {
-                $part->collectSearchable($headers, true, $texts);
+                $part->collectSearchable($raw, $headers, true, $texts);
             }
 
             return;
@@ -165,10 +171,10 @@ final class MimeBody
         if ($this->type === 'MESSAGE' && $this->subtype === 'RFC822') {
             if ($this->message !== null) {
                 if ($headers) {
-                    $texts[] = MimeText::decode((string) substr($this->raw, $this->offset, $this->message->offset - $this->offset));
+                    $texts[] = MimeText::decode((string) substr($raw, $this->offset, $this->message->offset - $this->offset));
                 }
 
-                $this->message->collectSearchable($headers, true, $texts);
+                $this->message->collectSearchable($raw, $headers, true, $texts);
             }
 
             return;
@@ -179,9 +185,9 @@ final class MimeBody
         }
 
         $text = match ($this->encoding) {
-            'BASE64' => MimeText::fromBase64($this->text()),
-            'QUOTED-PRINTABLE' => MimeText::fromQuotedPrintable($this->text()),
-            default => $this->text(),
+            'BASE64' => MimeText::fromBase64($this->sliceContents($raw)),
+            'QUOTED-PRINTABLE' => MimeText::fromQuotedPrintable($this->sliceContents($raw)),
+            default => $this->sliceContents($raw),
         };
 
         // rfc822_base64() answering NIL leaves the part unsearched.
@@ -229,9 +235,9 @@ final class MimeBody
      * rfc822_parse_msg_full(): the header's Content-* fields, read only when
      * the message is MIME, then the body behind it.
      */
-    private function parseMessage(int $headerStart, int $headerLength, int $end, int $depth): void
+    private function parseMessage(string $raw, int $headerStart, int $headerLength, int $end, int $depth): void
     {
-        $header = (string) substr($this->raw, $headerStart, $headerLength);
+        $header = (string) substr($raw, $headerStart, $headerLength);
         $position = 0;
         $remaining = $headerLength;
         // -1 until a Content-* field makes it matter whether this is MIME.
@@ -309,7 +315,7 @@ final class MimeBody
             }
         }
 
-        $this->parseContent($headerStart + $headerLength, $end, $depth);
+        $this->parseContent($raw, $headerStart + $headerLength, $end, $depth);
     }
 
     /**
@@ -317,7 +323,7 @@ final class MimeBody
      * subtype and charset, and for a multipart or an embedded message the
      * bodies inside it.
      */
-    private function parseContent(int $start, int $end, int $depth): void
+    private function parseContent(string $raw, int $start, int $end, int $depth): void
     {
         if ($depth > self::MAX_DEPTH) {
             $this->type = 'TEXT';
@@ -329,21 +335,21 @@ final class MimeBody
         $this->size = $end - $start;
 
         if ($this->type === 'TEXT') {
-            $this->parseText();
+            $this->parseText($raw);
         } elseif ($this->type === 'MESSAGE') {
             if ($this->subtype === 'RFC822') {
-                $this->parseEmbeddedMessage($depth);
+                $this->parseEmbeddedMessage($raw, $depth);
             }
-            $this->lines = substr_count($this->text(), "\n");
+            $this->lines = substr_count($this->sliceContents($raw), "\n");
         } elseif ($this->type === 'MULTIPART') {
-            $this->parseMultipart($depth);
+            $this->parseMultipart($raw, $depth);
         }
     }
 
-    private function parseText(): void
+    private function parseText(string $raw): void
     {
         if ($this->parameters !== []) {
-            $this->lines = substr_count($this->text(), "\n");
+            $this->lines = substr_count($this->sliceContents($raw), "\n");
 
             return;
         }
@@ -356,16 +362,16 @@ final class MimeBody
         $remaining = $this->size;
 
         while ($remaining-- > 0) {
-            $char = $this->raw[$position++];
+            $char = $raw[$position++];
 
             if ($charset === null) {
                 if ($char === "\x1b" && $remaining > 0) {
                     --$remaining;
-                    $char = $this->raw[$position++];
+                    $char = $raw[$position++];
 
                     if ($char === '$' && $remaining > 0) {
                         --$remaining;
-                        $char = $this->raw[$position++];
+                        $char = $raw[$position++];
 
                         if ($char === 'B' || $char === '@') {
                             $charset = 'ISO-2022-JP';
@@ -387,7 +393,7 @@ final class MimeBody
         $this->parameters = [['CHARSET', $charset]];
     }
 
-    private function parseEmbeddedMessage(int $depth): void
+    private function parseEmbeddedMessage(string $raw, int $depth): void
     {
         if (!in_array($this->encoding, self::IDENTITY_ENCODINGS, true)) {
             ErrorStack::push('Ignoring nested encoding of message contents');
@@ -399,8 +405,8 @@ final class MimeBody
         $headerLength = 0;
         $position = $this->offset;
 
-        while ($this->size > $headerLength && ($char !== "\n" || ($this->raw[$position] ?? "\0") !== "\n")) {
-            $next = $this->raw[$position++];
+        while ($this->size > $headerLength && ($char !== "\n" || ($raw[$position] ?? "\0") !== "\n")) {
+            $next = $raw[$position++];
             if ($next !== "\r") {
                 $char = $next;
             }
@@ -411,8 +417,8 @@ final class MimeBody
             ++$headerLength;
         }
 
-        $this->message = new self($this->raw);
-        $this->message->parseMessage($this->offset, $headerLength, $this->offset + $this->size, $depth + 1);
+        $this->message = new self();
+        $this->message->parseMessage($raw, $this->offset, $headerLength, $this->offset + $this->size, $depth + 1);
     }
 
     /**
@@ -420,7 +426,7 @@ final class MimeBody
      * at the start of a line, followed by nothing but blanks; where the
      * closing one never comes, the last part runs to the end of the body.
      */
-    private function parseMultipart(int $depth): void
+    private function parseMultipart(string $raw, int $depth): void
     {
         if (!in_array($this->encoding, self::IDENTITY_ENCODINGS, true)) {
             ErrorStack::push('Ignoring nested encoding of multipart contents');
@@ -435,7 +441,6 @@ final class MimeBody
             }
         }
 
-        $raw = $this->raw;
         $delimiterLength = strlen($boundary) + 2;
         $remaining = $this->size;
         $position = $this->offset;
@@ -487,14 +492,14 @@ final class MimeBody
                 continue;
             }
 
-            $char = $this->nextOrNewline($position, $remaining);
+            $char = $this->nextOrNewline($raw, $position, $remaining);
 
             if ($char === '-') {
                 // "--" again, then the end of the line or of the body: the
                 // closing delimiter, and the scan stops.
-                $char = $this->nextOrNewline($position, $remaining, "\0");
+                $char = $this->nextOrNewline($raw, $position, $remaining, "\0");
                 if ($char === '-') {
-                    $char = $this->nextOrNewline($position, $remaining);
+                    $char = $this->nextOrNewline($raw, $position, $remaining);
                     if ($char === "\r" || $char === "\n") {
                         if ($part !== null) {
                             $part->mimeSize = max(0, $before - $part->mimeOffset);
@@ -508,7 +513,7 @@ final class MimeBody
             }
 
             while ($char === ' ' || $char === "\t") {
-                $char = $this->nextOrNewline($position, $remaining);
+                $char = $this->nextOrNewline($raw, $position, $remaining);
             }
 
             if ($char !== "\r" && $char !== "\n") {
@@ -523,7 +528,7 @@ final class MimeBody
             if ($part !== null) {
                 $part->mimeSize = max(0, $before - $part->mimeOffset);
             }
-            $part = new self($raw);
+            $part = new self();
             if ($digest) {
                 $part->type = 'MESSAGE';
             }
@@ -536,11 +541,11 @@ final class MimeBody
         }
 
         if ($this->parts === []) {
-            $this->parts[] = new self($raw);
+            $this->parts[] = new self();
         }
 
         foreach ($this->parts as $part) {
-            $part->parsePart($depth);
+            $part->parsePart($raw, $depth);
         }
     }
 
@@ -548,9 +553,8 @@ final class MimeBody
      * One part of a multipart: its Content-* fields, then its contents.
      * A part with nothing in it at all keeps its defaults.
      */
-    private function parsePart(int $depth): void
+    private function parsePart(string $raw, int $depth): void
     {
-        $raw = $this->raw;
         $remaining = $this->mimeSize;
 
         if ($remaining === 0) {
@@ -622,7 +626,7 @@ final class MimeBody
         }
 
         $this->mimeSize -= $remaining;
-        $this->parseContent($position, $position + $remaining, $depth + 1);
+        $this->parseContent($raw, $position, $position + $remaining, $depth + 1);
     }
 
     /**
@@ -765,7 +769,7 @@ final class MimeBody
      * The next byte, or $instead where the body has none left: c-client's
      * `(i && i--) ? SNX (bs) : '\012'`.
      */
-    private function nextOrNewline(int &$position, int &$remaining, string $instead = "\n"): string
+    private function nextOrNewline(string $raw, int &$position, int &$remaining, string $instead = "\n"): string
     {
         if ($remaining <= 0) {
             return $instead;
@@ -773,6 +777,6 @@ final class MimeBody
 
         --$remaining;
 
-        return $this->raw[$position++] ?? "\0";
+        return $raw[$position++] ?? "\0";
     }
 }
