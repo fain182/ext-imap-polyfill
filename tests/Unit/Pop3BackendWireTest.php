@@ -230,8 +230,43 @@ class Pop3BackendWireTest extends TestCase
         $this->backend->fetch(['BODY.PEEK[1]'], [2], null, UidMode::Msgno);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('The server sent the message as 30 octets, after 22 earlier in the session');
+        $this->expectExceptionMessage('POP3 server sent message 1 as 30 octets, after 22 earlier in the session');
         $this->backend->fetch(['BODY.PEEK[1]'], [1], null, UidMode::Msgno);
+    }
+
+    /** Only a parsed structure has offsets to protect: pop3_cache() takes any later answer as it comes. */
+    public function test_a_message_never_parsed_is_taken_at_its_new_length(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+            '+OK', 'Subject: a', '', 'Body a, longer', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->backend->fetch(['BODY.PEEK[]'], [1], null, UidMode::Msgno);
+        $this->backend->fetch(['BODY.PEEK[]'], [2], null, UidMode::Msgno);
+
+        $this->assertSame([1 => "Subject: a\r\n\r\nBody a, longer\r\n"], $this->backend->fetch(['BODY.PEEK[]'], [1], null, UidMode::Msgno));
+    }
+
+    /** Items are answered in order, so a header asked before the body is still read ahead. */
+    public function test_a_header_asked_before_the_body_is_read_ahead(): void
+    {
+        $this->serverReplies([
+            '+OK 2 200',
+            '+OK', 'TOP', 'PIPELINING', '.',
+            '+OK', 'Subject: a', '', '.',
+            '+OK', 'Subject: b', '', '.',
+            '+OK', 'Subject: a', '', 'Body a', '.',
+            '+OK', 'Subject: b', '', 'Body b', '.',
+        ]);
+        $this->backend->selectOrExamineFolder('INBOX', false);
+
+        $this->backend->fetch(['RFC822.HEADER', 'BODY.PEEK[1]'], [1, 2], null, UidMode::Msgno);
+
+        $this->assertSame("STAT\r\nCAPA\r\nTOP 1 0\r\nTOP 2 0\r\nRETR 1\r\nRETR 2\r\n", $this->serverSaw());
     }
 
     /** What RETR measured outlives the text, so LIST never shows through again. */

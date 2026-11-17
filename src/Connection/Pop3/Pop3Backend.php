@@ -74,6 +74,9 @@ final class Pop3Backend implements ConnectionBackend
     /** @var array<int, MimeBody> uid => the RETR answer parsed, without its text */
     private array $structureCache = [];
 
+    /** @var array<int, int> uid => the length of the RETR answer its structure was parsed from */
+    private array $parsedLengths = [];
+
     /** @var list<string>|null what CAPA answered after login; null for a server without it */
     private ?array $capabilities = null;
 
@@ -275,7 +278,7 @@ final class Pop3Backend implements ConnectionBackend
 
         $ids = [];
         foreach ($this->messages->uidTable()->byMsgno() as $msgno => $uid) {
-            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (bool $headers): array => $this->bodyTexts($uid, $headers), $this->flags[$uid] ?? [], $charset)) {
+            if (Pop3SearchEvaluator::matches($program, fn (): RawMessage => $this->header($uid), fn (bool $headers): array => $this->readBodyTexts($uid, $headers), $this->flags[$uid] ?? [], $charset)) {
                 $ids[] = $uidMode === self::UID_MODE ? $uid : $msgno;
             }
         }
@@ -315,10 +318,15 @@ final class Pop3Backend implements ConnectionBackend
             $uids[$id] = $uidMode === self::UID_MODE ? $this->knownUid($id) : $this->messages->uidTable()->uidOf($id);
         }
 
-        $reads = array_map(self::partReadBy(...), $items);
-        // A message also read whole may take its header from that RETR, so
-        // no TOP is sent ahead for it.
-        if (!in_array(MessagePart::Whole, $reads, true) && in_array(MessagePart::Header, $reads, true)) {
+        // fetchItem() answers the items in order, so the first one to read
+        // the message decides: a RETR first leaves no header to ask TOP for.
+        $firstRead = MessagePart::None;
+        foreach ($items as $item) {
+            if (($firstRead = self::partReadBy($item)) !== MessagePart::None) {
+                break;
+            }
+        }
+        if ($firstRead === MessagePart::Header) {
             $this->readAhead(array_values($uids));
         }
 
@@ -398,10 +406,10 @@ final class Pop3Backend implements ConnectionBackend
         }
 
         if (str_ends_with($section, '.MIME')) {
-            return $this->structure($uid)->section(substr($section, 0, -5))?->mimeText($this->rawMessage($uid)) ?? '';
+            return $this->structure($uid)->section(substr($section, 0, -5))?->mimeText($this->readParsedText($uid)) ?? '';
         }
 
-        return $this->structure($uid)->section($section)?->text($this->rawMessage($uid)) ?? '';
+        return $this->structure($uid)->section($section)?->text($this->readParsedText($uid)) ?? '';
     }
 
     public function uidTable(): UidTable
@@ -695,15 +703,38 @@ final class Pop3Backend implements ConnectionBackend
      */
     private function structure(int $uid): MimeBody
     {
-        return $this->structureCache[$uid] ??= MimeBody::parse($this->rawMessage($uid));
+        if (!isset($this->structureCache[$uid])) {
+            $message = $this->rawMessage($uid);
+            $this->structureCache[$uid] = MimeBody::parse($message);
+            $this->parsedLengths[$uid] = strlen($message->getRaw());
+        }
+
+        return $this->structureCache[$uid];
+    }
+
+    /**
+     * The text structure()'s offsets are cut out of. A server sending the
+     * message at another length than the one parsed would have every part
+     * cut at the wrong place, so that answer is refused.
+     */
+    private function readParsedText(int $uid): RawMessage
+    {
+        $this->structure($uid);
+        $message = $this->rawMessage($uid);
+        $length = strlen($message->getRaw());
+        if ($length !== $this->parsedLengths[$uid]) {
+            throw new \RuntimeException("POP3 server sent message {$uid} as {$length} octets, after {$this->parsedLengths[$uid]} earlier in the session");
+        }
+
+        return $message;
     }
 
     /**
      * @return list<string>
      */
-    private function bodyTexts(int $uid, bool $headers): array
+    private function readBodyTexts(int $uid, bool $headers): array
     {
-        return $this->structure($uid)->searchableTexts($this->rawMessage($uid), $headers);
+        return $this->structure($uid)->searchableTexts($this->readParsedText($uid), $headers);
     }
 
     /**
